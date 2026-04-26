@@ -63,6 +63,11 @@
     // 1. Salva venda no Store
     Store.mutateVendas(vendas => { vendas.unshift(venda); });
 
+    // 1b. Enfileira para sync com Firebase
+    if (window.CH.SyncQueue) {
+      window.CH.SyncQueue.enqueue('salvar', 'vendas', venda);
+    }
+
     // 2. Baixa estoque via Firebase Transaction para cada item
     const EstoqueService = window.CH.EstoqueService;
     if (EstoqueService) {
