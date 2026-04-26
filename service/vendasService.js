@@ -65,7 +65,7 @@
 
     // 1b. Enfileira para sync com Firebase
     if (window.CH.SyncQueue) {
-      window.CH.SyncQueue.enqueue('salvar', 'vendas', venda);
+      window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
     }
 
     // 2. Baixa estoque via Firebase Transaction para cada item
