@@ -641,7 +641,9 @@ const FirebaseService = (() => {
         const batch = _fb.writeBatch(_db);
         ids.forEach(id => {
           const ref = _fb.doc(_db, 'vendas', typeof id === 'string' ? id : id.id);
-          batch.delete(ref);
+          const docData = { _deleted: true, _fbSynced: true, updatedAt: Utils.nowISO() };
+          if (_adminToken) docData.adminToken = _adminToken;
+          batch.set(ref, docData, { merge: true });
         });
         await batch.commit();
         console.info('[Firebase] ✓ venda(s) deletada(s):', ids.length);
@@ -661,7 +663,9 @@ const FirebaseService = (() => {
         const batch = _fb.writeBatch(_db);
         itens.forEach(v => {
           const ref = _fb.doc(_db, 'vendas', v.id);
-          batch.set(ref, { ...v, _fbSynced: true, updatedAt: Utils.nowISO() }, { merge: true });
+          const docData = { ...v, _fbSynced: true, updatedAt: Utils.nowISO() };
+          if (_adminToken) docData.adminToken = _adminToken;
+          batch.set(ref, docData, { merge: true });
         });
         await batch.commit();
         console.info('[Firebase] ✓ venda(s) atualizada(s):', itens.length);
