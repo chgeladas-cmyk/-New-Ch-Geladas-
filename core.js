@@ -632,6 +632,47 @@ const FirebaseService = (() => {
   }
   }
 
+
+  async function deletar(colName, dados) {
+    if (!_ready || !_db || !_fb) return false;
+    try {
+      if (colName === 'vendas') {
+        const ids = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        ids.forEach(id => {
+          const ref = _fb.doc(_db, 'vendas', typeof id === 'string' ? id : id.id);
+          batch.delete(ref);
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ venda(s) deletada(s):', ids.length);
+      }
+      return true;
+    } catch(e) {
+      console.warn('[Firebase] Deletar falhou:', colName, e.code || e.message);
+      return false;
+    }
+  }
+
+  async function atualizar(colName, dados) {
+    if (!_ready || !_db || !_fb) return false;
+    try {
+      if (colName === 'vendas') {
+        const itens = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        itens.forEach(v => {
+          const ref = _fb.doc(_db, 'vendas', v.id);
+          batch.set(ref, { ...v, _fbSynced: true, updatedAt: Utils.nowISO() }, { merge: true });
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ venda(s) atualizada(s):', itens.length);
+      }
+      return true;
+    } catch(e) {
+      console.warn('[Firebase] Atualizar falhou:', colName, e.code || e.message);
+      return false;
+    }
+  }
+
   async function ler(colName) {
   if (!_ready || !_db || !_fb) return null;
   try {
@@ -687,7 +728,7 @@ const FirebaseService = (() => {
   }
 
   return {
-  init, salvar, ler,
+  init, salvar, ler, deletar, atualizar,
   isReady: () => _ready,
   getUID:  () => _auth?.currentUser?.uid || null,
   getConfig: () => ({ ...CONFIG }),
