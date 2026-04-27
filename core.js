@@ -684,7 +684,7 @@ const FirebaseService = (() => {
    const snap = await _fb.getDocs(
      _fb.query(_fb.collection(_db, 'vendas'), _fb.orderBy('criadoEm','desc'), _fb.limit(1000))
    );
-   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true }));
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(v => !v._deleted);
     } else {
    const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
    return snap.exists() ? snap.data().dados : null;
