@@ -452,7 +452,14 @@ function init() {
   renderCatalogo();
   renderCart();
   atualizarAlerta();
-  EventBus.on('store:updated', () => { renderCatalogo(); renderCart(); atualizarAlerta(); });
+  EventBus.on('store:updated', (col) => {
+    renderCatalogo(); renderCart(); atualizarAlerta();
+    // Re-renderiza histórico se estiver visível
+    if (col === 'vendas') {
+      const relatorio = document.getElementById('secRelatorio');
+      if (relatorio && !relatorio.classList.contains('hidden')) abrirRelatorio();
+    }
+  });
   EventBus.on('cart:updated', renderCart);
 }
 

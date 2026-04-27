@@ -564,6 +564,26 @@ const FirebaseService = (() => {
     ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos']
     : ['estoque', 'config'];
 
+  // ── Listener em tempo real para coleção vendas ────────────────────
+  try {
+    const vendasQuery = _fb.query(
+      _fb.collection(_db, 'vendas'),
+      _fb.orderBy('criadoEm', 'desc'),
+      _fb.limit(1000)
+    );
+    const unsubVendas = _fb.onSnapshot(vendasQuery, snap => {
+      const vendas = snap.docs
+        .map(d => ({ ...d.data(), _fbSynced: true }))
+        .filter(v => !v._deleted);
+      try { localStorage.setItem(CONSTANTS.DB.VENDAS, JSON.stringify(vendas)); } catch(_) {}
+      Store.invalidate('vendas');
+      EventBus.emit('store:updated', 'vendas');
+      EventBus.emit('store:vendas');
+      EventBus.emit('sync:ok', 'vendas');
+    }, err => console.warn('[RT] vendas:', err.code));
+    _unsubscribers.push(unsubVendas);
+  } catch(e) { console.warn('[RT] vendas subscribe falhou:', e.message); }
+
   colsRT.forEach(col => {
     try {
    const unsub = _fb.onSnapshot(
