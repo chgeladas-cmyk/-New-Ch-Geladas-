@@ -147,6 +147,12 @@
       FinanceiroService.registrarEstorno(venda);
     }
 
+    // Sincroniza cancelamento com Firebase
+    if (window.CH.SyncQueue) {
+      const vendaAtualizada = Store.getVendas().find(v => v.id === vendaId);
+      if (vendaAtualizada) window.CH.SyncQueue.enqueue('atualizar', 'vendas', [vendaAtualizada]);
+    }
+
     EventBus.emit('venda:cancelada', { vendaId, operador: AuthService.getNome() });
     return true;
   }

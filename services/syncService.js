@@ -85,7 +85,11 @@
       const ok = await FirebaseService.salvar(item.colecao, item.dados);
       if (!ok) throw new Error(`Firestore rejeitou: ${item.colecao}`);
     } else if (item.acao === 'deletar') {
-      console.warn('[SyncQueue] Ação deletar ainda não implementada');
+      const ok = await FirebaseService.deletar(item.colecao, item.dados);
+      if (!ok) throw new Error(`Firestore deletar rejeitou: ${item.colecao}`);
+    } else if (item.acao === 'atualizar') {
+      const ok = await FirebaseService.atualizar(item.colecao, item.dados);
+      if (!ok) throw new Error(`Firestore atualizar rejeitou: ${item.colecao}`);
     }
   }
 
