@@ -806,6 +806,10 @@ function cancelarUltimaVenda() {
     const idx = vendas.findIndex(v=>v.id===_ultimaVenda.id);
     if (idx >= 0) vendas.splice(idx,1);
   });
+  // Sincroniza exclusão com Firebase
+  if (window.CH.SyncQueue) {
+    window.CH.SyncQueue.enqueue('deletar', 'vendas', [_ultimaVenda.id]);
+  }
   // Se foi fiado, reverte saldo
   if ((_ultimaVenda.formaPgto||'').startsWith('Fiado')) {
     const nomeCliente = _ultimaVenda.formaPgto.replace('Fiado — ','').trim();
@@ -920,6 +924,10 @@ function cancelarVendaHistorico(vendaId) {
     });
   });
   Store.mutateVendas(vendas => { const idx=vendas.findIndex(v=>v.id===vendaId); if(idx>=0) vendas.splice(idx,1); });
+  // Sincroniza exclusão com Firebase
+  if (window.CH.SyncQueue) {
+    window.CH.SyncQueue.enqueue('deletar', 'vendas', [vendaId]);
+  }
   UIService.showToast('Venda cancelada','','warning');
   abrirRelatorio();
 }
