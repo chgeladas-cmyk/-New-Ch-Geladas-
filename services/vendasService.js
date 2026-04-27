@@ -76,9 +76,12 @@
         try {
           // Calcula quantas unidades reais sair do estoque
           const prod  = EstoqueService.getProduto(item.prodId);
+          const pack  = prod?.packs?.find(pk =>
+            pk.label === item.label || (pk.qtd + 'x') === item.label
+          );
           const qtdUn = item.label === 'UNID'
             ? item.qtd
-            : item.qtd * (prod?.packs?.find(pk => pk.label === item.label)?.qtd || 1);
+            : item.qtd * (pack?.qtd || 1);
 
           await EstoqueService.baixarEstoqueVenda(item.prodId, qtdUn, venda.id);
         } catch(e) {

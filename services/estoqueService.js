@@ -364,9 +364,13 @@
   async function cancelarVenda(vendaId, itens) {
     const movs = [];
     for (const item of itens) {
+      const _prod = getProduto(item.prodId);
+      const _pack = _prod?.packs?.find(pk =>
+        pk.label === item.label || (pk.qtd + 'x') === item.label
+      );
       const qtd = item.label === 'UNID'
         ? item.qtd
-        : item.qtd * (getProduto(item.prodId)?.packs?.find(pk => pk.label === item.label)?.qtd || 1);
+        : item.qtd * (_pack?.qtd || 1);
       const mov = await _registrarMovimentacao({
         produtoId:  item.prodId,
         tipo:       'cancelamento',
