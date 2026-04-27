@@ -804,7 +804,7 @@ function cancelarUltimaVenda() {
     (_ultimaVenda.itens||[]).forEach(item => {
       const prod = estoque.find(p=>p.id===item.prodId);
       if (!prod) return;
-      const qtdDev = item.label === 'UNID' ? item.qtd : item.qtd * (prod.packs?.find(pk=>pk.label===item.label)?.qtd||1);
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
       prod.qtdUn = (prod.qtdUn||0) + qtdDev;
     });
   });
@@ -926,7 +926,7 @@ function cancelarVendaHistorico(vendaId) {
     (venda.itens||[]).forEach(item => {
       const prod = estoque.find(p=>p.id===item.prodId);
       if (!prod) return;
-      const qtdDev = item.label==='UNID'?item.qtd:item.qtd*(prod.packs?.find(pk=>pk.label===item.label)?.qtd||1);
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
       prod.qtdUn = (prod.qtdUn||0)+qtdDev;
     });
   });
