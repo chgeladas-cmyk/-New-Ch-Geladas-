@@ -183,10 +183,7 @@
     // ── Tenta usar Firebase Transaction (modo online + admin) ──────────
     // PDV não tem adminToken → Firestore rejeitaria a escrita de qualquer forma.
     // Nesse caso, aplica localmente e SyncQueue envia quando admin sincronizar.
-    const temToken = !!FirebaseService.getAdminToken();
-    const ehAdmin  = typeof AuthService !== 'undefined' && AuthService.isAdmin();
-
-    if (_isOnline() && FirebaseService.isReady() && temToken && ehAdmin) {
+    if (_isOnline() && FirebaseService.isReady()) {
       try {
         await FirebaseService.runTransaction(async (tx) => {
           // Lê o documento de estoque no Firestore
@@ -218,9 +215,8 @@
           if (!prodFB) novosDados.push({ ...prod, qtdUn: novaQtd, estoqueAtual: novaQtd });
 
           tx.set(estoqueRef, {
-            dados:      novosDados,
-            ts:         Utils.nowISO(),
-            adminToken: window.CH.FirebaseService.getAdminToken() || '',
+            dados: novosDados,
+            ts:    Utils.nowISO(),
           });
 
           // Também salva a movimentação como documento individual
@@ -265,9 +261,7 @@
     } else {
       // ── Modo local: offline, sem adminToken (PDV), ou Firebase não pronto ──
       // Aplica localmente — SyncQueue garante que admin sincronize depois.
-      const motivo = !_isOnline() ? 'offline'
-                   : !temToken   ? 'PDV sem adminToken'
-                   : 'Firebase não pronto';
+      const motivo = !_isOnline() ? 'offline' : 'Firebase não pronto';
       console.info(`[Estoque] Modo local (${motivo}): ${tipo} ${prod.nome}`);
       _movimentacaoLocal({ produtoId, prod, tipo, delta, estoqueAntes, estoqueDepois, origem, operador, observacao, custo, fornecedorId });
     }
