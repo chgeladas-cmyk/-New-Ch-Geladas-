@@ -31,7 +31,7 @@
    * @param {string} formaPgto
    * @returns {Promise<object>} venda finalizada
    */
-  async function finalizarVenda(cart, formaPgto) {
+  async function finalizarVenda(cart, formaPgto, extras = {}) {
     const itens    = cart.getItems ? cart.getItems()    : (cart.itens    || []);
     const total    = cart.getTotal ? cart.getTotal()    : (cart.total    || 0);
     const subtotal = cart.getSubtotal ? cart.getSubtotal() : (cart.subtotal || total);
@@ -52,12 +52,16 @@
       subtotal,
       desconto,
       lucro,
-      formaPgto: formaPgto || 'Dinheiro',
-      origem:    'PDV',
-      operador:  AuthService.getNome(),
-      role:      AuthService.getRole(),
-      status:    'concluida',
-      _fbSynced: false,
+      formaPgto:         formaPgto || 'Dinheiro',
+      origem:            'PDV',
+      operador:          AuthService.getNome(),
+      role:              AuthService.getRole(),
+      status:            'concluida',
+      _fbSynced:         false,
+      _troco:            extras.troco            || 0,
+      _parcelaDinheiro:  extras.parcelaDinheiro  || 0,
+      _parcelaRestante:  extras.parcelaRestante  || 0,
+      _formaRestante:    extras.formaRestante     || '',
     };
 
     // 1. Salva venda no Store
