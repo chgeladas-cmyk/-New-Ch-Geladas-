@@ -782,12 +782,14 @@ function confirmarFiado(clienteId) {
 /* ══ FINALIZAR VENDA ══ */
 function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '', parcelaRestante = 0) {
   if (CartService.isEmpty()) return;
-  const venda = CartService.finalize(forma);
+  const extras = { troco, parcelaDinheiro, parcelaRestante, formaRestante };
+  const venda = CartService.finalize(forma, extras);
   if (!venda) return;
-  venda._troco = troco;
-  venda._parcelaDinheiro = parcelaDinheiro;
-  venda._parcelaRestante = parcelaRestante;
-  venda._formaRestante   = formaRestante;
+  // Garante campos mesmo quando VendasService não está disponível
+  venda._troco           = venda._troco           || troco;
+  venda._parcelaDinheiro = venda._parcelaDinheiro || parcelaDinheiro;
+  venda._parcelaRestante = venda._parcelaRestante || parcelaRestante;
+  venda._formaRestante   = venda._formaRestante   || formaRestante;
   _ultimaVenda = venda;
   mostrarRecibo(venda);
   renderCatalogo();

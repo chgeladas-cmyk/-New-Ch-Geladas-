@@ -1024,11 +1024,11 @@ const CartService = (() => {
   clear() { _items = []; _desconto = 0; _pgtos = []; _formaPgto = ''; EventBus.emit('cart:updated'); },
   isEmpty() { return !_items.length; },
 
-  finalize(formaPgto) {
+  finalize(formaPgto, extras = {}) {
     if (this.isEmpty()) return null;
 
     if (window.CH?.VendasService) {
-   return window.CH.VendasService.finalizarVenda(this, formaPgto);
+   return window.CH.VendasService.finalizarVenda(this, formaPgto, extras);
     }
 
     const itens    = this.getItems();
