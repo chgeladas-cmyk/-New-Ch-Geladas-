@@ -281,7 +281,7 @@ body.is-admin .adm-flex{display:flex!important;}
     </div>
     <div class="mb-4">
       <label class="label">Valor em Dinheiro (R$)</label>
-      <input type="number" id="mistoDinheiro" class="inp text-xl font-black text-emerald-400" placeholder="0,00" step="0.01" min="0" oninput="calcMisto()">
+      <input type="number" id="mistoDinheiro" class="inp text-xl font-black text-emerald-400" placeholder="0,00" step="0.01" min="0" oninput="calcMisto()" onkeydown="if(event.key==='Enter')event.preventDefault()">
     </div>
     <div id="mistoRestanteBox" class="hidden bg-slate-900/60 border border-white/5 rounded-xl p-3 mb-4 text-center">
       <p class="text-[9px] text-slate-500 font-bold uppercase mb-1">Restante no Cartão/Pix</p>
@@ -801,16 +801,24 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
 function cancelarUltimaVenda() {
   if (!_ultimaVenda) return;
   if (!confirm(`Cancelar venda de ${Utils.formatCurrency(_ultimaVenda.total)}?\nO estoque será restaurado.`)) return;
-  // Restaurar estoque
+  // Restaurar estoque local
   Store.mutateEstoque(estoque => {
     (_ultimaVenda.itens||[]).forEach(item => {
       const prod = estoque.find(p=>p.id===item.prodId);
       if (!prod) return;
-      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);
+      const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
       prod.qtdUn = (prod.qtdUn||0) + qtdDev;
     });
   });
-  // Remove venda
+  // Restaurar estoque no Firebase (Transaction)
+  const _estoqueService = window.CH?.EstoqueService;
+  if (_estoqueService) {
+    _estoqueService.cancelarVenda(_ultimaVenda.id, _ultimaVenda.itens || []).catch(e =>
+      console.warn('[cancelar] estoque Firebase falhou:', e.message)
+    );
+  }
+  // Remove venda local
   Store.mutateVendas(vendas => {
     const idx = vendas.findIndex(v=>v.id===_ultimaVenda.id);
     if (idx >= 0) vendas.splice(idx,1);
@@ -928,10 +936,18 @@ function cancelarVendaHistorico(vendaId) {
     (venda.itens||[]).forEach(item => {
       const prod = estoque.find(p=>p.id===item.prodId);
       if (!prod) return;
-      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);
+      const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
       prod.qtdUn = (prod.qtdUn||0)+qtdDev;
     });
   });
+  // Restaurar estoque no Firebase (Transaction)
+  const _esSvc = window.CH?.EstoqueService;
+  if (_esSvc) {
+    _esSvc.cancelarVenda(vendaId, venda.itens || []).catch(e =>
+      console.warn('[cancelarHistorico] estoque Firebase falhou:', e.message)
+    );
+  }
   Store.mutateVendas(vendas => { const idx=vendas.findIndex(v=>v.id===vendaId); if(idx>=0) vendas.splice(idx,1); });
   // Sincroniza exclusão com Firebase
   if (window.CH.SyncQueue) {

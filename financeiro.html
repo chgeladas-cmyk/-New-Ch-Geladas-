@@ -104,6 +104,7 @@ body.is-admin .adm-only.block-only{display:block!important;}
       </div>
     </div>
     <div class="flex items-center gap-2">
+      <button onclick="abrirRelDiario()" class="btn-p !py-2 !px-3 text-[9px] !bg-emerald-600/20 !border-emerald-500/30 !text-emerald-400" title="Relatório Diário Detalhado"><i class="fas fa-file-alt mr-1"></i>Diário</button>
       <button onclick="abrirRelatorio()" class="btn-p !py-2 !px-3 text-[9px]">
         <i class="fas fa-file-alt mr-1"></i>Relatório
       </button>
@@ -754,6 +755,199 @@ window.addEventListener('DOMContentLoaded', () => {
     init();
   }
 });
+
+/* ══ RELATÓRIO DIÁRIO DETALHADO ══ */
+function abrirRelDiario() {
+  const hoje    = Utils.todayISO();
+  const vendas  = (Store.getVendas() || []).filter(v => (v.dataCurta || v.data || '') === hoje);
+  const lancamentos = window.CH.FinanceiroService
+    ? window.CH.FinanceiroService.getLancamentos({ dataDe: hoje, dataAte: hoje })
+    : [];
+  const despesas = lancamentos.filter(l => l.tipo === 'despesa');
+
+  document.getElementById('relDiarioData').textContent =
+    'Hoje — ' + new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+
+  // KPIs
+  const fatur  = vendas.reduce((s,v) => s + (v.total||0), 0);
+  const lucro  = vendas.reduce((s,v) => s + (v.lucro||0), 0);
+  const totalDespesas = despesas.reduce((s,d) => s + (d.valor||0), 0);
+  const caixa  = fatur - totalDespesas;
+  document.getElementById('relDiarioKpis').innerHTML = [
+    ['Faturamento', Utils.formatCurrency(fatur), 'text-emerald-400'],
+    ['Lucro Bruto',  Utils.formatCurrency(lucro),  'text-blue-400'],
+    ['Caixa Líquido',Utils.formatCurrency(caixa),  caixa >= 0 ? 'text-emerald-400' : 'text-red-400'],
+    ['Nº Vendas',    vendas.length,                 'text-amber-400'],
+    ['Despesas',     Utils.formatCurrency(totalDespesas), 'text-red-400'],
+    ['Ticket Médio', Utils.formatCurrency(vendas.length ? fatur/vendas.length : 0), 'text-purple-400'],
+  ].map(([k,v,cor]) => `
+    <div class="bg-slate-900/60 border border-white/5 rounded-xl p-2 text-center">
+      <p class="text-[8px] text-slate-500 font-bold uppercase mb-1">${k}</p>
+      <p class="text-sm font-black ${cor}">${v}</p>
+    </div>`).join('');
+
+  // Formas de pagamento
+  const formas = {};
+  vendas.forEach(v => {
+    const f = v.formaPgto || 'Outros';
+    if (!formas[f]) formas[f] = { total: 0, qtd: 0 };
+    formas[f].total += v.total || 0;
+    formas[f].qtd++;
+    // Misto: separar parcelas
+    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro) {
+      const f2 = f.replace('Dinheiro+', '');
+      if (!formas['Dinheiro']) formas['Dinheiro'] = { total: 0, qtd: 0 };
+      if (!formas[f2])         formas[f2]         = { total: 0, qtd: 0 };
+      formas['Dinheiro'].total += v._parcelaDinheiro || 0;
+      formas[f2].total         += v._parcelaRestante || 0;
+      formas[f].total -= v.total; formas[f].qtd--;
+      if (formas[f].qtd <= 0) delete formas[f];
+    }
+  });
+  const COR_FORMA = { Dinheiro:'text-emerald-400', Pix:'text-blue-400', Crédito:'text-amber-400', Débito:'text-purple-400', Fiado:'text-red-400' };
+  document.getElementById('relDiarioFormas').innerHTML =
+    Object.entries(formas).sort((a,b) => b[1].total - a[1].total).map(([f, d]) => `
+      <div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+        <span class="text-[10px] font-black ${COR_FORMA[f] || 'text-slate-300'}">${f}</span>
+        <div class="flex items-center gap-3">
+          <span class="text-[9px] text-slate-500 font-bold">${d.qtd} venda${d.qtd!==1?'s':''}</span>
+          <span class="text-[10px] font-black text-white">${Utils.formatCurrency(d.total)}</span>
+        </div>
+      </div>`).join('') || '<p class="text-[9px] text-slate-600 text-center py-2">Sem vendas hoje</p>';
+
+  // Top produtos
+  const prods = {};
+  vendas.forEach(v => v.itens?.forEach(i => {
+    const k = i.nome || '?';
+    if (!prods[k]) prods[k] = { qtd: 0, total: 0, cat: i.categoria || '' };
+    prods[k].qtd   += i.qtd || 1;
+    prods[k].total += (i.preco || 0) * (i.qtd || 1);
+  }));
+  const topIcons = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+  document.getElementById('relDiarioProds').innerHTML =
+    Object.entries(prods).sort((a,b) => b[1].total - a[1].total).slice(0, 10)
+    .map(([nome, d], i) => `
+      <div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+        <div>
+          <p class="text-[10px] font-black text-slate-200">${topIcons[i] || `${i+1}.`} ${nome}</p>
+          ${d.cat ? `<p class="text-[8px] text-slate-600 font-bold">${d.cat}</p>` : ''}
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] font-black text-amber-400">${Utils.formatCurrency(d.total)}</p>
+          <p class="text-[8px] text-slate-600 font-bold">${d.qtd} unid.</p>
+        </div>
+      </div>`).join('') || '<p class="text-[9px] text-slate-600 text-center py-2">Sem itens</p>';
+
+  // Despesas
+  document.getElementById('relDiarioDespesas').innerHTML =
+    despesas.length ? despesas.map(d => `
+      <div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+        <div>
+          <p class="text-[10px] font-black text-red-400">${d.descricao || 'Despesa'}</p>
+          <p class="text-[8px] text-slate-500 font-bold">${d.hora || ''} · ${d.categoria || ''}</p>
+        </div>
+        <p class="text-[10px] font-black text-red-400">- ${Utils.formatCurrency(d.valor)}</p>
+      </div>`).join('')
+    : '<p class="text-[9px] text-slate-600 text-center py-2">Nenhuma despesa hoje</p>';
+
+  // Histórico venda a venda
+  document.getElementById('relDiarioVendas').innerHTML =
+    vendas.length ? [...vendas].sort((a,b) => (b.hora||'').localeCompare(a.hora||'')).map(v => `
+      <div class="bg-slate-900/60 border border-white/5 rounded-xl p-3">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[9px] text-slate-500 font-bold">${v.hora || '—'}</span>
+            <span class="text-[9px] font-black ${v.status==='cancelada'?'text-red-400':'text-emerald-400'}">${v.status === 'cancelada' ? '✗ Cancelada' : '✓ Concluída'}</span>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-black text-white">${Utils.formatCurrency(v.total)}</p>
+            <p class="text-[8px] text-slate-500 font-bold">${v.formaPgto || '—'}</p>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          ${(v.itens||[]).map(i => `
+            <div class="flex justify-between">
+              <span class="text-[9px] text-slate-400">${i.qtd}× ${i.nome} <span class="text-slate-600">${i.label||'UNID'}</span></span>
+              <span class="text-[9px] text-slate-400">${Utils.formatCurrency((i.preco||0)*(i.qtd||1))}</span>
+            </div>`).join('')}
+        </div>
+        ${v.desconto > 0 ? `<p class="text-[8px] text-amber-400 font-bold mt-1">Desconto: - ${Utils.formatCurrency(v.desconto)}</p>` : ''}
+        ${v._parcelaDinheiro > 0 ? `<p class="text-[8px] text-slate-500 font-bold mt-1">Dinheiro: ${Utils.formatCurrency(v._parcelaDinheiro)} · ${v._formaRestante}: ${Utils.formatCurrency(v._parcelaRestante)}</p>` : ''}
+        <p class="text-[8px] text-slate-600 font-bold mt-1">Op.: ${v.operador || '—'} · Lucro: ${Utils.formatCurrency(v.lucro||0)}</p>
+      </div>`).join('')
+    : '<p class="text-[9px] text-slate-600 text-center py-4">Nenhuma venda hoje</p>';
+
+  UIService.openModal('modalRelDiario');
+}
+
+function baixarRelDiario() {
+  const hoje   = Utils.todayISO();
+  const vendas = (Store.getVendas() || []).filter(v => (v.dataCurta || v.data || '') === hoje);
+  const fatur  = vendas.reduce((s,v) => s + (v.total||0), 0);
+  const lucro  = vendas.reduce((s,v) => s + (v.lucro||0), 0);
+  let txt = `RELATÓRIO DIÁRIO — ${hoje}\n`;
+  txt += `${'='.repeat(40)}\n`;
+  txt += `Faturamento : ${Utils.formatCurrency(fatur)}\n`;
+  txt += `Lucro Bruto : ${Utils.formatCurrency(lucro)}\n`;
+  txt += `Nº de Vendas: ${vendas.length}\n\n`;
+  txt += `VENDAS:\n${'-'.repeat(40)}\n`;
+  vendas.forEach((v, i) => {
+    txt += `\n${i+1}. ${v.hora} — ${Utils.formatCurrency(v.total)} — ${v.formaPgto}\n`;
+    (v.itens||[]).forEach(it => {
+      txt += `   ${it.qtd}× ${it.nome} (${it.label||'UNID'}) = ${Utils.formatCurrency((it.preco||0)*(it.qtd||1))}\n`;
+    });
+    if (v.desconto > 0) txt += `   Desconto: -${Utils.formatCurrency(v.desconto)}\n`;
+    txt += `   Operador: ${v.operador||'—'} | Status: ${v.status||'concluida'}\n`;
+  });
+  Utils.downloadBlob(txt, 'text/plain;charset=utf-8;', `relatorio_diario_${hoje}.txt`);
+}
+
 </script>
+
+<!-- ══ MODAL RELATÓRIO DIÁRIO DETALHADO ══ -->
+<div id="modalRelDiario" class="modal">
+  <div class="modal-box max-w-lg p-0 overflow-hidden">
+    <div class="p-4 border-b border-white/5 flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-black text-emerald-400 flex items-center gap-2"><i class="fas fa-file-alt"></i> Relatório Diário Detalhado</h3>
+        <p id="relDiarioData" class="text-[9px] text-slate-500 font-bold mt-0.5"></p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="baixarRelDiario()" class="w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 flex items-center justify-center"><i class="fas fa-download text-sm"></i></button>
+        <button onclick="UIService.closeModal('modalRelDiario')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+      </div>
+    </div>
+    <div class="overflow-y-auto scroll" style="max-height:82vh;">
+
+      <!-- KPIs -->
+      <div class="grid grid-cols-3 gap-2 p-4 border-b border-white/5" id="relDiarioKpis"></div>
+
+      <!-- Formas de pagamento -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">💳 Por Forma de Pagamento</p>
+        <div id="relDiarioFormas" class="space-y-1"></div>
+      </div>
+
+      <!-- Top produtos do dia -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">🏆 Produtos Mais Vendidos</p>
+        <div id="relDiarioProds" class="space-y-1"></div>
+      </div>
+
+      <!-- Despesas do dia -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">💸 Despesas</p>
+        <div id="relDiarioDespesas" class="space-y-1"></div>
+      </div>
+
+      <!-- Histórico completo venda a venda -->
+      <div class="p-4">
+        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">🧾 Todas as Vendas</p>
+        <div id="relDiarioVendas" class="space-y-2"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
 </body>
 </html>
