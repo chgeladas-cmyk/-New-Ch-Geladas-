@@ -329,20 +329,22 @@ function renderPacksEdit(){const el=document.getElementById('mePkList');if(!el)r
 function salvarEdicao(){const id=document.getElementById('meId').value;const nome=document.getElementById('meNome').value.trim();const custo=parseFloat(document.getElementById('meCusto').value)||0;const preco=parseFloat(document.getElementById('mePreco').value)||0;const nq=parseInt(document.getElementById('meQtd').value)||0;const cat=document.getElementById('meCat').value;const motivo=document.getElementById('meMotivo').value.trim();if(!nome){UIService.showToast('Nome obrigatório','','error');return;}if(nq!==_qtdOrig&&!motivo){UIService.showToast('Informe o motivo do ajuste','','error');document.getElementById('meMotivo').focus();return;}Store.mutateEstoque(est=>{const p=est.find(x=>x.id===id);if(!p)return;const ant=p.qtdUn;p.nome=nome;p.custoUn=custo;p.precoUn=preco;p.qtdUn=nq;p.categoria=cat;p.packs=_packsEdit;
     Store.mutateAuditoria(audit=>{audit.unshift({prodId:id,prodNome:nome,antes:ant,depois:nq,delta:nq-ant,motivo:motivo||'Edição',criadoEm:new Date().toISOString(),data:Utils.today()});});
   });
-  // Sincroniza estoque atualizado com Firebase
+  // Sync Firebase: se mudou qtd → Transaction; sempre → sync dados completos
   const _esSvc = window.CH?.EstoqueService;
-  if (_esSvc && nq !== _qtdOrig) {
-    _esSvc.ajustarEstoque(id, nq, motivo || 'Edição via estoque').catch(e =>
-      console.warn('[salvarEdicao] ajuste Firebase falhou:', e.message)
-    );
-  } else if (_esSvc) {
-    // Mesmo sem mudança de qtd, sincroniza dados (nome, preço, etc)
-    const prodAtual = Store.getEstoque().find(p => p.id === id);
-    if (prodAtual && window.CH?.SyncQueue) {
+  (async () => {
+    try {
+      if (_esSvc && nq !== _qtdOrig) {
+        await _esSvc.ajustarEstoque(id, nq, motivo || 'Edição');
+      }
+      // Sempre sincroniza o estoque completo (nome, preço, categoria, packs)
       const estoqueAtual = Store.getEstoque();
-      window.CH.SyncQueue.enqueue('salvar', 'estoque', estoqueAtual);
-    }
-  }
+      if (window.CH?.FirebaseService?.isReady()) {
+        await window.CH.FirebaseService.salvar('estoque', estoqueAtual);
+      } else if (window.CH?.SyncQueue) {
+        window.CH.SyncQueue.enqueue('salvar', 'estoque', estoqueAtual);
+      }
+    } catch(e) { console.warn('[salvarEdicao] sync Firebase falhou:', e.message); }
+  })();
   UIService.closeModal('modalEditar');UIService.showToast('Produto atualizado!',nome,'success');}
 
 function excluirProduto(id){const p=Store.getEstoque().find(x=>x.id===id);if(!p||!confirm(`Excluir "${p.nome}"?`))return;Store.mutateEstoque(est=>{const idx=est.findIndex(x=>x.id===id);if(idx>=0)est.splice(idx,1);});UIService.showToast('Excluído',p.nome,'warning');}
