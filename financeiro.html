@@ -770,6 +770,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (AuthService.isLogged()) {
     document.getElementById('lock').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
+    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
     init();
   }
 });
