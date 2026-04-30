@@ -694,8 +694,19 @@ function cancelarVenda(vendaId) {
   const venda = Store.getVendas().find(v=>v.id===vendaId);
   if (!venda) return;
   const motivo = prompt(`Cancelar venda de ${Utils.formatCurrency(venda.total)}?\n\nInforme o motivo do cancelamento:`);
-  if (motivo === null) return; // clicou cancelar
+  if (motivo === null) return;
   if (!motivo.trim()) { UIService.showToast('Informe o motivo','','error'); return; }
+
+  // 1. Restaurar estoque no Firebase (Transaction)
+  const _esSvc = window.CH?.EstoqueService;
+  if (_esSvc) {
+    _esSvc.cancelarVenda(vendaId, venda.itens || []).catch(e =>
+      console.warn('[financeiro] estoque Firebase falhou:', e.message)
+    );
+  }
+
+  // 2. Atualiza venda localmente
+  let vendaAtualizada;
   Store.mutateVendas(vendas => {
     const v = vendas.find(x=>x.id===vendaId);
     if (!v) return;
@@ -703,13 +714,19 @@ function cancelarVenda(vendaId) {
     v.motivoCancelamento = motivo.trim();
     v.canceladoEm = new Date().toISOString();
     v.canceladoPor = AuthService.getNome();
-    // Neutralizar valores para não contar no financeiro
     v._totalOriginal = v.total;
     v._lucroOriginal = v.lucro;
     v.total = 0;
     v.lucro = 0;
+    vendaAtualizada = { ...v };
   });
-  UIService.showToast('Venda cancelada','','warning');
+
+  // 3. Sincroniza cancelamento com Firebase
+  if (window.CH?.SyncQueue && vendaAtualizada) {
+    window.CH.SyncQueue.enqueue('atualizar', 'vendas', [vendaAtualizada]);
+  }
+
+  UIService.showToast('Venda cancelada — estoque restaurado','','warning');
   renderHistorico();
   renderTudo();
 }
