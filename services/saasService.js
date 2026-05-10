@@ -15,22 +15,26 @@
   const { Utils, EventBus, CryptoService } = window.CH;
 
   // ─── Firebase helpers ─────────────────────────────────────────────
+  // Reutiliza a instância do core.js (que já faz signInAnonymously)
   let _db = null, _fb = null;
 
   async function _ensureDB() {
     if (_db && _fb) return true;
-    const { initializeApp, getApps, getApp } =
-      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+
+    // 1) Garante que core.js inicializou o Firebase (com auth anônima)
+    const FB = window.CH?.FirebaseService;
+    if (FB) {
+      await FB.init();  // idempotente — só inicializa se ainda não fez
+    }
+
+    // 2) Importa o SDK Firestore e reutiliza o app já criado
     _fb = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    const CONFIG = {
-      apiKey:            'AIzaSyDdFvTRQQmomMiLD0byrBwGZnitSC0zwus',
-      authDomain:        'new-ch-geladas.firebaseapp.com',
-      projectId:         'new-ch-geladas',
-      storageBucket:     'new-ch-geladas.firebasestorage.app',
-      messagingSenderId: '898297448757',
-      appId:             '1:898297448757:web:d59cb5336d61d19ad9a47c',
-    };
-    const app = getApps().length ? getApp() : initializeApp(CONFIG);
+    const { getApps, getApp } =
+      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+
+    const app = getApps().length ? getApp() : null;
+    if (!app) throw new Error('Firebase não inicializado. Recarregue a página.');
+
     _db = _fb.getFirestore(app);
     return true;
   }
