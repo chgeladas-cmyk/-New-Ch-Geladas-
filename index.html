@@ -78,21 +78,24 @@ body::before {
   background-clip: text;
 }
 
-.pin-input {
-  font-size: 2rem !important;
-  font-family: 'Syne', monospace;
+.login-input {
+  font-size: 1rem;
+  font-family: 'Syne', sans-serif;
   background: rgba(255,255,255,.03);
   border: 2px solid rgba(255,255,255,.08);
   border-radius: 1.25rem;
   color: #fff;
-  padding: 1.2rem;
+  padding: 1rem 1.25rem;
   width: 100%;
-  text-align: center;
-  letter-spacing: .5em;
+  text-align: left;
+  letter-spacing: .02em;
   outline: none;
   transition: all .2s;
+  box-sizing: border-box;
+  margin-bottom: .75rem;
 }
-.pin-input:focus {
+.login-input::placeholder { color: #475569; }
+.login-input:focus {
   border-color: rgba(59,130,246,.6);
   background: rgba(59,130,246,.05);
   box-shadow: 0 0 0 4px rgba(59,130,246,.12);
@@ -151,8 +154,11 @@ body::before {
   display: inline-block;
   margin-bottom: .3rem;
 }
-.role-admin { background: rgba(59,130,246,.15); color: #60a5fa; }
-.role-pdv   { background: rgba(16,185,129,.15); color: #34d399; }
+.role-admin    { background: rgba(59,130,246,.15);  color: #60a5fa; }
+.role-pdv      { background: rgba(16,185,129,.15);  color: #34d399; }
+.role-ctrl     { background: rgba(245,158,11,.15);  color: #f59e0b; }
+.role-valid    { background: rgba(139,92,246,.15);  color: #a78bfa; }
+.role-gerente  { background: rgba(245,158,11,.15);  color: #fbbf24; }
 
 /* ── ALERTAS BANNER ────────────────────────── */
 .alert-banner {
@@ -281,6 +287,14 @@ body::before {
 /* ── CARD ADMIN-ONLY ───────────────────────── */
 .adm-only { display: none; }
 body.is-admin .adm-only { display: block; }
+.ctrl-only  { display: none; }
+.valid-only { display: none; }
+body.is-controlador .ctrl-only  { display: block; }
+body.is-validador   .valid-only { display: block; }
+body.is-admin .ctrl-only  { display: block; }
+body.is-admin .valid-only { display: block; }
+/* Aprovação badge amarelo */
+.badge-aprov { background:#f59e0b !important; }
 
 /* ── RELÓGIO ───────────────────────────────── */
 #relogio {
@@ -358,16 +372,18 @@ body.is-admin .adm-only { display: block; }
   <div class="lock-card">
     <div style="font-size:3rem;margin-bottom:1rem">🍺</div>
     <p class="lock-logo">CH Geladas</p>
-    <p style="font-size:.65rem;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin:.5rem 0 2.5rem">Sistema de Gestão</p>
+    <p style="font-size:.65rem;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin:.5rem 0 2rem">Sistema de Gestão</p>
 
-    <input type="password" id="pinInput" inputmode="numeric"
-      autocomplete="current-password" maxlength="8"
-      class="pin-input" placeholder="· · · · ·">
+    <input type="text" id="loginNome" autocomplete="username"
+      class="login-input" placeholder="👤 Usuário">
 
-    <div id="lockError" class="hidden" style="font-size:.7rem;color:#f87171;font-weight:700;margin:.75rem 0;min-height:1.2rem;"></div>
+    <input type="password" id="loginSenha" autocomplete="current-password"
+      class="login-input" placeholder="🔒 Senha">
+
+    <div id="lockError" class="hidden" style="font-size:.7rem;color:#f87171;font-weight:700;margin:.25rem 0 .5rem;min-height:1.2rem;"></div>
 
     <button onclick="doLogin()"
-      style="width:100%;padding:1.1rem;margin-top:.5rem;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:#fff;border:none;border-radius:1.25rem;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all .2s;box-shadow:0 8px 24px rgba(29,78,216,.3)">
+      style="width:100%;padding:1.1rem;margin-top:.25rem;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:#fff;border:none;border-radius:1.25rem;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all .2s;box-shadow:0 8px 24px rgba(29,78,216,.3)">
       Entrar
     </button>
 
@@ -477,15 +493,36 @@ body.is-admin .adm-only { display: block; }
   <div class="app-grid">
 
     <!-- VENDAS -->
-    <a href="vendas.html" class="app-card c-blue" style="animation-delay:.05s">
+    <a href="vendas.html" class="app-card c-blue" data-modulo="vendas" style="animation-delay:.05s">
       <div class="app-badge" id="badgeVendas"></div>
       <div class="app-icon">🛒</div>
       <div class="app-name">Vendas</div>
       <div class="app-desc">PDV · Carrinho · Pagamento</div>
     </a>
 
+    <!-- AVULSA -->
+    <a href="avulsa.html" class="app-card c-purple" data-modulo="avulsa" style="animation-delay:.08s">
+      <div class="app-icon">💜</div>
+      <div class="app-name">Avulsa</div>
+      <div class="app-desc">Venda rápida · Serviços</div>
+    </a>
+
+    <!-- SAAS ADMIN -->
+    <a href="saas-admin.html" class="app-card c-red" data-modulo="saas_admin" style="animation-delay:.10s">
+      <div class="app-icon">🔐</div>
+      <div class="app-name">SaaS Admin</div>
+      <div class="app-desc">Painel super admin</div>
+    </a>
+
+    <!-- SAAS REGISTRO -->
+    <a href="saas-register.html" class="app-card c-green" data-modulo="saas_register" style="animation-delay:.11s">
+      <div class="app-icon">🏢</div>
+      <div class="app-name">Cadastrar</div>
+      <div class="app-desc">Nova empresa SaaS</div>
+    </a>
+
     <!-- ESTOQUE -->
-    <a href="estoque.html" class="app-card c-green adm-only" style="animation-delay:.1s">
+    <a href="estoque.html" class="app-card c-green" data-modulo="estoque" style="animation-delay:.1s;display:none">
       <div class="app-badge" id="badgeEstoque"></div>
       <div class="app-icon">📦</div>
       <div class="app-name">Estoque</div>
@@ -493,14 +530,14 @@ body.is-admin .adm-only { display: block; }
     </a>
 
     <!-- FINANCEIRO -->
-    <a href="financeiro.html" class="app-card c-purple adm-only" style="animation-delay:.15s">
+    <a href="financeiro.html" class="app-card c-purple" data-modulo="financeiro" style="animation-delay:.15s;display:none">
       <div class="app-icon">📊</div>
       <div class="app-name">Financeiro</div>
       <div class="app-desc">Lucro · Caixa · Relatórios</div>
     </a>
 
     <!-- COMANDA -->
-    <a href="comanda.html" class="app-card c-pink" style="animation-delay:.2s">
+    <a href="comanda.html" class="app-card c-pink" data-modulo="comandas" style="animation-delay:.2s">
       <div class="app-badge" id="badgeComanda"></div>
       <div class="app-icon">🍽️</div>
       <div class="app-name">Comanda</div>
@@ -508,7 +545,7 @@ body.is-admin .adm-only { display: block; }
     </a>
 
     <!-- DELIVERY -->
-    <a href="delivery.html" class="app-card c-orange" style="animation-delay:.25s">
+    <a href="delivery.html" class="app-card c-orange" data-modulo="delivery" style="animation-delay:.25s">
       <div class="app-badge" id="badgeDelivery"></div>
       <div class="app-icon">🛵</div>
       <div class="app-name">Delivery</div>
@@ -516,7 +553,7 @@ body.is-admin .adm-only { display: block; }
     </a>
 
     <!-- FIADO -->
-    <a href="fiado.html" class="app-card c-red" style="animation-delay:.3s">
+    <a href="fiado.html" class="app-card c-red" data-modulo="fiado" style="animation-delay:.3s">
       <div class="app-badge" id="badgeFiado"></div>
       <div class="app-icon">🤝</div>
       <div class="app-name">Fiado</div>
@@ -524,35 +561,43 @@ body.is-admin .adm-only { display: block; }
     </a>
 
     <!-- PONTO -->
-    <a href="ponto.html" class="app-card c-teal" style="animation-delay:.35s">
+    <a href="ponto.html" class="app-card c-teal" data-modulo="ponto" style="animation-delay:.35s">
       <div class="app-icon">⏱️</div>
       <div class="app-name">Ponto</div>
       <div class="app-desc">Entrada · Saída · Horas</div>
     </a>
 
     <!-- CARDÁPIO DIGITAL -->
-    <a href="cardapio.html" class="app-card c-orange" style="animation-delay:.42s">
+    <a href="cardapio.html" class="app-card c-orange" data-modulo="cardapio" style="animation-delay:.42s">
       <div class="app-icon">🍽️</div>
       <div class="app-name">Cardápio</div>
       <div class="app-desc">Delivery · Pedidos online</div>
     </a>
 
+    <!-- APROVAÇÃO (controlador + validador + admin) -->
+    <a href="aprovacao.html" class="app-card c-amber" data-modulo="aprovacao" id="cardAprovacao" style="animation-delay:.38s;display:none">
+      <div class="app-badge badge-aprov" id="badgeAprovacao"></div>
+      <div class="app-icon">✅</div>
+      <div class="app-name">Aprovação</div>
+      <div class="app-desc">Pendentes · Controle · Validação</div>
+    </a>
+
     <!-- CONFIG (admin only) -->
-    <div class="app-card c-amber adm-only" onclick="abrirConfig()" style="animation-delay:.4s">
+    <div class="app-card c-amber" data-modulo="__adm__" onclick="abrirConfig()" style="animation-delay:.4s;display:none">
       <div class="app-icon">⚙️</div>
       <div class="app-name">Configurações</div>
       <div class="app-desc">PIN · Loja · Firebase · Alertas</div>
     </div>
 
     <!-- USUÁRIOS (admin only) -->
-    <div class="app-card c-purple adm-only" onclick="abrirGestaoUsuarios()" style="animation-delay:.45s">
+    <div class="app-card c-purple" data-modulo="__adm__" onclick="abrirGestaoUsuarios()" style="animation-delay:.45s;display:none">
       <div class="app-icon">👥</div>
       <div class="app-name">Usuários</div>
       <div class="app-desc">Equipe · PINs · Permissões</div>
     </div>
 
     <!-- MONITOR (admin only) -->
-    <a href="monitor.html" class="app-card c-slate adm-only" style="animation-delay:.5s">
+    <a href="monitor.html" class="app-card c-slate" data-modulo="__adm__" style="animation-delay:.5s;display:none">
       <div class="app-icon">📊</div>
       <div class="app-name">Monitor</div>
       <div class="app-desc">Sync · Backup · Auditoria</div>
@@ -673,35 +718,60 @@ body.is-admin .adm-only { display: block; }
   </div>
 </div>
 
-<!-- MODAL USUÁRIOS -->
+<!-- MODAL USUÁRIOS + PERFIS -->
 <div id="modalUsuarios" style="position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.8);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;">
-  <div style="background:rgba(12,16,26,.98);border:1px solid rgba(255,255,255,.09);border-radius:2rem;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 32px 64px rgba(0,0,0,.6);">
-    <div style="padding:1.25rem 1.5rem;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <h3 style="font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;color:#a78bfa">👥 Gestão de Usuários</h3>
+  <div style="background:rgba(12,16,26,.98);border:1px solid rgba(255,255,255,.09);border-radius:2rem;width:100%;max-width:440px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 32px 64px rgba(0,0,0,.6);">
+    <!-- Header -->
+    <div style="padding:1.1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <h3 style="font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;color:#a78bfa">👥 Usuários & Perfis</h3>
       <button onclick="fecharGestaoUsuarios()" style="width:2rem;height:2rem;border-radius:.625rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06);color:#475569;cursor:pointer">✕</button>
     </div>
-    <div style="padding:1.25rem 1.5rem;overflow-y:auto;flex:1">
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+      <button id="tabUsuariosBtn" onclick="switchModalTab('usuarios')" style="flex:1;padding:.65rem;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border:none;background:transparent;color:#a78bfa;border-bottom:2px solid #a78bfa;cursor:pointer;transition:.2s">Usuários</button>
+      <button id="tabPerfisBtn"   onclick="switchModalTab('perfis')"   style="flex:1;padding:.65rem;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border:none;background:transparent;color:#475569;border-bottom:2px solid transparent;cursor:pointer;transition:.2s">Perfis & Permissões</button>
+    </div>
+    <!-- Content -->
+    <div style="overflow-y:auto;flex:1;padding:1.1rem 1.25rem">
 
-      <!-- Criar novo usuário -->
-      <div style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:1rem;padding:1rem;margin-bottom:1rem">
-        <p style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#a78bfa;margin-bottom:.75rem">+ Novo Usuário</p>
-        <input type="text" id="novoUserNome" placeholder="Nome completo" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.9rem;outline:none;font-family:inherit;margin-bottom:.5rem;display:block">
-        <select id="novoUserRole" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.85rem;outline:none;font-family:inherit;margin-bottom:.5rem;display:block">
-          <option value="">— Papel —</option>
-          <option value="gerente">Gerente</option>
-          <option value="operador">Operador</option>
-          <option value="entregador">Entregador</option>
-          <option value="pdv">PDV (Caixa)</option>
-        </select>
-        <input type="password" id="novoUserPin" inputmode="numeric" maxlength="8" placeholder="PIN (mín. 3 dígitos)" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.9rem;outline:none;font-family:inherit;margin-bottom:.75rem;display:block">
-        <button onclick="criarUsuario()" style="width:100%;padding:.75rem;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:.75rem;font-weight:800;font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">Criar Usuário</button>
+      <!-- ── TAB USUÁRIOS ── -->
+      <div id="tabUsuarios">
+        <div style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:1rem;padding:1rem;margin-bottom:1rem">
+          <p style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#a78bfa;margin-bottom:.75rem">+ Novo Usuário</p>
+          <input type="text" id="novoUserNome" placeholder="Nome completo" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.9rem;outline:none;font-family:inherit;margin-bottom:.5rem;display:block">
+          <select id="novoUserRole" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.85rem;outline:none;font-family:inherit;margin-bottom:.5rem;display:block">
+            <option value="">— Perfil —</option>
+          </select>
+          <input type="password" id="novoUserPin" autocomplete="new-password" placeholder="Senha (mín. 3 caracteres)" style="width:100%;background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.6rem .875rem;color:#fff;font-size:.9rem;outline:none;font-family:inherit;margin-bottom:.75rem;display:block">
+          <button onclick="criarUsuario()" style="width:100%;padding:.75rem;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:.75rem;font-weight:800;font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">Criar Usuário</button>
+        </div>
+        <p style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:.6rem">Usuários Ativos</p>
+        <div id="usuariosLista"></div>
+        <p style="font-size:.58rem;color:#1e293b;font-weight:600;margin-top:.75rem;line-height:1.5">O login padrão de admin usa usuário "admin" e a senha configurada no sistema (PIN admin). PDV usa "pdv" e a senha PDV.</p>
       </div>
 
-      <!-- Lista de usuários -->
-      <p style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:.6rem">Usuários Ativos</p>
-      <div id="usuariosLista"></div>
+      <!-- ── TAB PERFIS ── -->
+      <div id="tabPerfis" style="display:none">
+        <!-- Criar novo perfil -->
+        <div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:1rem;padding:1rem;margin-bottom:1rem">
+          <p style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#f59e0b;margin-bottom:.75rem">+ Novo Perfil</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <input type="text" id="novoPerfidId" placeholder="ID (ex: analista)" style="background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.55rem .75rem;color:#fff;font-size:.78rem;outline:none;font-family:inherit">
+            <input type="text" id="novoPerfilLabel" placeholder="Nome (ex: Analista)" style="background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.55rem .75rem;color:#fff;font-size:.78rem;outline:none;font-family:inherit">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem">
+            <input type="text" id="novoPerfilIcone" placeholder="Ícone (ex: 📋)" style="background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.55rem .75rem;color:#fff;font-size:.78rem;outline:none;font-family:inherit">
+            <input type="color" id="novoPerfilCor" value="#64748b" style="background:#0f172a;border:2px solid #1e293b;border-radius:.75rem;padding:.3rem .5rem;width:100%;height:2.4rem;cursor:pointer">
+          </div>
+          <button onclick="criarNovoPerfil()" style="width:100%;padding:.65rem;background:linear-gradient(135deg,#b45309,#92400e);color:#fff;border:none;border-radius:.75rem;font-weight:800;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;cursor:pointer">Criar Perfil Base</button>
+        </div>
 
-      <p style="font-size:.58rem;color:#1e293b;font-weight:600;margin-top:.75rem;line-height:1.5">PINs padrão (admin/001, pdv/123) continuam funcionando independente desta lista.</p>
+        <!-- Lista de perfis editáveis -->
+        <div id="perfisLista"></div>
+
+        <button onclick="restaurarPerfisPadrao()" style="width:100%;margin-top:.75rem;padding:.6rem;background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.2);color:#64748b;border-radius:.75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer">↺ Restaurar Perfis Padrão</button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -716,11 +786,16 @@ body.is-admin .adm-only { display: block; }
 </div>
 
 <script src="core.js"></script>
+  <script src="./services/permissoesService.js"></script>
   <script src="./services/syncService.js"></script>
   <script src="./services/auditService.js"></script>
   <script src="./services/syncMonitor.js"></script>
   <script src="./services/backupService.js"></script>
   <script src="./services/userService.js"></script>
+  <script src="./services/estoqueService.js"></script>
+  <script src="./services/financeiroService.js"></script>
+  <script src="./services/vendasService.js"></script>
+  <script src="./services/aprovacaoService.js"></script>
 
 <script>
 'use strict';
@@ -729,17 +804,23 @@ body.is-admin .adm-only { display: block; }
    LOGIN
 ══════════════════════════════════ */
 async function doLogin() {
-  const pin = document.getElementById('pinInput').value.trim();
-  const err = document.getElementById('lockError');
-  if (!pin) return;
+  const nome  = document.getElementById('loginNome').value.trim();
+  const senha = document.getElementById('loginSenha').value.trim();
+  const err   = document.getElementById('lockError');
+  err.textContent = '';
+  err.classList.add('hidden');
+  if (!nome || !senha) {
+    err.textContent = 'Preencha usuário e senha.';
+    err.classList.remove('hidden');
+    return;
+  }
 
-  // Usa UserService (multi-usuário) quando disponível, fallback para AuthService (legado)
   let ok = false;
   if (window.CH?.UserService) {
-    const user = await window.CH.UserService.login(pin);
+    const user = await window.CH.UserService.login(nome, senha);
     ok = !!user;
   } else {
-    ok = await AuthService.login(pin);
+    ok = await AuthService.login(senha);
   }
 
   if (ok) {
@@ -747,17 +828,23 @@ async function doLogin() {
     setTimeout(() => {
       document.getElementById('lock').style.display = 'none';
       document.getElementById('hub').classList.add('show');
-      if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+      const _role = AuthService.getRole();
+      if (['adm','admin'].includes(_role)) document.body.classList.add('is-admin');
+      if (_role === 'controlador') document.body.classList.add('is-controlador');
+      if (_role === 'validador')   document.body.classList.add('is-validador');
       iniciarHub();
+      setTimeout(_aplicarPermissoesHub, 100);
     }, 400);
   } else {
-    err.textContent = 'PIN incorreto. Tente novamente.';
-    document.getElementById('pinInput').value = '';
-    document.getElementById('pinInput').focus();
+    err.textContent = 'Usuário ou senha incorretos.';
+    err.classList.remove('hidden');
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
   }
 }
 
-document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginSenha').addEventListener('keyup', e => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
+document.getElementById('loginNome').addEventListener('keyup', e => { if (e.key === 'Enter') { document.getElementById('loginSenha').focus(); } });
 
 function doLogout() {
   if (!confirm('Encerrar sessão?')) return;
@@ -815,10 +902,17 @@ function _atualizarHero() {
 
   if (nomeEl) nomeEl.textContent = nome;
   if (roleEl) {
-    roleEl.textContent = isAdmin ? 'ADMIN' : 'PDV';
-    roleEl.className   = 'hero-role ' + (isAdmin ? 'role-admin' : 'role-pdv');
+    const _r = AuthService.getRole();
+    const _ri = window.CH.UserService?.PERMISSOES_ROLES?.[_r] || {};
+    roleEl.textContent = _ri.label || _r.toUpperCase();
+    const rcls = { adm:'role-admin', admin:'role-admin', controlador:'role-ctrl', validador:'role-valid', colaborador:'role-pdv', gerente:'role-gerente', operador:'role-pdv', pdv:'role-pdv' };
+    roleEl.className   = 'hero-role ' + (rcls[_r] || 'role-pdv');
   }
-  if (avatarEl) avatarEl.textContent = isAdmin ? '👑' : '🛒';
+  if (avatarEl) {
+    const _rr = AuthService.getRole();
+    const _rri = window.CH.UserService?.PERMISSOES_ROLES?.[_rr] || {};
+    avatarEl.textContent = _rri.icone || '🛒';
+  }
   if (dataEl) {
     dataEl.textContent = new Date().toLocaleDateString('pt-BR', {
       weekday:'long', day:'2-digit', month:'long',
@@ -980,9 +1074,14 @@ function _atualizarBadges() {
   const fiadoAtivo = Store.getFiado().filter(c => (c.saldo||0) > 0).length;
   _setBadge('badgeFiado', fiadoAtivo);
 
-  // Vendas hoje
-  const vendasHoje = Store.getVendas().filter(v => v.dataCurta === hoje).length;
+  // Vendas hoje (só concluidas/validadas)
+  const vendasHoje = Store.getVendas().filter(v => v.dataCurta === hoje && ['concluida','validada'].includes(v.status)).length;
   _setBadge('badgeVendas', vendasHoje > 0 ? vendasHoje : 0);
+
+  // Aprovação — badge pendentes + aprovadas
+  const pendentesAprov = Store.getVendas().filter(v => v.status === 'pendente').length;
+  const aprovadasAprov = Store.getVendas().filter(v => v.status === 'aprovada').length;
+  _setBadge('badgeAprovacao', pendentesAprov + aprovadasAprov);
 }
 
 function _setBadge(id, count) {
@@ -1210,9 +1309,15 @@ function _atualizarGraficoSemanal() {
 /* ══════════════════════════════════
    GESTÃO DE USUÁRIOS (Admin)
 ══════════════════════════════════ */
+/* ══════════════════════════════════
+   USUÁRIOS & PERFIS (Admin)
+══════════════════════════════════ */
+
+let _modalTabAtual = 'usuarios';
+
 function abrirGestaoUsuarios() {
   if (!AuthService.isAdmin()) { showToast('Apenas admin', '', 'error'); return; }
-  _renderUsuarios();
+  switchModalTab('usuarios');
   const m = document.getElementById('modalUsuarios');
   if (m) { m.style.opacity = '1'; m.style.visibility = 'visible'; m.style.pointerEvents = 'auto'; }
 }
@@ -1222,51 +1327,69 @@ function fecharGestaoUsuarios() {
   if (m) { m.style.opacity = '0'; m.style.visibility = 'hidden'; m.style.pointerEvents = 'none'; }
 }
 
+function switchModalTab(tab) {
+  _modalTabAtual = tab;
+  document.getElementById('tabUsuarios').style.display = tab === 'usuarios' ? 'block' : 'none';
+  document.getElementById('tabPerfis').style.display   = tab === 'perfis'   ? 'block' : 'none';
+  const bU = document.getElementById('tabUsuariosBtn'), bP = document.getElementById('tabPerfisBtn');
+  if(bU) { bU.style.color = tab==='usuarios'?'#a78bfa':'#475569'; bU.style.borderBottomColor = tab==='usuarios'?'#a78bfa':'transparent'; }
+  if(bP) { bP.style.color = tab==='perfis'  ?'#f59e0b':'#475569'; bP.style.borderBottomColor = tab==='perfis'  ?'#f59e0b':'transparent'; }
+  if (tab === 'usuarios') { _renderUsuarios(); _popularSelectPerfis(); }
+  if (tab === 'perfis')   { _renderPerfis(); }
+}
+
+// ── USUÁRIOS ──────────────────────────────────────────────────────
+
+function _popularSelectPerfis() {
+  const sel = document.getElementById('novoUserRole');
+  if (!sel || !window.CH?.PermissoesService) return;
+  const perfis = window.CH.PermissoesService.getPerfis();
+  sel.innerHTML = '<option value="">— Perfil —</option>'
+    + perfis.map(p => `<option value="${p.id}">${p.icone || ''} ${p.label}</option>`).join('')
+    + '<option value="adm">👑 Administrador</option>';
+}
+
 function _renderUsuarios() {
   const lista = document.getElementById('usuariosLista');
   if (!lista || !window.CH?.UserService) return;
-
-  const users  = window.CH.UserService.getUsuarios();
-  const roles  = window.CH.UserService.PERMISSOES_ROLES;
-
+  const users = window.CH.UserService.getUsuarios();
   if (!users.length) {
     lista.innerHTML = '<p style="font-size:.65rem;color:#475569;text-align:center;padding:.75rem;font-weight:600">Nenhum usuário cadastrado além dos PINs padrão.</p>';
     return;
   }
-
   lista.innerHTML = users.map(u => {
-    const info = roles[u.role] || { label: u.role, cor: '#64748b' };
+    const perfil = window.CH.PermissoesService?.getPerfil(u.role);
+    const cor    = perfil?.cor || '#64748b';
+    const label  = perfil?.label || u.role;
+    const icone  = perfil?.icone || '👤';
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:rgba(255,255,255,.04);border-radius:.75rem;margin-bottom:.4rem">
         <div style="display:flex;align-items:center;gap:.6rem">
-          <div style="width:1.8rem;height:1.8rem;border-radius:50%;background:${info.cor}22;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;color:${info.cor}">${u.nome.charAt(0).toUpperCase()}</div>
+          <div style="width:2rem;height:2rem;border-radius:50%;background:${cor}22;display:flex;align-items:center;justify-content:center;font-size:.9rem">${icone}</div>
           <div>
-            <p style="font-size:.72rem;font-weight:800;color:#e2e8f0">${u.nome}</p>
-            <span style="font-size:.58rem;font-weight:700;color:${info.cor};background:${info.cor}18;padding:.1rem .4rem;border-radius:.3rem">${info.label}</span>
+            <p style="font-size:.75rem;font-weight:800;color:#e2e8f0">${u.nome}</p>
+            <span style="font-size:.6rem;font-weight:700;color:${cor};background:${cor}18;padding:.1rem .5rem;border-radius:.3rem">${label}</span>
           </div>
         </div>
-        <button onclick="desativarUsuario('${u.id}','${u.nome}')" style="width:1.8rem;height:1.8rem;border-radius:.5rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;cursor:pointer;font-size:.65rem" title="Desativar">✕</button>
+        <button onclick="desativarUsuario('${u.id}','${u.nome}')" style="width:1.9rem;height:1.9rem;border-radius:.5rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;cursor:pointer;font-size:.65rem" title="Desativar">✕</button>
       </div>`;
   }).join('');
 }
 
 async function criarUsuario() {
-  const nome = document.getElementById('novoUserNome')?.value.trim();
-  const role = document.getElementById('novoUserRole')?.value;
-  const pin  = document.getElementById('novoUserPin')?.value.trim();
-
-  if (!nome || !role || !pin) { showToast('Preencha todos os campos', '', 'error'); return; }
-  if (pin.length < 3)         { showToast('PIN mínimo 3 dígitos', '', 'error'); return; }
-
+  const nome  = document.getElementById('novoUserNome')?.value.trim();
+  const role  = document.getElementById('novoUserRole')?.value;
+  const senha = document.getElementById('novoUserPin')?.value.trim();
+  if (!nome || !role || !senha) { showToast('Preencha todos os campos', '', 'error'); return; }
+  if (senha.length < 3)         { showToast('Senha mínima 3 caracteres', '', 'error'); return; }
   try {
-    await window.CH.UserService.criarUsuario({ nome, role, pin });
-    showToast(`${nome} criado!`, window.CH.UserService.PERMISSOES_ROLES[role]?.label || role, 'success');
+    await window.CH.UserService.criarUsuario({ nome, role, senha });
+    const p = window.CH.PermissoesService?.getPerfil(role);
+    showToast(`${nome} criado!`, p?.label || role, 'success');
     document.getElementById('novoUserNome').value = '';
     document.getElementById('novoUserPin').value  = '';
     _renderUsuarios();
-  } catch(e) {
-    showToast('Erro', e.message, 'error');
-  }
+  } catch(e) { showToast('Erro', e.message, 'error'); }
 }
 
 async function desativarUsuario(id, nome) {
@@ -1275,9 +1398,182 @@ async function desativarUsuario(id, nome) {
     await window.CH.UserService.desativarUsuario(id);
     showToast(`${nome} desativado`, '', 'warning');
     _renderUsuarios();
-  } catch(e) {
-    showToast('Erro', e.message, 'error');
-  }
+  } catch(e) { showToast('Erro', e.message, 'error'); }
+}
+
+// ── PERFIS & PERMISSÕES ───────────────────────────────────────────
+
+const NIVEL_LABELS = ['Sem acesso', 'Leitura', 'Completo'];
+const NIVEL_CORES  = ['#1e293b',   '#f59e0b', '#10b981'];
+
+function _renderPerfis() {
+  const lista = document.getElementById('perfisLista');
+  if (!lista || !window.CH?.PermissoesService) return;
+  const Perm   = window.CH.PermissoesService;
+  const perfis = Perm.getPerfis();
+  const modulos= Perm.MODULOS;
+  const flags  = Perm.FLAGS;
+
+  lista.innerHTML = perfis.map(p => {
+    const modulosHTML = modulos.map(m => {
+      const nivel = p.modulos?.[m.id] ?? 0;
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.35rem .5rem;border-radius:.5rem;background:rgba(255,255,255,.02);margin-bottom:.2rem">
+          <span style="font-size:.72rem;color:#94a3b8">${m.icone} ${m.label}</span>
+          <div style="display:flex;gap:.25rem">
+            ${[0,1,2].map(n => `
+              <button onclick="setNivel('${p.id}','${m.id}',${n})" style="
+                padding:.2rem .45rem;border-radius:.35rem;font-size:.6rem;font-weight:700;cursor:pointer;border:1px solid;transition:.15s;
+                background:${nivel===n ? NIVEL_CORES[n]+'33' : 'transparent'};
+                color:${nivel===n ? NIVEL_CORES[n] : '#334155'};
+                border-color:${nivel===n ? NIVEL_CORES[n]+'66' : '#1e293b'};
+              " title="${NIVEL_LABELS[n]}">${NIVEL_LABELS[n]}</button>`).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    const flagsHTML = flags.map(f => {
+      const val = p.flags?.[f.id] ?? false;
+      return `
+        <div style="display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:.5rem;background:rgba(255,255,255,.02);margin-bottom:.2rem;cursor:pointer" onclick="toggleFlag('${p.id}','${f.id}')">
+          <div style="width:2.5rem;height:1.25rem;border-radius:999px;background:${val?'#10b981':'#1e293b'};transition:.2s;position:relative;flex-shrink:0">
+            <div style="position:absolute;top:.125rem;left:${val?'1.25rem':'.125rem'};width:1rem;height:1rem;border-radius:50%;background:${val?'#fff':'#475569'};transition:.2s"></div>
+          </div>
+          <span style="font-size:.68rem;color:#94a3b8;line-height:1.3">${f.label}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="background:rgba(12,16,26,.8);border:1px solid ${p.cor}33;border-radius:1rem;padding:.875rem;margin-bottom:.875rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <span style="font-size:1.1rem">${p.icone||'👤'}</span>
+            <div>
+              <p style="font-size:.78rem;font-weight:800;color:${p.cor}">${p.label}</p>
+              <p style="font-size:.6rem;color:#475569;font-family:monospace">${p.id}</p>
+            </div>
+          </div>
+          <button onclick="deletarPerfil('${p.id}','${p.label}')" style="padding:.25rem .5rem;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);color:#f87171;border-radius:.4rem;font-size:.6rem;cursor:pointer;font-weight:700">Remover</button>
+        </div>
+        <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#334155;margin-bottom:.35rem">Módulos</p>
+        ${modulosHTML}
+        <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#334155;margin:.6rem 0 .35rem">Configurações</p>
+        ${flagsHTML}
+      </div>`;
+  }).join('');
+}
+
+async function setNivel(perfilId, moduloId, nivel) {
+  const Perm = window.CH.PermissoesService;
+  if (!Perm) return;
+  const p = Perm.getPerfil(perfilId);
+  if (!p) return;
+  const modulos = { ...(p.modulos||{}) };
+  modulos[moduloId] = nivel;
+  Perm.atualizarPerfil(perfilId, { modulos });
+  _renderPerfis();
+  _aplicarPermissoesHub();
+  showToast('Permissão salva', NIVEL_LABELS[nivel], 'success');
+}
+
+async function toggleFlag(perfilId, flagId) {
+  const Perm = window.CH.PermissoesService;
+  if (!Perm) return;
+  const p = Perm.getPerfil(perfilId);
+  if (!p) return;
+  const flags = { ...(p.flags||{}) };
+  flags[flagId] = !flags[flagId];
+  Perm.atualizarPerfil(perfilId, { flags });
+  _renderPerfis();
+  showToast('Configuração salva', '', 'success');
+}
+
+function criarNovoPerfil() {
+  const id    = document.getElementById('novoPerfidId')?.value.trim().toLowerCase().replace(/\s+/g,'_');
+  const label = document.getElementById('novoPerfilLabel')?.value.trim();
+  const icone = document.getElementById('novoPerfilIcone')?.value.trim() || '👤';
+  const cor   = document.getElementById('novoPerfilCor')?.value || '#64748b';
+  if (!id || !label) { showToast('Informe ID e Nome do perfil', '', 'error'); return; }
+  try {
+    window.CH.PermissoesService.criarPerfil({ id, label, icone, cor });
+    document.getElementById('novoPerfidId').value    = '';
+    document.getElementById('novoPerfilLabel').value = '';
+    document.getElementById('novoPerfilIcone').value = '';
+    _renderPerfis();
+    _popularSelectPerfis();
+    showToast(`Perfil "${label}" criado!`, 'Configure os módulos abaixo', 'success');
+  } catch(e) { showToast('Erro', e.message, 'error'); }
+}
+
+function deletarPerfil(id, label) {
+  if (!confirm(`Remover perfil "${label}"? Usuários com este perfil perderão o acesso.`)) return;
+  try {
+    window.CH.PermissoesService.deletarPerfil(id);
+    _renderPerfis();
+    _popularSelectPerfis();
+    showToast(`Perfil "${label}" removido`, '', 'warning');
+  } catch(e) { showToast('Erro', e.message, 'error'); }
+}
+
+function restaurarPerfisPadrao() {
+  if (!confirm('Restaurar todos os perfis para os padrão do sistema? Configurações personalizadas serão perdidas.')) return;
+  window.CH.PermissoesService.restaurarPadroes();
+  _renderPerfis();
+  _popularSelectPerfis();
+  showToast('Perfis restaurados', 'Configurações padrão aplicadas', 'success');
+}
+
+// ── HUB DINÂMICO — mostra/oculta cards por permissão ─────────────
+
+function _aplicarPermissoesHub() {
+  const Perm = window.CH.PermissoesService;
+  const role = AuthService.getRole();
+  const isAdm = ['adm','admin'].includes(role);
+
+  // Cards com data-modulo
+  document.querySelectorAll('[data-modulo]').forEach(card => {
+    const mod = card.dataset.modulo;
+    if (mod === '__adm__') {
+      card.style.display = isAdm ? '' : 'none';
+      return;
+    }
+    // aprovacao: mostra se tem controle OU validação
+    if (mod === 'aprovacao') {
+      const ok = isAdm
+        || (Perm && (Perm.temAcesso(role,'aprovacao_controle') || Perm.temAcesso(role,'aprovacao_validacao')));
+      card.style.display = ok ? '' : 'none';
+      return;
+    }
+    // avulsa: mostra para qualquer role com acesso a vendas
+    if (mod === 'avulsa') {
+      const PODE_AVULSA = ['adm','admin','gerente','operador','pdv','colaborador'];
+      const ok = PODE_AVULSA.includes(role) || (Perm && Perm.temAcesso(role,'vendas'));
+      card.style.display = ok ? '' : 'none';
+      return;
+    }
+    // saas_admin: só super admin (adm/admin)
+    if (mod === 'saas_admin') {
+      card.style.display = isAdm ? '' : 'none';
+      return;
+    }
+    // saas_register: sempre visível
+    if (mod === 'saas_register') {
+      card.style.display = '';
+      return;
+    }
+    const ok = isAdm || (Perm && Perm.temAcesso(role, mod));
+    card.style.display = ok ? '' : 'none';
+  });
+
+  // Widgets do hero (breakdown de pagamento, estoque crítico, gráfico)
+  const verFinanceiro = isAdm || (Perm && Perm.temAcesso(role,'financeiro'));
+  const verEstoque    = isAdm || (Perm && Perm.temAcesso(role,'estoque'));
+  ['pgtoBreakdown','graficoSemanalCard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = verFinanceiro ? '' : 'none';
+  });
+  const ec = document.getElementById('estoqueCriticoCard');
+  if (ec) ec.style.display = verEstoque ? '' : 'none';
 }
 
 function limparTodosBancos() {
@@ -1318,10 +1614,14 @@ window.addEventListener('DOMContentLoaded', () => {
   if (AuthService.isLogged()) {
     document.getElementById('lock').style.display = 'none';
     document.getElementById('hub').classList.add('show');
-    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+    const _role2 = AuthService.getRole();
+    if (['adm','admin'].includes(_role2)) document.body.classList.add('is-admin');
+    if (_role2 === 'controlador') document.body.classList.add('is-controlador');
+    if (_role2 === 'validador')   document.body.classList.add('is-validador');
     iniciarHub();
+    setTimeout(_aplicarPermissoesHub, 100);
   } else {
-    setTimeout(() => document.getElementById('pinInput')?.focus(), 300);
+    setTimeout(() => document.getElementById('loginNome')?.focus(), 300);
   }
 });
 </script>

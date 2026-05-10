@@ -61,10 +61,42 @@ const CONSTANTS = Object.freeze({
     ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
     escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
   }),
+  adm: Object.freeze({
+    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
+  }),
+  colaborador: Object.freeze({
+    ler:      ['vendas'],
+    escrever: ['vendas'],
+  }),
+  controlador: Object.freeze({
+    ler:      ['vendas','aprovacao'],
+    escrever: ['aprovacao'],
+  }),
+  validador: Object.freeze({
+    ler:      ['vendas','estoque','financeiro','aprovacao'],
+    escrever: ['aprovacao'],
+  }),
+  analista: Object.freeze({
+    ler:      ['vendas','estoque','financeiro','aprovacao'],
+    escrever: ['aprovacao'],
+  }),
+  gerente: Object.freeze({
+    ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro'],
+  }),
+  operador: Object.freeze({
+    ler:      ['estoque','vendas','comandas'],
+    escrever: ['vendas','comandas'],
+  }),
+  entregador: Object.freeze({
+    ler:      ['pedidos'],
+    escrever: ['pedidos'],
+  }),
   }),
 
   TIPOS_MOVIMENTACAO: Object.freeze(['entrada','venda','avaria','ajuste','transferencia','cancelamento','inventario']),
-  ROLES:              Object.freeze(['admin','gerente','operador','entregador','pdv']),
+  ROLES:              Object.freeze(['admin','adm','gerente','operador','entregador','pdv','colaborador','controlador','validador','analista']),
 });
 
 const Utils = Object.freeze({
@@ -560,9 +592,9 @@ const FirebaseService = (() => {
   const role = AuthService.getRole();
   if (!role || !_db || !_fb) return;
 
-  const colsRT = role === 'admin'
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos']
-    : ['estoque', 'config'];
+  const colsRT = (role === 'admin' || role === 'adm')
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'usuarios']
+    : ['estoque', 'config', 'usuarios'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
@@ -592,6 +624,14 @@ const FirebaseService = (() => {
        if (!snap.exists()) return;
        const dados = snap.data()?.dados;
        if (!dados) return;
+       // Usuarios: salva direto no localStorage de usuários, não via Store genérico
+       if (col === 'usuarios') {
+         if (Array.isArray(dados)) {
+           try { localStorage.setItem('CH_USERS', JSON.stringify(dados)); } catch(_) {}
+           EventBus.emit('usuarios:atualizados', dados);
+         }
+         return;
+       }
        const key = CONSTANTS.DB[col.toUpperCase()];
        if (!key) return;
        try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {}
@@ -858,8 +898,8 @@ const AuthService = {
   return this._session;
   },
 
-  isLogged() { return !!(this._load()?.role); },
-  isAdmin()  { return this._load()?.role === 'admin'; },
+  isLogged() { const s = this._load(); return !!(s && s.role); },
+  isAdmin()  { const r = this._load()?.role; return r === 'admin' || r === 'adm'; },
   getRole()  { return this._load()?.role || null; },
   getNome()  { return this._load()?.nome || 'Colaborador'; },
   getUID()   { return FirebaseService.getUID(); },
@@ -874,12 +914,28 @@ const AuthService = {
   },
 
   async login(pin) {
-  const role = await CryptoService.validatePin(pin);
-  if (!role) return false;
-  const session = { role, nome: role === 'admin' ? 'Administrador' : 'Colaborador', loginAt: Date.now() };
+  // 1. Tenta UserService (usuários criados pelo ADM)
+  let session = null;
+  if (window.CH?.UserService) {
+    try {
+      const user = await window.CH.UserService.validarPin(pin);
+      if (user && user.id !== 'legacy') {
+        session = { role: user.role, nome: user.nome, userId: user.id, loginAt: Date.now() };
+      }
+    } catch(e) { console.warn('[AuthService.login] UserService erro:', e); }
+  }
+
+  // 2. Fallback: PINs legados (admin/001, pdv/123)
+  if (!session) {
+    const role = await CryptoService.validatePin(pin);
+    if (!role) return false;
+    session = { role, nome: role === 'admin' ? 'Administrador' : 'PDV', loginAt: Date.now() };
+  }
+
   sessionStorage.setItem(CONSTANTS.SESSION_KEY, JSON.stringify(session));
   this._session = session;
-  if (role === 'admin') {
+  const isAdm = ['adm','admin'].includes(session.role);
+  if (isAdm) {
     await FirebaseService.init();
     await FirebaseService.gerarAdminToken(String(pin).trim());
   } else {
@@ -903,7 +959,7 @@ const AuthService = {
   }, 2000);
   setTimeout(() => Store.hydrateAsync(), 3000);
 
-  EventBus.emit('auth:login', { role });
+  EventBus.emit('auth:login', { role: session.role });
   return true;
   },
 

@@ -108,6 +108,32 @@ service cloud.firestore {
       allow write: if autenticado() && temAdminToken(request.resource.data);
     }
 
+    // ─── /ch_dados/usuarios — lista de usuarios sincronizada ────────
+    // Usuarios podem ser lidos por qualquer autenticado.
+    // Escrita exige adminToken (apenas admin cria/edita usuarios).
+    // Override da regra geral /ch_dados/{colecao} para explicitar.
+    // (A regra geral ja cobre, mas deixamos explícito para clareza.)
+
+    // ─── SaaS: empresas, usuários, convites ─────────────────────────
+    match /saas_empresas/{empresaId} {
+      allow read:  if autenticado();
+      allow write: if autenticado();
+    }
+
+    match /saas_usuarios/{uid} {
+      allow read:  if autenticado();
+      allow write: if autenticado();
+    }
+
+    match /saas_convites/{codigo} {
+      allow read:  if autenticado();
+      allow write: if autenticado();
+    }
+
+    match /saas_dados/{empresaId}/{colecao}/{docId} {
+      allow read, write: if autenticado();
+    }
+
     // ─── Bloqueia tudo que não foi mapeado ───────────────────────────
     match /{document=**} {
       allow read, write: if false;

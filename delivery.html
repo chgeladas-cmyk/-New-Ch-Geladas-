@@ -72,9 +72,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
     <div class="text-5xl mb-4">🛵</div>
     <h1 class="text-2xl font-black mb-1 uppercase tracking-tight">CH <span class="text-orange-400">GELADAS</span></h1>
     <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Módulo de Delivery</p>
-    <input type="password" id="pinInput" autocomplete="current-password" inputmode="numeric"
-      class="w-full bg-slate-950 border-2 border-slate-800 focus:border-orange-500 p-5 rounded-2xl text-center text-2xl outline-none text-white tracking-[.4em] transition-all font-mono mb-4"
-      placeholder="· · · · ·" maxlength="8">
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
     <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
     <button onclick="doLogin()" class="w-full bg-orange-700 hover:bg-orange-600 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
       <i class="fas fa-unlock-alt mr-2"></i>Entrar
@@ -281,6 +280,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 </div>
 
 <script src="core.js"></script>
+  <script src="./services/permissoesService.js"></script>
+  <script src="./services/userService.js"></script>
   <script src="./services/syncService.js"></script>
   <script src="./services/auditService.js"></script>
   <script src="./services/syncMonitor.js"></script>
@@ -293,12 +294,44 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 'use strict';
 
 async function doLogin() {
-  const pin = document.getElementById('pinInput').value.trim();
-  const ok  = await AuthService.login(pin);
-  if (ok) { document.getElementById('lock').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); init(); }
-  else { const e=document.getElementById('lockError'); e.textContent='PIN incorreto.'; e.classList.remove('hidden'); document.getElementById('pinInput').value=''; }
+  const nome  = document.getElementById('loginNome')?.value.trim();
+  const senha = document.getElementById('loginSenha')?.value.trim();
+  const err   = document.getElementById('lockError');
+  err.textContent = '';
+  err.classList.add('hidden');
+  if (!nome || !senha) {
+    err.textContent = 'Preencha usuario e senha.';
+    err.classList.remove('hidden');
+    return;
+  }
+  let ok = false;
+  if (window.CH && window.CH.UserService) {
+    const user = await window.CH.UserService.login(nome, senha);
+    ok = !!user;
+  } else {
+    ok = await AuthService.login(senha);
+  }
+  if (ok) {
+    document.getElementById('lock').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    const _r = AuthService.getRole();
+    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+    const rt = document.getElementById('roleTag');
+    if (rt) {
+      const _pi = window.CH && window.CH.PermissoesService && window.CH.PermissoesService.getPerfil && window.CH.PermissoesService.getPerfil(_r);
+      rt.textContent = (_pi && _pi.label) || _r || 'PDV';
+      rt.classList.remove('hidden');
+    }
+    init();
+  } else {
+    err.textContent = 'Usuario ou senha incorretos.';
+    err.classList.remove('hidden');
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
+  }
 }
-document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('loginSenha').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
 function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
 
 /* ═══════════ ESTADO ═══════════ */
@@ -721,11 +754,18 @@ function _tempoDecorrido(iso) {
 function _set(id,val) { const el=document.getElementById(id); if(el) el.textContent=val; }
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (AuthService.isLogged()) {
-    document.getElementById('lock').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    init();
+  if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const _role = AuthService.getRole();
+  if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(_role);
+    rt.textContent = _info?.label || _role || 'PDV';
+    rt.classList.remove('hidden');
   }
+  init();
 });
 </script>
 </body>

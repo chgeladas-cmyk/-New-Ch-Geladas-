@@ -82,9 +82,8 @@ body.is-admin .adm-flex{display:flex!important;}
     <div class="text-5xl mb-4">🍺</div>
     <h1 class="text-2xl font-black mb-1 uppercase tracking-tight">CH <span class="text-blue-400">GELADAS</span></h1>
     <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Módulo de Vendas</p>
-    <input type="password" id="pinInput" autocomplete="current-password" inputmode="numeric"
-      class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-5 rounded-2xl text-center text-2xl outline-none text-white tracking-[.4em] transition-all font-mono mb-4"
-      placeholder="· · · · ·" maxlength="8">
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
     <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
     <button onclick="doLogin()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
       <i class="fas fa-unlock-alt mr-2"></i>Entrar
@@ -407,6 +406,8 @@ body.is-admin .adm-flex{display:flex!important;}
 </div>
 
 <script src="core.js"></script>
+  <script src="./services/permissoesService.js"></script>
+  <script src="./services/userService.js"></script>
   <script src="./services/syncService.js"></script>
   <script src="./services/auditService.js"></script>
   <script src="./services/syncMonitor.js"></script>
@@ -424,25 +425,44 @@ let _drawerOpen  = false;
 
 /* ══ LOGIN ══ */
 async function doLogin() {
-  const pin = document.getElementById('pinInput').value.trim();
-  const err = document.getElementById('lockError');
-  if (!pin) return;
-  const ok = await AuthService.login(pin);
+  const nome  = document.getElementById('loginNome')?.value.trim();
+  const senha = document.getElementById('loginSenha')?.value.trim();
+  const err   = document.getElementById('lockError');
+  err.textContent = '';
+  err.classList.add('hidden');
+  if (!nome || !senha) {
+    err.textContent = 'Preencha usuario e senha.';
+    err.classList.remove('hidden');
+    return;
+  }
+  let ok = false;
+  if (window.CH && window.CH.UserService) {
+    const user = await window.CH.UserService.login(nome, senha);
+    ok = !!user;
+  } else {
+    ok = await AuthService.login(senha);
+  }
   if (ok) {
     document.getElementById('lock').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
+    const _r = AuthService.getRole();
     if (AuthService.isAdmin()) document.body.classList.add('is-admin');
     const rt = document.getElementById('roleTag');
-    if (rt) { rt.textContent = AuthService.isAdmin() ? 'ADM' : 'PDV'; rt.classList.remove('hidden'); }
+    if (rt) {
+      const _pi = window.CH && window.CH.PermissoesService && window.CH.PermissoesService.getPerfil && window.CH.PermissoesService.getPerfil(_r);
+      rt.textContent = (_pi && _pi.label) || _r || 'PDV';
+      rt.classList.remove('hidden');
+    }
     init();
   } else {
-    err.textContent = 'PIN incorreto.';
+    err.textContent = 'Usuario ou senha incorretos.';
     err.classList.remove('hidden');
-    document.getElementById('pinInput').value = '';
-    document.getElementById('pinInput').focus();
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
   }
 }
-document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginSenha').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
 function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
 
 /* ══ INIT ══ */
@@ -757,22 +777,67 @@ function renderClientesFiado() {
 }
 
 function confirmarFiado(clienteId) {
+  const { Store, AuthService, Utils, EventBus } = window.CH;
   const cliente = Store.getFiado().find(c=>c.id===clienteId);
   if (!cliente) return;
+  const total  = CartService.getTotal();
+  const itens  = CartService.getItems();
+
   // Verifica limite
-  const total = CartService.getTotal();
   if (cliente.limite > 0 && (cliente.saldo||0) + total > cliente.limite) {
     UIService.showToast('Limite insuficiente', `Limite: ${Utils.formatCurrency(cliente.limite)}`, 'error'); return;
   }
   UIService.closeModal('modalFiadoCliente');
-  // Lança no fiado do cliente
+
+  // ── Precisa de aprovação? ─────────────────────────────────────────
+  if (_verificarAprovacao()) {
+    // Cria venda pendente SEM baixar estoque ainda
+    const itensDesc = itens.map(i=>`${i.nome} x${i.qtd}`).join(', ');
+    const venda = {
+      id:           Utils.generateId(),
+      dataCurta:    Utils.todayISO(),
+      data:         Utils.today(),
+      hora:         Utils.nowTime(),
+      criadoEm:     Utils.nowISO(),
+      itens,
+      total,
+      subtotal:     CartService.getSubtotal ? CartService.getSubtotal() : total,
+      desconto:     CartService.getDesconto ? CartService.getDesconto() : 0,
+      lucro:        itens.reduce((s,i) => s + (i.preco-(i.custo||0))*i.qtd, 0),
+      formaPgto:    `Fiado — ${cliente.nome}`,
+      origem:       'PDV',
+      operador:     AuthService.getNome(),
+      role:         AuthService.getRole(),
+      status:       'pendente',
+      _fbSynced:    false,
+      _fiado:       true,
+      _fiadoClienteId:   clienteId,
+      _fiadoClienteNome: cliente.nome,
+      _baixouEstoque:    false, // estoque SÓ baixa após aprovação
+    };
+    Store.mutateVendas(v => { v.unshift(venda); });
+    if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
+    CartService.clear();
+    EventBus.emit('venda:pendente', venda);
+    renderCatalogo();
+    atualizarAlerta();
+    UIService.showToast(`Fiado ${cliente.nome}`, 'Aguardando aprovação', 'warning');
+    return;
+  }
+
+  // ── Sem aprovação: lança direto ───────────────────────────────────
+  const itensDesc = itens.map(i=>`${i.nome} x${i.qtd}`).join(', ');
   Store.mutateFiado(fiado => {
     const c = fiado.find(x=>x.id===clienteId);
     if (!c) return;
     c.saldo = (c.saldo||0) + total;
     if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
-    const itensDesc = CartService.getItems().map(i=>`${i.nome} x${i.qtd}`).join(', ');
-    c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'fiado', descricao:itensDesc||'Compra PDV', valor:total, criadoEm:new Date().toISOString() });
+    c.movimentacoes.unshift({
+      id: Utils.generateId(), tipo: 'fiado',
+      descricao: itensDesc || 'Compra PDV',
+      valor: total, itens,
+      criadoEm: new Date().toISOString(),
+    });
     if (c.limite>0 && c.saldo >= c.limite) c.bloqueado = true;
   });
   EventBus.emit('fiado:lancado', { cliente: cliente.nome, valor: total, obs: 'Venda PDV' });
@@ -780,21 +845,80 @@ function confirmarFiado(clienteId) {
 }
 
 /* ══ FINALIZAR VENDA ══ */
+
+/* ══ APROVAÇÃO INLINE — independente de serviços externos ══ */
+function _verificarAprovacao() {
+  try {
+    const role = window.CH?.AuthService?.getRole?.() || '';
+
+    // Roles que NUNCA precisam de aprovação
+    const LIVRES = ['adm','admin','gerente','operador','pdv','entregador'];
+    if (LIVRES.includes(role)) return false;
+
+    // Tenta PermissoesService (configuração do ADM)
+    const Perm = window.CH?.PermissoesService;
+    if (Perm) {
+      const p = Perm.getPerfil(role);
+      // Se o perfil existe e tem a flag EXPLICITAMENTE definida, usa ela
+      if (p && p.flags && typeof p.flags.vendas_requer_aprovacao === 'boolean') {
+        return p.flags.vendas_requer_aprovacao;
+      }
+    }
+
+    // Fallback conservador: qualquer role fora da lista livre requer aprovação
+    // Isso garante que colaborador/controlador/analista/validador
+    // e qualquer perfil personalizado sempre requeiram aprovação
+    return true;
+  } catch(e) { return true; }
+}
+
 function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '', parcelaRestante = 0) {
   if (CartService.isEmpty()) return;
+
+  // ── Verifica aprovação independente dos serviços ──────────────
+  if (_verificarAprovacao()) {
+    const { Store, AuthService, Utils, EventBus } = window.CH;
+    const itens    = CartService.getItems();
+    const total    = CartService.getTotal();
+    const subtotal = CartService.getSubtotal ? CartService.getSubtotal() : total;
+    const desconto = CartService.getDesconto ? CartService.getDesconto() : 0;
+    const lucro    = itens.reduce((s,i) => s + (i.preco - (i.custo||0)) * i.qtd, 0) - desconto;
+    const venda = {
+      id: Utils.generateId(), dataCurta: Utils.todayISO(), data: Utils.today(),
+      hora: Utils.nowTime(), criadoEm: Utils.nowISO(),
+      itens, total, subtotal, desconto, lucro,
+      formaPgto: forma || 'Dinheiro', origem: 'PDV',
+      operador: AuthService.getNome(), role: AuthService.getRole(),
+      status: 'pendente', _fbSynced: false,
+      _troco: troco, _parcelaDinheiro: parcelaDinheiro,
+      _parcelaRestante: parcelaRestante, _formaRestante: formaRestante,
+    };
+    Store.mutateVendas(v => { v.unshift(venda); });
+    if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
+    CartService.clear();
+    EventBus.emit('venda:pendente', venda);
+    renderCatalogo();
+    atualizarAlerta();
+    UIService.showToast('Enviado para aprovacao!', 'Aguarda controlador', 'warning');
+    return;
+  }
+
+  // ── Fluxo direto (sem aprovacao) ─────────────────────────────
   const extras = { troco, parcelaDinheiro, parcelaRestante, formaRestante };
-  const venda = CartService.finalize(forma, extras);
-  if (!venda) return;
-  // Garante campos mesmo quando VendasService não está disponível
-  venda._troco           = venda._troco           || troco;
-  venda._parcelaDinheiro = venda._parcelaDinheiro || parcelaDinheiro;
-  venda._parcelaRestante = venda._parcelaRestante || parcelaRestante;
-  venda._formaRestante   = venda._formaRestante   || formaRestante;
-  _ultimaVenda = venda;
-  mostrarRecibo(venda);
-  renderCatalogo();
-  atualizarAlerta();
-  UIService.showToast('Venda concluída!', Utils.formatCurrency(venda.total), 'success');
+  const result = CartService.finalize(forma, extras);
+  const _done = (venda) => {
+    if (!venda) return;
+    venda._troco           = venda._troco           || troco;
+    venda._parcelaDinheiro = venda._parcelaDinheiro || parcelaDinheiro;
+    venda._parcelaRestante = venda._parcelaRestante || parcelaRestante;
+    venda._formaRestante   = venda._formaRestante   || formaRestante;
+    _ultimaVenda = venda;
+    mostrarRecibo(venda);
+    renderCatalogo();
+    atualizarAlerta();
+    UIService.showToast('Venda concluida!', Utils.formatCurrency(venda.total), 'success');
+  };
+  if (result && typeof result.then === 'function') { result.then(_done); } else { _done(result); }
 }
 
 /* ══ CANCELAR VENDA ══ */
@@ -1010,14 +1134,21 @@ function _setText(id,val) { const el=document.getElementById(id); if(el) el.text
 
 /* ══ INIT SESSÃO ══ */
 window.addEventListener('DOMContentLoaded', () => {
-  if (AuthService.isLogged()) {
-    document.getElementById('lock').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
-    const rt = document.getElementById('roleTag');
-    if (rt) { rt.textContent = AuthService.isAdmin()?'ADM':'PDV'; rt.classList.remove('hidden'); }
-    init();
+  if (!AuthService.isLogged()) {
+    location.href = 'index.html';
+    return;
   }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const _role = AuthService.getRole();
+  if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(_role);
+    rt.textContent = _info?.label || _role || 'PDV';
+    rt.classList.remove('hidden');
+  }
+  init();
 });
 </script>
 </body>

@@ -54,7 +54,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
     <div class="text-5xl mb-4">📦</div>
     <h1 class="text-2xl font-black mb-1 uppercase">CH <span class="text-emerald-400">GELADAS</span></h1>
     <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Módulo de Estoque</p>
-    <input type="password" id="pinInput" inputmode="numeric" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-emerald-500 p-5 rounded-2xl text-center text-2xl outline-none text-white tracking-[.4em] transition-all font-mono mb-4" placeholder="· · · · ·" maxlength="8">
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-blue-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
     <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
     <button onclick="doLogin()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all"><i class="fas fa-unlock-alt mr-2"></i>Entrar</button>
     <div class="mt-6"><a href="index.html" class="text-[9px] text-slate-700 hover:text-slate-500 font-bold uppercase tracking-widest">← Hub Principal</a></div>
@@ -278,6 +279,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
 <div id="toast"><div id="toastIcon" class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-black"></div><div><span id="toastMsg" class="text-[11px] font-black uppercase tracking-wide block"></span><span id="toastSub" class="text-[9px] text-slate-500 font-bold"></span></div></div>
 
 <script src="core.js"></script>
+  <script src="./services/permissoesService.js"></script>
+  <script src="./services/userService.js"></script>
   <script src="./services/syncService.js"></script>
   <script src="./services/auditService.js"></script>
   <script src="./services/syncMonitor.js"></script>
@@ -288,8 +291,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
 'use strict';
 let _packsForm=[],_packsEdit=[],_qtdOrig=0;
 
-async function doLogin(){const pin=document.getElementById('pinInput').value.trim();const err=document.getElementById('lockError');if(!pin)return;const ok=await AuthService.login(pin);if(ok){document.getElementById('lock').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(AuthService.isAdmin())document.body.classList.add('is-admin');const rt=document.getElementById('roleTag');if(rt){rt.textContent=AuthService.isAdmin()?'ADM':'PDV';rt.classList.remove('hidden');}init();}else{err.textContent='PIN incorreto.';err.classList.remove('hidden');document.getElementById('pinInput').value='';}}
-document.getElementById('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+async function doLogin(){const pin=document.getElementById('loginSenha').value.trim();const err=document.getElementById('lockError');if(!pin)return;const ok=await AuthService.login(pin);if(ok){document.getElementById('lock').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(AuthService.isAdmin())document.body.classList.add('is-admin');const rt=document.getElementById('roleTag');if(rt){rt.textContent=AuthService.isAdmin()?'ADM':'PDV';rt.classList.remove('hidden');}init();}else{err.textContent='PIN incorreto.';err.classList.remove('hidden');document.getElementById('loginSenha').value='';}}
+document.getElementById('loginSenha').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 function logout(){if(confirm('Encerrar sessão?')){AuthService.logout();location.reload();}}
 
 function init(){UIService.startClock('clock');renderFiltros();renderLista();renderKPIs();renderAudit();EventBus.on('store:updated',()=>{renderFiltros();renderLista();renderKPIs();renderAudit();});}
@@ -381,7 +384,20 @@ function baixarRelatorio(){Utils.downloadBlob(_gerarTextoRelatorio(),'text/plain
 
 function _setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 
-window.addEventListener('DOMContentLoaded',()=>{if(AuthService.isLogged()){document.getElementById('lock').classList.add('hidden');document.getElementById('app').classList.remove('hidden');if(AuthService.isAdmin())document.body.classList.add('is-admin');const rt=document.getElementById('roleTag');if(rt){rt.textContent=AuthService.isAdmin()?'ADM':'PDV';rt.classList.remove('hidden');}init();}});
+window.addEventListener('DOMContentLoaded', () => {
+  if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const _role = AuthService.getRole();
+  if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(_role);
+    rt.textContent = _info?.label || _role || 'PDV';
+    rt.classList.remove('hidden');
+  }
+  init();
+});
 </script>
 </body>
 </html>
