@@ -35,6 +35,14 @@
     const app = getApps().length ? getApp() : null;
     if (!app) throw new Error('Firebase não inicializado. Recarregue a página.');
 
+    // 3) Garante auth anônima mesmo sem core.js na página
+    const { getAuth, signInAnonymously } =
+      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    const auth = getAuth(app);
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+
     _db = _fb.getFirestore(app);
     return true;
   }
