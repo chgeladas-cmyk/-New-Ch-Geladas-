@@ -35,6 +35,14 @@
     const app = getApps().length ? getApp() : null;
     if (!app) throw new Error('Firebase não inicializado. Recarregue a página.');
 
+    // 3) Garante auth anônima mesmo sem core.js na página
+    const { getAuth, signInAnonymously } =
+      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    const auth = getAuth(app);
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+
     _db = _fb.getFirestore(app);
     return true;
   }
@@ -313,21 +321,6 @@
     await _fb.updateDoc(_fb.doc(_db, 'saas_empresas', empresaId), { plano });
   }
 
-
-  async function deletarEmpresa(empresaId) {
-    await _ensureDB();
-    // 1) Busca todos os usuários da empresa
-    const uSnap = await _fb.getDocs(
-      _fb.query(_fb.collection(_db, 'saas_usuarios'), _fb.where('empresaId','==',empresaId))
-    );
-    // 2) Batch: deleta empresa + usuários (max 500 ops por batch)
-    const batch = _fb.writeBatch(_db);
-    batch.delete(_fb.doc(_db, 'saas_empresas', empresaId));
-    uSnap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-    console.info('[SaaS] Empresa deletada:', empresaId);
-  }
-
   async function toggleEmpresa(empresaId, ativo) {
     if (!isSuperAdmin()) throw new Error('Acesso negado');
     await _ensureDB();
@@ -344,7 +337,7 @@
     // Convites
     gerarConvite, usarConvite,
     // Usuários
-    getUsuariosEmpresa, desativarUsuario, deletarEmpresa,
+    getUsuariosEmpresa, desativarUsuario,
     // Super admin
     listarEmpresas, atualizarPlano, toggleEmpresa, gerarConviteAdmin,
     // Planos
