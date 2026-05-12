@@ -549,6 +549,27 @@ const FirebaseService = (() => {
 
   let _db = null, _auth = null, _fb = null;
   let _ready = false, _adminToken = null;
+
+  // ── Multi-tenant path helpers ─────────────────────────────────────
+  function _empresaId() {
+    try {
+      const s = sessionStorage.getItem('SAAS_SESSION');
+      return s ? JSON.parse(s).empresaId : null;
+    } catch { return null; }
+  }
+  function _docRef(colName) {
+    const eid = _empresaId();
+    return eid
+      ? _fb.doc(_db, 'saas_dados', eid, 'ch_dados', colName)
+      : _fb.doc(_db, 'ch_dados', colName);
+  }
+  function _colRef(colName) {
+    const eid = _empresaId();
+    return eid
+      ? _fb.collection(_db, 'saas_dados', eid, colName)
+      : _fb.collection(_db, colName);
+  }
+
   let _unsubscribers = [];
 
   async function init() {
@@ -599,7 +620,7 @@ const FirebaseService = (() => {
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
     const vendasQuery = _fb.query(
-      _fb.collection(_db, 'vendas'),
+      _colRef('vendas'),
       _fb.orderBy('criadoEm', 'desc'),
       _fb.limit(1000)
     );
@@ -619,7 +640,7 @@ const FirebaseService = (() => {
   colsRT.forEach(col => {
     try {
    const unsub = _fb.onSnapshot(
-     _fb.doc(_db, 'ch_dados', col),
+     _docRef(col),
      snap => {
        if (!snap.exists()) return;
        const dados = snap.data()?.dados;
@@ -667,7 +688,7 @@ const FirebaseService = (() => {
    if (!pendentes.length) return true;
    const batch = _fb.writeBatch(_db);
    pendentes.forEach(venda => {
-     const ref = _fb.doc(_db, 'vendas', venda.id);
+     const ref = _fb.doc(_colRef('vendas'), venda.id);
      batch.set(ref, { ...venda, _fbSynced: true, syncedAt: Utils.nowISO() });
    });
    await batch.commit();
@@ -683,7 +704,7 @@ const FirebaseService = (() => {
     } else {
    const docData = { dados, ts: Utils.nowISO() };
    if (_adminToken) docData.adminToken = _adminToken;
-   await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
+   await _fb.setDoc(_docRef(colName), docData);
     }
     return true;
   } catch(e) {
@@ -700,7 +721,7 @@ const FirebaseService = (() => {
         const ids = Array.isArray(dados) ? dados : [dados];
         const batch = _fb.writeBatch(_db);
         ids.forEach(id => {
-          const ref = _fb.doc(_db, 'vendas', typeof id === 'string' ? id : id.id);
+          const ref = _fb.doc(_colRef('vendas'), typeof id === 'string' ? id : id.id);
           const docData = { _deleted: true, _fbSynced: true, updatedAt: Utils.nowISO() };
           if (_adminToken) docData.adminToken = _adminToken;
           batch.set(ref, docData, { merge: true });
@@ -722,7 +743,7 @@ const FirebaseService = (() => {
         const itens = Array.isArray(dados) ? dados : [dados];
         const batch = _fb.writeBatch(_db);
         itens.forEach(v => {
-          const ref = _fb.doc(_db, 'vendas', v.id);
+          const ref = _fb.doc(_colRef('vendas'), v.id);
           const docData = { ...v, _fbSynced: true, updatedAt: Utils.nowISO() };
           if (_adminToken) docData.adminToken = _adminToken;
           batch.set(ref, docData, { merge: true });
@@ -742,11 +763,11 @@ const FirebaseService = (() => {
   try {
     if (colName === 'vendas') {
    const snap = await _fb.getDocs(
-     _fb.query(_fb.collection(_db, 'vendas'), _fb.orderBy('criadoEm','desc'), _fb.limit(1000))
+     _fb.query(_colRef('vendas'), _fb.orderBy('criadoEm','desc'), _fb.limit(1000))
    );
    return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(v => !v._deleted);
     } else {
-   const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
+   const snap = await _fb.getDoc(_docRef(colName));
    return snap.exists() ? snap.data().dados : null;
     }
   } catch(e) {
