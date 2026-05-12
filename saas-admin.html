@@ -259,7 +259,6 @@ function renderLista() {
             ? `<button class="btn-sm btn-danger"  onclick="toggleEmpresa('${e.id}',false)"><i class="fas fa-ban mr-1"></i>Desativar</button>`
             : `<button class="btn-sm btn-success" onclick="toggleEmpresa('${e.id}',true)"><i class="fas fa-check mr-1"></i>Ativar</button>`
           }
-          <button class="btn-sm btn-danger" onclick="deletarEmpresa('${e.id}','${e.nome}')"><i class="fas fa-trash mr-1"></i>Excluir</button>
           <button class="btn-sm btn-info" onclick="gerarConviteAdmin('${e.id}','colaborador')">
             <i class="fas fa-ticket-alt mr-1"></i>Gerar Convite
           </button>
@@ -312,14 +311,6 @@ function toast(msg, tipo='ok') {
   t.className = 'show ' + tipo;
   setTimeout(() => t.className = '', 2500);
 }
-
-async function deletarEmpresa(empresaId, nome) {
-  if (!confirm(`Excluir permanentemente "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
-  try {
-    await _SS().deletarEmpresa(empresaId);
-    await carregarEmpresas();
-  } catch(e) {
-    alert('Erro ao excluir: ' + e.message);
-  }
-}
 </script>
+</body>
+</html>
