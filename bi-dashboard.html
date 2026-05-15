@@ -272,14 +272,75 @@
     margin: 20px 0 12px;
   }
   .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: .88rem; }
-  .text-right  { text-align: right; }
-  .text-mono   { font-family: monospace; }
-  .fw7 { font-weight: 700; }
-  .c-green  { color: var(--green); }
-  .c-red    { color: var(--red); }
-  .c-yellow { color: var(--yellow); }
-  .c-muted  { color: var(--muted); }
-</style>
+  /* ── Formulário Lançar ───────────────────────────────────────── */
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: .75rem; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; display: block; }
+  .form-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px; border-radius: 8px;
+    font-size: .9rem; outline: none; transition: border-color .15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--muted); }
+  select.form-input option { background: var(--bg); }
+
+  .tipo-pills { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tipo-pill {
+    flex: 1; min-width: 120px; padding: 12px 16px; border-radius: 10px;
+    border: 2px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; font-size: .85rem; font-weight: 700;
+    text-align: center; transition: all .15s;
+  }
+  .tipo-pill.active-red    { border-color: var(--red);    color: var(--red);    background: rgba(239,68,68,.1); }
+  .tipo-pill.active-orange { border-color: var(--yellow); color: var(--yellow); background: rgba(245,158,11,.1); }
+  .tipo-pill.active-purple { border-color: var(--purple); color: var(--purple); background: rgba(167,139,250,.1); }
+  .tipo-pill:hover { border-color: var(--border); opacity: .85; }
+
+  .lancar-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
+  }
+  @media (max-width: 700px) { .lancar-grid { grid-template-columns: 1fr; } }
+
+  .btn-lancar {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    font-size: .95rem; font-weight: 800; cursor: pointer; transition: opacity .15s;
+    letter-spacing: .02em;
+  }
+  .btn-lancar:hover { opacity: .88; }
+  .btn-lancar-red    { background: var(--red);    color: #fff; }
+  .btn-lancar-orange { background: var(--yellow); color: #000; }
+  .btn-lancar-purple { background: var(--purple); color: #fff; }
+
+  .lancamentos-lista .item-lanc {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .lancamentos-lista .item-lanc:last-child { border-bottom: none; }
+  .lanc-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0;
+  }
+  .lanc-icon-red    { background: rgba(239,68,68,.15); }
+  .lanc-icon-orange { background: rgba(245,158,11,.15); }
+  .lanc-icon-purple { background: rgba(167,139,250,.15); }
+  .lanc-body { flex: 1; min-width: 0; }
+  .lanc-desc { font-weight: 700; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lanc-meta { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+  .lanc-valor { font-weight: 800; font-size: .95rem; flex-shrink: 0; }
+
+  .resumo-dia {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin-bottom: 20px;
+  }
+  .resumo-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; text-align: center;
+  }
+  .resumo-item .r-val { font-size: 1.2rem; font-weight: 800; margin-bottom: 3px; }
+  .resumo-item .r-lab { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
 </head>
 <body>
 
@@ -358,6 +419,7 @@
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" onclick="switchTab('visao-geral')">Visão Geral</button>
+      <button class="tab" onclick="switchTab('lancar')">💸 Lançar</button>
       <button class="tab" onclick="switchTab('custos')">💰 Custos</button>
       <button class="tab" onclick="switchTab('abc')">Curva ABC</button>
       <button class="tab" onclick="switchTab('financeiro')">Financeiro</button>
@@ -390,6 +452,113 @@
         <div class="compare-grid" id="compare-grid"></div>
       </div>
     </div>
+
+    <!-- Tab: Lançar ──────────────────────────────────────────────── -->
+    <div id="tab-lancar" class="tab-content">
+      <div class="lancar-grid">
+
+        <!-- Formulário -->
+        <div class="chart-card">
+          <div class="chart-title" style="margin-bottom:16px">Novo Lançamento</div>
+
+          <!-- Tipo -->
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <div class="tipo-pills">
+              <button class="tipo-pill active-red" id="pill-despesa" onclick="selecionarTipo('despesa')">
+                💸 Despesa
+              </button>
+              <button class="tipo-pill" id="pill-sangria" onclick="selecionarTipo('sangria')">
+                💴 Sangria<br><span style="font-size:.7rem;font-weight:400">Retirada caixa</span>
+              </button>
+              <button class="tipo-pill" id="pill-outro" onclick="selecionarTipo('outro')">
+                📌 Outro
+              </button>
+            </div>
+          </div>
+
+          <!-- Descrição -->
+          <div class="form-group">
+            <label class="form-label" for="lanc-desc">Descrição</label>
+            <input id="lanc-desc" class="form-input" type="text"
+              placeholder="Ex: Conta de luz, Retirada, Compra de gelo…">
+          </div>
+
+          <!-- Valor -->
+          <div class="form-group">
+            <label class="form-label" for="lanc-valor">Valor (R$)</label>
+            <input id="lanc-valor" class="form-input" type="number"
+              min="0.01" step="0.01" placeholder="0,00"
+              oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+          </div>
+
+          <!-- Categoria (só para Despesa) -->
+          <div class="form-group" id="grupo-categoria">
+            <label class="form-label" for="lanc-cat">Categoria</label>
+            <select id="lanc-cat" class="form-input">
+              <option value="operacional">Operacional (luz, água, aluguel…)</option>
+              <option value="compra">Compra de mercadoria</option>
+              <option value="avaria">Avaria / Quebra</option>
+              <option value="ajuste">Ajuste de estoque</option>
+              <option value="outro">Outros</option>
+            </select>
+          </div>
+
+          <!-- Data -->
+          <div class="form-group">
+            <label class="form-label" for="lanc-data">Data</label>
+            <input id="lanc-data" class="form-input" type="date">
+          </div>
+
+          <!-- Observação -->
+          <div class="form-group">
+            <label class="form-label" for="lanc-obs">Observação (opcional)</label>
+            <input id="lanc-obs" class="form-input" type="text"
+              placeholder="Detalhes adicionais…">
+          </div>
+
+          <button id="btn-lancar" class="btn-lancar btn-lancar-red" onclick="confirmarLancamento()">
+            💸 Registrar Despesa
+          </button>
+          <div id="lanc-feedback" style="margin-top:10px;font-size:.83rem;text-align:center;min-height:1.2em"></div>
+        </div>
+
+        <!-- Resumo + Lista do dia -->
+        <div>
+          <!-- Resumo do dia -->
+          <div class="chart-card" style="margin-bottom:16px">
+            <div class="chart-title" style="margin-bottom:14px">Resumo de Hoje</div>
+            <div class="resumo-dia">
+              <div class="resumo-item">
+                <div class="r-val c-red" id="res-despesas">R$ 0,00</div>
+                <div class="r-lab">Despesas</div>
+              </div>
+              <div class="resumo-item">
+                <div class="r-val c-yellow" id="res-sangrias">R$ 0,00</div>
+                <div class="r-lab">Sangrias</div>
+              </div>
+              <div class="resumo-item">
+                <div class="r-val c-muted" id="res-total-saidas">R$ 0,00</div>
+                <div class="r-lab">Total Saídas</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Últimos lançamentos -->
+          <div class="chart-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div class="chart-title">Últimos Lançamentos</div>
+              <button class="btn btn-outline btn-sm" onclick="renderLancar()">↻</button>
+            </div>
+            <div class="lancamentos-lista" id="lista-lancamentos">
+              <div class="empty-state">Carregando…</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <!-- /tab-lancar -->
 
     <!-- Tab: Custos ───────────────────────────────────────────── -->
     <div id="tab-custos" class="tab-content">
@@ -648,6 +817,7 @@ function switchTab(id) {
   document.getElementById(`tab-${id}`)?.classList.add('active');
   event.target.classList.add('active');
   // Lazy render específico por tab
+  if (id === 'lancar')      renderLancar();
   if (id === 'custos')      renderCustos();
   if (id === 'abc')         renderABC();
   if (id === 'financeiro')  renderFinanceiro();
@@ -1219,6 +1389,154 @@ function renderParados() {
   `).join('') || '<tr><td colspan="7" class="empty-state">Nenhum produto parado! 🎉</td></tr>';
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  LANÇAR — Despesas, Sangria, Outros
+// ═══════════════════════════════════════════════════════════════════
+
+let _tipoAtual = 'despesa';
+
+const TIPO_CFG = {
+  despesa: { label: 'Registrar Despesa', btnCls: 'btn-lancar-red',    icone: '💸', pillCls: 'active-red',    catVisible: true  },
+  sangria: { label: 'Registrar Sangria', btnCls: 'btn-lancar-orange', icone: '💴', pillCls: 'active-orange', catVisible: false },
+  outro:   { label: 'Registrar Lançamento', btnCls: 'btn-lancar-purple', icone: '📌', pillCls: 'active-purple', catVisible: true },
+};
+
+function selecionarTipo(tipo) {
+  _tipoAtual = tipo;
+  const cfg = TIPO_CFG[tipo];
+  // Pills
+  ['despesa','sangria','outro'].forEach(t => {
+    const p = document.getElementById(`pill-${t}`);
+    p.className = 'tipo-pill' + (t === tipo ? ` ${TIPO_CFG[t].pillCls}` : '');
+  });
+  // Botão
+  const btn = document.getElementById('btn-lancar');
+  btn.textContent = `${cfg.icone} ${cfg.label}`;
+  btn.className   = `btn-lancar ${cfg.btnCls}`;
+  // Categoria
+  document.getElementById('grupo-categoria').style.display = cfg.catVisible ? '' : 'none';
+  // Placeholder desc
+  const descs = { despesa: 'Ex: Conta de luz, Fornecedor…', sangria: 'Ex: Retirada para troco, Fechamento…', outro: 'Descreva o lançamento…' };
+  document.getElementById('lanc-desc').placeholder = descs[tipo];
+  document.getElementById('lanc-feedback').textContent = '';
+}
+
+function confirmarLancamento() {
+  const FinSvc = window.CH?.FinanceiroService;
+  if (!FinSvc) { _feedback('FinanceiroService não disponível.', 'red'); return; }
+
+  const desc  = document.getElementById('lanc-desc').value.trim();
+  const valor = parseFloat(document.getElementById('lanc-valor').value);
+  const cat   = document.getElementById('lanc-cat').value;
+  const data  = document.getElementById('lanc-data').value;
+  const obs   = document.getElementById('lanc-obs').value.trim();
+
+  if (!desc)       { _feedback('⚠️ Informe a descrição.', 'red'); return; }
+  if (!valor || valor <= 0) { _feedback('⚠️ Informe o valor.', 'red'); return; }
+
+  const categoriaFinal = _tipoAtual === 'sangria' ? 'sangria'
+                       : _tipoAtual === 'outro'   ? 'outro'
+                       : cat;
+
+  const descFinal = obs ? `${desc} — ${obs}` : desc;
+
+  // Sobrescreve data se diferente de hoje
+  const hoje = new Date().toISOString().slice(0,10);
+  const dataFinal = (data && data !== hoje) ? data : null;
+
+  try {
+    if (dataFinal) {
+      // lança com data customizada via mutação direta
+      const Utils = window.CH.Utils;
+      const AuthService = window.CH.AuthService;
+      const Store = window.CH.Store;
+      const lanc = {
+        id:         Utils.generateId(),
+        tipo:       'despesa',
+        categoria:  categoriaFinal,
+        descricao:  descFinal,
+        valor:      valor,
+        formaPgto:  _tipoAtual === 'sangria' ? 'dinheiro' : '',
+        referencia: '',
+        operador:   AuthService.getNome?.() || '',
+        data:       dataFinal + 'T12:00:00',
+        dataCurta:  dataFinal,
+        hora:       '12:00',
+      };
+      Store.mutateFinanceiro(fin => { fin.unshift(lanc); });
+    } else {
+      FinSvc.registrarDespesa({
+        descricao:  descFinal,
+        valor,
+        categoria:  categoriaFinal,
+        formaPgto:  _tipoAtual === 'sangria' ? 'dinheiro' : '',
+      });
+    }
+
+    const cfg = TIPO_CFG[_tipoAtual];
+    _feedback(`${cfg.icone} ${cfg.label.replace('Registrar','').trim()} de ${fmt(valor)} registrada!`, 'green');
+    // Limpa form
+    document.getElementById('lanc-desc').value  = '';
+    document.getElementById('lanc-valor').value = '';
+    document.getElementById('lanc-obs').value   = '';
+    // Atualiza lista
+    setTimeout(() => { renderLancar(); renderKPIs(window.CH.BIService?.getDashboardExecutivo?.()); }, 200);
+
+  } catch(e) {
+    _feedback('Erro: ' + e.message, 'red');
+  }
+}
+
+function _feedback(msg, cor) {
+  const el = document.getElementById('lanc-feedback');
+  el.textContent = msg;
+  el.style.color  = cor === 'green' ? 'var(--green)' : 'var(--red)';
+  if (cor === 'green') setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function renderLancar() {
+  const FinSvc = window.CH?.FinanceiroService;
+  if (!FinSvc) return;
+
+  const hoje = new Date().toISOString().slice(0,10);
+
+  // Inicializa data com hoje
+  const dataInput = document.getElementById('lanc-data');
+  if (!dataInput.value) dataInput.value = hoje;
+
+  // Resumo do dia
+  const despHoje = FinSvc.getLancamentos({ tipo: 'despesa', dataDe: hoje, dataAte: hoje }) || [];
+  const totalDespesas = despHoje.filter(l => l.categoria !== 'sangria').reduce((s,l) => s + (l.valor||0), 0);
+  const totalSangrias = despHoje.filter(l => l.categoria === 'sangria').reduce((s,l) => s + (l.valor||0), 0);
+  document.getElementById('res-despesas').textContent   = fmt(totalDespesas);
+  document.getElementById('res-sangrias').textContent   = fmt(totalSangrias);
+  document.getElementById('res-total-saidas').textContent = fmt(totalDespesas + totalSangrias);
+
+  // Últimos lançamentos (despesas + sangrias, todos os dias — limita 40)
+  const todos = FinSvc.getLancamentos({ tipo: 'despesa', limit: 40 }) || [];
+
+  const ICONE = { sangria:'💴', compra:'🛒', avaria:'🔨', ajuste:'📋', operacional:'⚡', outro:'📌' };
+  const ICLS  = { sangria:'lanc-icon-orange', compra:'lanc-icon-red', avaria:'lanc-icon-red',
+                  ajuste:'lanc-icon-purple', operacional:'lanc-icon-red', outro:'lanc-icon-purple' };
+  const CATLABEL = { sangria:'Sangria', compra:'Compra', avaria:'Avaria', ajuste:'Ajuste',
+                     operacional:'Operacional', outro:'Outro' };
+
+  document.getElementById('lista-lancamentos').innerHTML = todos.length
+    ? todos.map(l => `
+        <div class="item-lanc">
+          <div class="lanc-icon ${ICLS[l.categoria]||'lanc-icon-purple'}">
+            ${ICONE[l.categoria]||'📌'}
+          </div>
+          <div class="lanc-body">
+            <div class="lanc-desc">${l.descricao || '—'}</div>
+            <div class="lanc-meta">${CATLABEL[l.categoria]||l.categoria} · ${l.dataCurta||'—'} ${l.hora||''} · ${l.operador||''}</div>
+          </div>
+          <div class="lanc-valor c-red">− ${fmt(l.valor)}</div>
+        </div>
+      `).join('')
+    : '<div class="empty-state">Nenhum lançamento ainda.</div>';
+}
+
 // ── Render principal ─────────────────────────────────────────────────
 function renderAll() {
   const BI = window.CH?.BIService;
@@ -1231,6 +1549,7 @@ function renderAll() {
 
   // Render da tab ativa
   const tabAtiva = document.querySelector('.tab-content.active')?.id?.replace('tab-','');
+  if (tabAtiva === 'lancar')      renderLancar();
   if (tabAtiva === 'custos')      renderCustos();
   if (tabAtiva === 'abc')         renderABC();
   if (tabAtiva === 'financeiro')  renderFinanceiro();
