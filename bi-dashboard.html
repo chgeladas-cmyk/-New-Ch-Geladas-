@@ -842,6 +842,13 @@ function renderCustos() {
   const BI = window.CH?.BIService;
   if (!BI) return;
 
+  // Compatibilidade: se biService.js ainda não foi atualizado
+  if (typeof BI.getCustosConsolidados !== 'function') {
+    document.getElementById('custos-kpi-grid').innerHTML =
+      '<div class="alert alert-warning" style="grid-column:1/-1">⚠️ Atualize o arquivo <code>services/biService.js</code> para habilitar esta aba.</div>';
+    return;
+  }
+
   const c = BI.getCustosConsolidados(_de, _ate);
 
   // ── KPIs ────────────────────────────────────────────────────────
