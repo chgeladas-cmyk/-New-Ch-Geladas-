@@ -27,6 +27,7 @@ const CONSTANTS = Object.freeze({
   CATEGORIAS:     'CH_CATEGORIAS',
   FORNECEDORES:   'CH_FORNECEDORES',
   FINANCEIRO:     'CH_FINANCEIRO',
+  SAIDAS:         'CH_SAIDAS',
   SYNC_QUEUE:     'CH_SYNC_QUEUE',
   }),
 
@@ -45,6 +46,7 @@ const CONSTANTS = Object.freeze({
   MAX_COMANDAS:      2_000,
   MAX_MOVIMENTACOES: 10_000,
   MAX_FINANCEIRO:    5_000,
+  MAX_SAIDAS:        5_000,
   MAX_SYNC_QUEUE:    500,
 
   PIN_HASH: Object.freeze({
@@ -58,12 +60,12 @@ const CONSTANTS = Object.freeze({
     escrever: ['vendas'],
   }),
   admin: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
   }),
   adm: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
   }),
   colaborador: Object.freeze({
     ler:      ['vendas'],
@@ -190,12 +192,13 @@ const Store = (() => {
   categorias:    CONSTANTS.DB.CATEGORIAS,
   fornecedores:  CONSTANTS.DB.FORNECEDORES,
   financeiro:    CONSTANTS.DB.FINANCEIRO,
+  saidas:        CONSTANTS.DB.SAIDAS,
   };
 
   const _empty = {
   estoque:[], vendas:[], comandas:[], fiado:[],
   ponto:[], pedidos:[], auditoria:[], config:{},
-  movimentacoes:[], categorias:[], fornecedores:[], financeiro:[],
+  movimentacoes:[], categorias:[], fornecedores:[], financeiro:[], saidas:[],
   };
 
   const _limits = {
@@ -203,6 +206,7 @@ const Store = (() => {
   pedidos: CONSTANTS.MAX_PEDIDOS, auditoria: CONSTANTS.MAX_AUDITORIA,
   comandas: CONSTANTS.MAX_COMANDAS, movimentacoes: CONSTANTS.MAX_MOVIMENTACOES,
   financeiro: CONSTANTS.MAX_FINANCEIRO,
+  saidas:     CONSTANTS.MAX_SAIDAS,
   };
 
   function _read(col) {
@@ -328,6 +332,7 @@ const Store = (() => {
   getCategorias()    { return _read('categorias'); },
   getFornecedores()  { return _read('fornecedores'); },
   getFinanceiro()    { return _read('financeiro'); },
+  getSaidas()        { return _read('saidas'); },
 
   getVendasHoje() {
     const hoje = Utils.todayISO();
@@ -364,6 +369,7 @@ const Store = (() => {
   mutateCategorias(fn)    { _mutate('categorias',    fn); },
   mutateFornecedores(fn)  { _mutate('fornecedores',  fn); },
   mutateFinanceiro(fn)    { _mutate('financeiro',    fn); },
+  mutateSaidas(fn)        { _mutate('saidas',        fn); },
 
   invalidate(col) {
     if (col) delete _cache[col];
