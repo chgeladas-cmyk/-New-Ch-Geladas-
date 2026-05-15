@@ -239,7 +239,7 @@ body::before {
 .c-red    { --accent: #ef4444; }
 .c-teal   { --accent: #14b8a6; }
 .c-amber  { --accent: #f59e0b; }
-.c-slate  { --accent: #64748b; }
+.c-indigo { --accent: #6366f1; }
 
 .app-card::before { background: var(--accent, #3b82f6); }
 .app-card:hover   { border-color: color-mix(in srgb, var(--accent,#3b82f6) 30%, transparent); }
@@ -595,6 +595,13 @@ body.is-admin .valid-only { display: block; }
       <div class="app-name">Usuários</div>
       <div class="app-desc">Equipe · PINs · Permissões</div>
     </div>
+
+    <!-- DASHBOARD BI (relatorios) -->
+    <a href="bi-dashboard.html" class="app-card c-indigo" data-modulo="relatorios" style="animation-delay:.48s;display:none">
+      <div class="app-icon">📊</div>
+      <div class="app-name">Dashboard BI</div>
+      <div class="app-desc">Custos · Margem · Análises</div>
+    </a>
 
     <!-- MONITOR (admin only) -->
     <a href="monitor.html" class="app-card c-slate" data-modulo="__adm__" style="animation-delay:.5s;display:none">
@@ -1559,6 +1566,12 @@ function _aplicarPermissoesHub() {
     // saas_register: sempre visível
     if (mod === 'saas_register') {
       card.style.display = '';
+      return;
+    }
+    // relatorios: admin ou quem tem acesso ao módulo
+    if (mod === 'relatorios') {
+      const ok = isAdm || (Perm && Perm.temAcesso(role, 'relatorios'));
+      card.style.display = ok ? '' : 'none';
       return;
     }
     const ok = isAdm || (Perm && Perm.temAcesso(role, mod));
