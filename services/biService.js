@@ -587,6 +587,100 @@
     return alertas;
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  //  CUSTOS CONSOLIDADOS
+  //  Soma TODOS os custos do período:
+  //    CMV            = custo dos itens vendidos (do cadastro de produtos)
+  //    Despesas Op.   = lançamentos tipo 'despesa' no FinanceiroService
+  //    Custo Total    = CMV + Despesas Op.
+  //    Resultado Liq. = Receita − Custo Total
+  // ══════════════════════════════════════════════════════════════════
+  function getCustosConsolidados(de, ate) {
+    if (!de || !ate) { const m = _mesAtual(); de = m.de; ate = m.ate; }
+
+    // ── CMV das vendas ────────────────────────────────────────────
+    const cmvData = getCMV(de, ate);
+
+    // ── Despesas operacionais registradas ─────────────────────────
+    const FinSvc   = window.CH?.FinanceiroService;
+    const despesas = FinSvc
+      ? (FinSvc.getLancamentos({ tipo: 'despesa', dataDe: de, dataAte: ate }) || [])
+      : [];
+
+    // Agrupamento por categoria
+    const mapaCat = {};
+    despesas.forEach(d => {
+      const cat = d.categoria || 'outro';
+      if (!mapaCat[cat]) mapaCat[cat] = { categoria: cat, valor: 0, count: 0 };
+      mapaCat[cat].valor += d.valor || 0;
+      mapaCat[cat].count++;
+    });
+
+    const LABEL_CAT = {
+      compra:       'Compras / Estoque',
+      avaria:       'Avarias',
+      ajuste:       'Ajustes',
+      operacional:  'Operacional',
+      cancelamento: 'Cancelamentos',
+      outro:        'Outros',
+    };
+
+    const totalDespesas   = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+    const totalCustos     = cmvData.cmv + totalDespesas;
+    const resultadoLiq    = cmvData.receita - totalCustos;
+    const margemLiquida   = cmvData.receita > 0 ? (resultadoLiq / cmvData.receita) * 100 : 0;
+    const pctDespesas     = cmvData.receita > 0 ? (totalDespesas / cmvData.receita) * 100 : 0;
+    const pctCustoTotal   = cmvData.receita > 0 ? (totalCustos   / cmvData.receita) * 100 : 0;
+
+    const listaCategorias = Object.values(mapaCat)
+      .sort((a, b) => b.valor - a.valor)
+      .map(c => ({
+        ...c,
+        label:      LABEL_CAT[c.categoria] || c.categoria,
+        percentual: totalDespesas > 0 ? (c.valor / totalDespesas) * 100 : 0,
+      }));
+
+    // ── Fluxo dia a dia: receita / custo_mercadoria / despesas ────
+    // (para gráfico de linha do período)
+    const fluxoDias = {};
+    // preenche receita das vendas
+    _vendasPeriodo(de, ate).forEach(v => {
+      const d = v.dataCurta;
+      if (!fluxoDias[d]) fluxoDias[d] = { data: d, receita: 0, cmv: 0, despesas: 0 };
+      fluxoDias[d].receita += v.total || 0;
+      (v.itens || []).forEach(item => {
+        fluxoDias[d].cmv += (item.custo || item.custoUn || 0) * (item.qtd || 0);
+      });
+    });
+    // preenche despesas operacionais por dia
+    despesas.forEach(d => {
+      const dt = d.dataCurta;
+      if (!fluxoDias[dt]) fluxoDias[dt] = { data: dt, receita: 0, cmv: 0, despesas: 0 };
+      fluxoDias[dt].despesas += d.valor || 0;
+    });
+    const fluxoPorDia = Object.values(fluxoDias)
+      .sort((a, b) => a.data.localeCompare(b.data))
+      .map(d => ({ ...d, custoTotal: d.cmv + d.despesas, resultado: d.receita - d.cmv - d.despesas }));
+
+    return {
+      receita:         cmvData.receita,
+      cmv:             cmvData.cmv,
+      despesas:        totalDespesas,
+      totalCustos,
+      resultadoLiquido: resultadoLiq,
+      margemBruta:     cmvData.margemBruta,
+      margemBrutaPct:  cmvData.margemPercentual,
+      margemLiquida,
+      pctCMV:          cmvData.percentualCMV,
+      pctDespesas,
+      pctCustoTotal,
+      listaCategorias,
+      despesasLista:   despesas.sort((a, b) => b.dataCurta.localeCompare(a.dataCurta)),
+      fluxoPorDia,
+      periodo:         { de, ate },
+    };
+  }
+
   // ── Exportar ──────────────────────────────────────────────────────
   window.CH.BIService = {
     getCurvaABC,
@@ -600,7 +694,8 @@
     getFluxoCaixaPeriodo,
     getComparativoPeriodos,
     getDashboardExecutivo,
+    getCustosConsolidados,
   };
 
-  console.info('%c BIService ✓  (Curva ABC | CMV | BI Analytics)', 'color:#10b981;font-weight:bold');
+  console.info('%c BIService ✓  (Curva ABC | CMV | Custos | BI Analytics)', 'color:#10b981;font-weight:bold');
 })();
