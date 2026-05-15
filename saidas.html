@@ -504,12 +504,14 @@ const TIPO_COR = { compra:'amber', retirada:'blue', despesa:'purple' };
 const TIPO_ICON = { compra:'🛒', retirada:'💵', despesa:'📋' };
 const TIPO_LABEL = { compra:'Compra', retirada:'Retirada', despesa:'Despesa' };
 
-/* ═══ UTILS LOCAIS ═══ */
-const { Store, AuthService, Utils, UIService } = window.CH;
+/* ═══ ALIASES (evita conflito com globais do core.js) ═══ */
+const _Store       = window.CH.Store;
+const _AuthService = window.CH.AuthService;
+const _Utils       = window.CH.Utils;
 
-function hoje() { return Utils.todayISO(); }
-function nowISO() { return Utils.nowISO(); }
-function nowTime() { return Utils.nowTime(); }
+function hoje()    { return __Utils.todayISO(); }
+function nowISO()  { return __Utils.nowISO(); }
+function nowTime() { return __Utils.nowTime(); }
 
 function fmt(v) { return 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -547,17 +549,17 @@ async function doLogin() {
   err.classList.add('hidden');
   if (!nome || !senha) { err.textContent = 'Preencha usuário e senha'; err.classList.remove('hidden'); return; }
   try {
-    const ok = await AuthService.login(nome, senha);
+    const ok = await _AuthService.login(nome, senha);
     if (!ok) { err.textContent = 'Usuário ou senha inválidos'; err.classList.remove('hidden'); return; }
     document.getElementById('lock').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
-    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+    if (_AuthService.isAdmin()) document.body.classList.add('is-admin');
     init();
   } catch(e) { err.textContent = 'Erro: ' + e.message; err.classList.remove('hidden'); }
 }
 document.getElementById('loginSenha').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
 document.getElementById('loginNome').addEventListener('keydown',  e => { if (e.key==='Enter') document.getElementById('loginSenha').focus(); });
-function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
+function logout() { if (!confirm('Encerrar sessão?')) return; _AuthService.logout(); location.reload(); }
 
 /* ═══ INIT ═══ */
 function init() {
@@ -642,13 +644,13 @@ function registrarSaida() {
   if (!valorRaw || valorRaw <= 0) { showToast('Informe um valor válido','','error'); return; }
 
   const saida = {
-    id:        Utils.generateId(),
+    id:        _Utils.generateId(),
     tipo:      _tipoAtual,
     categoria,
     descricao,
     valor:     valorRaw,
     formaPgto,
-    operador:  AuthService.getNome(),
+    operador:  _AuthService.getNome(),
     data:      nowISO(),
     dataCurta: hoje(),
     hora:      nowTime(),
@@ -668,7 +670,7 @@ function registrarSaida() {
   }
 
   // Persiste
-  Store.mutateSaidas(saidas => { saidas.unshift(saida); });
+  _Store.mutateSaidas(saidas => { saidas.unshift(saida); });
 
   // Integra com FinanceiroService (lançamento de despesa)
   try {
@@ -699,7 +701,7 @@ function limparFormulario() {
 
 /* ═══ DASHBOARD ═══ */
 function renderDashboard() {
-  const todas  = Store.getSaidas() || [];
+  const todas  = _Store.getSaidas() || [];
   const saidas = filtrarPorPeriodo(todas, _periodo);
 
   const compras   = saidas.filter(s => s.tipo === 'compra');
@@ -784,7 +786,7 @@ function renderUltimas(saidas) {
 
 /* ═══ HISTÓRICO ═══ */
 function renderHistorico() {
-  const todas  = Store.getSaidas() || [];
+  const todas  = _Store.getSaidas() || [];
   let saidas   = filtrarPorPeriodo(todas, _periodo2);
   if (_filtroTipo !== 'todos') saidas = saidas.filter(s => s.tipo === _filtroTipo);
   const busca = (document.getElementById('histBusca')?.value || '').toLowerCase().trim();
@@ -843,7 +845,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 /* ═══ DETALHE ═══ */
 function abrirDetalhe(id) {
-  const s = (Store.getSaidas()||[]).find(x=>x.id===id);
+  const s = (_Store.getSaidas()||[]).find(x=>x.id===id);
   if (!s) return;
   _saidaAtualId = id;
 
@@ -877,11 +879,11 @@ function abrirDetalhe(id) {
 
 function apagarSaidaAtual() {
   if (!_saidaAtualId) return;
-  if (!AuthService.isAdmin()) { showToast('Apenas ADM','','error'); return; }
-  const s = (Store.getSaidas()||[]).find(x=>x.id===_saidaAtualId);
+  if (!_AuthService.isAdmin()) { showToast('Apenas ADM','','error'); return; }
+  const s = (_Store.getSaidas()||[]).find(x=>x.id===_saidaAtualId);
   if (!s) return;
   if (!confirm(`Apagar saída de ${fmt(s.valor)}?\nEsta ação não pode ser desfeita.`)) return;
-  Store.mutateSaidas(saidas => { const i=saidas.findIndex(x=>x.id===_saidaAtualId); if(i>=0) saidas.splice(i,1); });
+  _Store.mutateSaidas(saidas => { const i=saidas.findIndex(x=>x.id===_saidaAtualId); if(i>=0) saidas.splice(i,1); });
   fecharModal('modalDetalhe');
   showToast('Saída apagada','','warning');
   renderDashboard();
@@ -891,7 +893,7 @@ function apagarSaidaAtual() {
 
 /* ═══ RELATÓRIO ═══ */
 function gerarRelatorio() {
-  const todas  = Store.getSaidas() || [];
+  const todas  = _Store.getSaidas() || [];
   const saidas = filtrarPorPeriodo(todas, _periodo3);
   const { de, ate } = getRange(_periodo3);
 
@@ -994,7 +996,7 @@ function gerarRelatorio() {
 let _relTexto = '';
 
 function _gerarTextoRelatorio(saidas, { de, ate, total, totC, totR, totD }) {
-  const config = Store.getConfig() || {};
+  const config = _Store.getConfig() || {};
   const nomeLoja = config.nomeLoja || 'CH Geladas';
   const lines = [];
   const sep = '─'.repeat(28);
@@ -1075,13 +1077,13 @@ function _set(id, val) { const el=document.getElementById(id); if(el) el.textCon
 
 /* ═══ INIT CHECK ═══ */
 window.addEventListener('DOMContentLoaded', () => {
-  if (!AuthService.isLogged()) {
+  if (!_AuthService.isLogged()) {
     document.getElementById('lock').classList.remove('hidden');
     return;
   }
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+  if (_AuthService.isAdmin()) document.body.classList.add('is-admin');
   init();
 });
 </script>
