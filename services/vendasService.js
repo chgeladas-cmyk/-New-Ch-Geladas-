@@ -116,6 +116,14 @@
 
     // ── REQUER APROVAÇÃO: para aqui, sem estoque/financeiro ──────
     if (requerAprovacao) {
+      // Reserva o estoque para evitar o "Paradoxo do Estoque":
+      // impede que outro colaborador venda as mesmas unidades
+      // enquanto esta venda aguarda aprovação/validação.
+      const ES = window.CH.EstoqueService;
+      if (ES?.reservarEstoque) {
+        try { ES.reservarEstoque(venda.id, venda.itens || []); }
+        catch(e) { console.warn('[VendasService] Reserva de estoque falhou:', e.message); }
+      }
       EventBus.emit('venda:pendente', venda);
       console.info(`[VendasService] Venda PENDENTE (${role}) → ${venda.id} | aguarda controlador`);
       return venda; // ← retorna objeto real, não Promise
