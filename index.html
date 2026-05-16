@@ -1571,9 +1571,9 @@ function _aplicarPermissoesHub() {
       card.style.display = isAdm ? '' : 'none';
       return;
     }
-    // saas_register: sempre visível
+    // saas_register: apenas admin
     if (mod === 'saas_register') {
-      card.style.display = '';
+      card.style.display = isAdm ? '' : 'none';
       return;
     }
     // relatorios: admin ou quem tem acesso ao módulo
