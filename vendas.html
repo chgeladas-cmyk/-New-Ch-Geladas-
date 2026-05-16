@@ -621,44 +621,6 @@ function fecharDrawer() {
 /* ══ PAGAMENTO ══ */
 function abrirPagamento() {
   if (CartService.isEmpty()) return;
-
-  // ── Bloqueio de pré-requisitos para colaborador/PDV ────────────
-  // Admin e gerente são isentos — operam mesmo sem caixa ou ponto.
-  const { Store, AuthService, Utils } = window.CH;
-  const _role = AuthService.getRole();
-  const _rolesLivres = ['admin', 'adm', 'gerente'];
-
-  if (!_rolesLivres.includes(_role)) {
-    // 1. Verifica ponto de entrada batido hoje pelo próprio operador
-    const _nome      = AuthService.getNome();
-    const _hoje      = Utils.todayISO();
-    const _pontoHoje = Store.getPonto().some(p =>
-      p.dataCurta === _hoje &&
-      p.nome      === _nome &&
-      p.tipo      === 'ENTRADA'
-    );
-    if (!_pontoHoje) {
-      UIService.showToast(
-        'Ponto não registrado',
-        'Bata o ponto de entrada antes de vender',
-        'warning'
-      );
-      return;
-    }
-
-    // 2. Verifica caixa aberto
-    const _caixaRaw = localStorage.getItem('CH_CAIXA_ATUAL');
-    if (!_caixaRaw) {
-      UIService.showToast(
-        'Caixa fechado',
-        'Abra o caixa antes de realizar vendas',
-        'warning'
-      );
-      return;
-    }
-  }
-  // ── Fim do bloqueio ────────────────────────────────────────────
-
   _setText('pgtoResumo', `${CartService.getCount()} itens — ${Utils.formatCurrency(CartService.getTotal())}`);
   const di = document.getElementById('descontoInput');
   if (di) di.value = '';
