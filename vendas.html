@@ -629,12 +629,11 @@ function abrirPagamento() {
   const _rolesLivres = ['admin', 'adm', 'gerente'];
 
   if (!_rolesLivres.includes(_role)) {
-    // 1. Verifica ponto de entrada batido hoje pelo próprio operador
-    const _nome      = AuthService.getNome();
+    // 1. Verifica se existe qualquer ponto de entrada hoje
+    //    (não filtra por nome — o ponto é registrado manualmente pelo operador)
     const _hoje      = Utils.todayISO();
     const _pontoHoje = Store.getPonto().some(p =>
       p.dataCurta === _hoje &&
-      p.nome      === _nome &&
       p.tipo      === 'ENTRADA'
     );
     if (!_pontoHoje) {
