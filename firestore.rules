@@ -134,6 +134,15 @@ service cloud.firestore {
       allow read, write: if autenticado();
     }
 
+    // ─── /ch_tripwire/{docId} — Log imutável de intrusões ────────────
+    // Qualquer autenticado (incluindo PDV anônimo) pode CRIAR.
+    // Ninguém pode atualizar ou deletar — nem o admin via console.
+    match /ch_tripwire/{docId} {
+      allow create: if autenticado();
+      allow read:   if autenticado();
+      allow update, delete: if false;
+    }
+
     // ─── Bloqueia tudo que não foi mapeado ───────────────────────────
     match /{document=**} {
       allow read, write: if false;
