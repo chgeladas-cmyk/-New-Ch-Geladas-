@@ -28,6 +28,8 @@ const CONSTANTS = Object.freeze({
   FORNECEDORES:   'CH_FORNECEDORES',
   FINANCEIRO:     'CH_FINANCEIRO',
   SAIDAS:         'CH_SAIDAS',
+  CAMBIO:         'CH_CAMBIO',
+  PERFIS:         'CH_PERFIS',
   SYNC_QUEUE:     'CH_SYNC_QUEUE',
   }),
 
@@ -56,43 +58,43 @@ const CONSTANTS = Object.freeze({
 
   PERMISSOES: Object.freeze({
   pdv: Object.freeze({
-    ler:      ['estoque', 'config'],
+    ler:      ['estoque', 'config', 'perfis'],
     escrever: ['vendas'],
   }),
   admin: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   adm: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   colaborador: Object.freeze({
-    ler:      ['vendas'],
+    ler:      ['vendas', 'perfis'],
     escrever: ['vendas'],
   }),
   controlador: Object.freeze({
-    ler:      ['vendas','aprovacao'],
+    ler:      ['vendas','aprovacao', 'perfis'],
     escrever: ['aprovacao'],
   }),
   validador: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
     escrever: ['aprovacao'],
   }),
   analista: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
     escrever: ['aprovacao'],
   }),
   gerente: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
+    escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','vendas','comandas'],
+    ler:      ['estoque','vendas','comandas', 'perfis'],
     escrever: ['vendas','comandas'],
   }),
   entregador: Object.freeze({
-    ler:      ['pedidos'],
+    ler:      ['pedidos', 'perfis'],
     escrever: ['pedidos'],
   }),
   }),
