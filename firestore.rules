@@ -97,11 +97,14 @@ service cloud.firestore {
     }
 
     // ─── /vendas/{vendaId} ───────────────────────────────────────────
+    // create: PDV e colaboradores (sem adminToken)
+    // update: qualquer autenticado (aprovação/validação pelo controlador/validador)
+    // delete: apenas admin (adminToken obrigatório)
     match /vendas/{vendaId} {
       allow create: if autenticado() && vendaValida(request.resource.data);
       allow read:   if autenticado();
-      allow update, delete: if autenticado()
-                             && temAdminToken(request.resource.data);
+      allow update: if autenticado();
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
     }
 
     // ─── /movimentacoes/{movId} ──────────────────────────────────────

@@ -733,8 +733,9 @@ const FirebaseService = (() => {
         const batch = _fb.writeBatch(_db);
         itens.forEach(v => {
           const ref = _fb.doc(_db, 'vendas', v.id);
+          // Não inclui adminToken — update de vendas (aprovação) é liberado
+          // para qualquer autenticado no Firestore rules
           const docData = { ...v, _fbSynced: true, updatedAt: Utils.nowISO() };
-          if (_adminToken) docData.adminToken = _adminToken;
           batch.set(ref, docData, { merge: true });
         });
         await batch.commit();
