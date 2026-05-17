@@ -70,8 +70,8 @@ const CONSTANTS = Object.freeze({
     escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   colaborador: Object.freeze({
-    ler:      ['vendas', 'perfis'],
-    escrever: ['vendas'],
+    ler:      ['vendas', 'comandas', 'fiado', 'perfis'],
+    escrever: ['vendas', 'comandas'],
   }),
   controlador: Object.freeze({
     ler:      ['vendas','aprovacao', 'perfis'],
@@ -90,7 +90,7 @@ const CONSTANTS = Object.freeze({
     escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','vendas','comandas', 'perfis'],
+    ler:      ['estoque','vendas','comandas','fiado','perfis'],
     escrever: ['vendas','comandas'],
   }),
   entregador: Object.freeze({
@@ -868,17 +868,42 @@ const SyncService = (() => {
   for (const col of alvo) {
     const dados = await FirebaseService.ler(col);
     if (dados == null) continue;
-    if (col === 'vendas') {
-   const localVendas = Store.getVendas();
-   const localIds    = new Set(localVendas.map(v => v.id));
-   const novas       = dados.filter(v => v.id && !localIds.has(v.id));
-   if (novas.length > 0) {
-     const merged = [...novas, ...localVendas]
-       .sort((a, b) => (b.criadoEm||'') > (a.criadoEm||'') ? 1 : -1)
-       .slice(0, CONSTANTS.MAX_VENDAS);
-     Store._writeRaw('vendas', merged);
-     console.info(`[Sync] Merge: +${novas.length} vendas do Firebase.`);
-   }
+
+    // ── Coleções com merge inteligente (nunca sobrescreve locais não enviados) ──
+    if (col === 'vendas' || col === 'comandas' || col === 'fiado') {
+      const getLocal = col === 'vendas'    ? () => Store.getVendas()
+                     : col === 'comandas'  ? () => Store.getComandas()
+                     : () => Store.getFiado();
+      const writeRaw = (data) => Store._writeRaw(col, data);
+      const maxLimit = col === 'vendas' ? CONSTANTS.MAX_VENDAS : (CONSTANTS.MAX_COMANDAS || 2000);
+
+      const local    = getLocal();
+      const localIds = new Set(local.map(v => v.id).filter(Boolean));
+
+      // Itens do Firestore que ainda não existem localmente
+      const novosDaNuvem = dados.filter(v => v.id && !localIds.has(v.id));
+
+      // Itens locais que ainda não foram enviados (sem _fbSynced, ou status pendente)
+      // e itens do Firestore atualizados mais recentemente
+      const remoteMap = new Map((dados || []).map(v => [v.id, v]));
+      const localFinal = local.map(v => {
+        const remoto = remoteMap.get(v.id);
+        // Se existe nos dois lados, usa o mais recente
+        if (remoto) {
+          const tsLocal  = v.updatedAt  || v.criadoEm || '';
+          const tsRemoto = remoto.updatedAt || remoto.criadoEm || '';
+          return tsRemoto > tsLocal ? remoto : v;
+        }
+        return v; // só local — mantém
+      });
+
+      if (novosDaNuvem.length > 0 || localFinal.some((v, i) => v !== local[i])) {
+        const merged = [...novosDaNuvem, ...localFinal]
+          .sort((a, b) => (b.criadoEm||'') > (a.criadoEm||'') ? 1 : -1)
+          .slice(0, maxLimit);
+        writeRaw(merged);
+        console.info(`[Sync] Merge ${col}: +${novosDaNuvem.length} da nuvem.`);
+      }
     } else {
    const key = CONSTANTS.DB[col.toUpperCase()];
    if (key) { try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {} }

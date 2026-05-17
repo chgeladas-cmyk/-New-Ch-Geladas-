@@ -524,6 +524,7 @@ function addItemComanda(prodId) {
     const idx = cmd.itens.findIndex(i => i.prodId === prodId);
     if (idx >= 0) { cmd.itens[idx].qtd++; }
     else { cmd.itens.push({ prodId, nome: prod.nome, preco: prod.precoUn||0, custo: prod.custoUn||0, qtd: 1 }); }
+    cmd.updatedAt = new Date().toISOString();
   });
 
   renderDetalhe();
@@ -594,6 +595,7 @@ function alterarQtdComanda(idx, delta) {
     const novaQtd = (cmd.itens[idx]?.qtd||0) + delta;
     if (novaQtd <= 0) cmd.itens.splice(idx, 1);
     else cmd.itens[idx].qtd = novaQtd;
+    cmd.updatedAt = new Date().toISOString();
   });
   renderDetalhe();
 }
@@ -601,7 +603,7 @@ function alterarQtdComanda(idx, delta) {
 function removerItemComanda(idx) {
   Store.mutateComandas(cmds => {
     const cmd = cmds.find(c => c.id === _cmdAtualId);
-    if (cmd) cmd.itens.splice(idx, 1);
+    if (cmd) { cmd.itens.splice(idx, 1); cmd.updatedAt = new Date().toISOString(); }
   });
   renderDetalhe();
 }
@@ -725,6 +727,7 @@ async function confirmarFechamento(forma) {
       cmds[idx].status    = 'paga';
       cmds[idx].formaPgto = forma;
       cmds[idx].fechadoEm = new Date().toISOString();
+      cmds[idx].updatedAt = new Date().toISOString();
       cmds[idx].total     = total;
       cmds[idx].vendaId   = venda?.id || null;
     }
