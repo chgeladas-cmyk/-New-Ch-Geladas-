@@ -862,7 +862,8 @@ function confirmarFiado(clienteId) {
     return;
   }
 
-  // ── Sem aprovação: lança direto ───────────────────────────────────
+  // ── Sem aprovação: lança na conta (tab aberta) ────────────────────
+  // Registra na aba do cliente MAS não finaliza a venda (conta permanece aberta)
   const itensDesc = itens.map(i=>`${i.nome} x${i.qtd}`).join(', ');
   Store.mutateFiado(fiado => {
     const c = fiado.find(x=>x.id===clienteId);
@@ -872,13 +873,24 @@ function confirmarFiado(clienteId) {
     c.movimentacoes.unshift({
       id: Utils.generateId(), tipo: 'fiado',
       descricao: itensDesc || 'Compra PDV',
-      valor: total, itens,
+      valor: total,
+      itens: itens.map(i => ({
+        prodId: i.prodId, nome: i.nome,
+        preco: i.preco, qtd: i.qtd, label: i.label || 'UNID',
+      })),
       criadoEm: new Date().toISOString(),
     });
     if (c.limite>0 && c.saldo >= c.limite) c.bloqueado = true;
   });
+  // Sincroniza fiado com Firestore
+  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
   EventBus.emit('fiado:lancado', { cliente: cliente.nome, valor: total, obs: 'Venda PDV' });
-  finalizarVenda(`Fiado — ${cliente.nome}`);
+  // Limpa o carrinho para o próximo cliente, mas NÃO cria venda finalizada
+  // A conta fica aberta em Fiado.html até o cliente pagar
+  CartService.clear();
+  renderCatalogo();
+  atualizarAlerta();
+  UIService.showToast(`Fiado lançado — ${cliente.nome}`, Utils.formatCurrency(total), 'warning');
 }
 
 /* ══ FINALIZAR VENDA ══ */

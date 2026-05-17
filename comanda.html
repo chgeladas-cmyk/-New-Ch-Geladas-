@@ -327,7 +327,20 @@ document.getElementById('loginSenha').addEventListener('keydown', function(e) { 
 document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
 function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
 
-/* ══ RESET COMANDAS ══ */
+/* ══ REMOVER COMANDA PAGA ══ */
+function removerComanda(id) {
+  const cmd = Store.getComandas().find(c => c.id === id);
+  if (!cmd) return;
+  if (cmd.status !== 'paga') { UIService.showToast('Apenas comandas pagas podem ser removidas', '', 'error'); return; }
+  if (!confirm(`Remover a comanda "${cmd.nome}" da lista?\nOs dados da venda já foram registrados.`)) return;
+  Store.mutateComandas(cmds => {
+    const idx = cmds.findIndex(c => c.id === id);
+    if (idx >= 0) cmds.splice(idx, 1);
+  });
+  UIService.showToast('Mesa removida', cmd.nome, 'success');
+  renderGrade();
+  atualizarKpis();
+}
 function resetComandas() {
   if (!AuthService.isAdmin()) { UIService.showToast('Apenas ADM','','error'); return; }
   const abertas = Store.getComandas().filter(c => c.status !== 'fechada');
@@ -353,8 +366,19 @@ let _cmdAtualId = null;  // id da comanda aberta no detalhe
 function init() {
   UIService.startClock('clock');
   if (AuthService.isAdmin()) document.body.classList.add('is-admin');
-  renderGrade();
-  atualizarKpis();
+  // Força pull do Firestore para carregar comandas atualizadas em qualquer aparelho
+  if (window.CH?.SyncService) {
+    window.CH.SyncService.pull(['comandas']).then(() => {
+      renderGrade();
+      atualizarKpis();
+    }).catch(() => {
+      renderGrade();
+      atualizarKpis();
+    });
+  } else {
+    renderGrade();
+    atualizarKpis();
+  }
   EventBus.on('store:updated', () => {
     atualizarKpis();
     if (_cmdAtualId) renderDetalhe(); else renderGrade();
@@ -438,7 +462,12 @@ function renderGrade() {
           <p class="text-[8px] text-slate-500 font-bold">${qtdItens} item${qtdItens!==1?'s':''}</p>
         </div>
         ${!paga ? `<button onclick="event.stopPropagation();abrirComanda('${c.id}')" class="bg-purple-700/30 border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-xl font-black text-[9px] uppercase hover:bg-purple-700/50 transition-all">Abrir →</button>` : ''}
-        ${paga ? `<p class="text-[8px] text-emerald-400 font-bold">${c.formaPgto||''}</p>` : ''}
+        ${paga ? `<div class="flex items-center gap-2">
+          <p class="text-[8px] text-emerald-400 font-bold">${c.formaPgto||''}</p>
+          <button onclick="event.stopPropagation();removerComanda('${c.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 flex items-center justify-center transition-all" title="Remover mesa">
+            <i class="fas fa-times text-[9px]"></i>
+          </button>
+        </div>` : ''}
       </div>
     </div>`;
   }).join('');

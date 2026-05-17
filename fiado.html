@@ -210,6 +210,9 @@ body.is-admin .adm-only{display:flex!important;}
         <button onclick="zerarSaldoCliente()" class="adm-only py-3 rounded-2xl bg-amber-600/20 border border-amber-500/25 text-amber-300 font-black text-[9px] uppercase flex flex-col items-center gap-1 transition-all active:scale-95 hover:bg-amber-600/35">
           <i class="fas fa-eraser text-base"></i>Zerar
         </button>
+        <button id="btnExcluirCliente" onclick="excluirCliente()" class="adm-only py-3 rounded-2xl bg-red-900/30 border border-red-500/25 text-red-400 font-black text-[9px] uppercase flex flex-col items-center gap-1 transition-all active:scale-95 hover:bg-red-900/50">
+          <i class="fas fa-user-times text-base"></i>Excluir
+        </button>
       </div>
     </div>
 
@@ -465,8 +468,19 @@ let _clienteAtualId = null;
 function init() {
   UIService.startClock('clock');
   if (AuthService.isAdmin()) document.body.classList.add('is-admin');
-  atualizarKpis();
-  renderClientes();
+  // Força pull do Firestore para carregar dados atualizados em qualquer aparelho
+  if (window.CH?.SyncService) {
+    window.CH.SyncService.pull(['fiado']).then(() => {
+      atualizarKpis();
+      renderClientes();
+    }).catch(() => {
+      atualizarKpis();
+      renderClientes();
+    });
+  } else {
+    atualizarKpis();
+    renderClientes();
+  }
   EventBus.on('store:updated', () => { atualizarKpis(); if (_clienteAtualId) renderDetalhe(); else renderClientes(); });
 }
 
@@ -564,6 +578,17 @@ function renderDetalhe() {
   }
   const saldoEl = document.getElementById('detSaldo');
   if (saldoEl) saldoEl.className = `text-3xl font-black ${quitado ? 'text-emerald-400' : 'text-red-400'}`;
+
+  // Botão excluir: só visível quando quitado (saldo=0)
+  const btnExcluir = document.getElementById('btnExcluirCliente');
+  if (btnExcluir) {
+    if (quitado && AuthService.isAdmin()) {
+      btnExcluir.style.display = 'flex';
+      btnExcluir.title = 'Excluir cliente (saldo zerado)';
+    } else {
+      btnExcluir.style.display = 'none';
+    }
+  }
 
   // Renderiza com abas: Compras | Pagamentos
   _renderDetalheAbas(c);
@@ -1142,6 +1167,23 @@ function apagarMovimentacao(movId) {
   });
   UIService.showToast('Movimentação apagada','','warning');
   renderDetalhe();
+}
+
+function excluirCliente() {
+  if (!AuthService.isAdmin()) return;
+  const c = Store.getFiado().find(x=>x.id===_clienteAtualId);
+  if (!c) return;
+  if ((c.saldo||0) > 0) {
+    UIService.showToast('Não é possível excluir', 'Cliente ainda tem saldo devedor', 'error');
+    return;
+  }
+  if (!confirm(`Excluir o cliente "${c.nome}" permanentemente?\nEsta ação não pode ser desfeita.`)) return;
+  Store.mutateFiado(fiado => {
+    const idx = fiado.findIndex(x=>x.id===_clienteAtualId);
+    if (idx>=0) fiado.splice(idx,1);
+  });
+  UIService.showToast('Cliente excluído', c.nome, 'warning');
+  voltarLista();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
