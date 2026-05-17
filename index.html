@@ -568,6 +568,13 @@ body.is-admin .valid-only { display: block; }
       <div class="app-desc">Clientes · Saldo · Receber</div>
     </a>
 
+    <!-- CÂMBIO -->
+    <a href="cambio.html" class="app-card c-amber" data-modulo="cambio" style="animation-delay:.33s">
+      <div class="app-icon">💱</div>
+      <div class="app-name">Câmbio</div>
+      <div class="app-desc">Pix/Cartão → Espécie</div>
+    </a>
+
     <!-- PONTO -->
     <a href="ponto.html" class="app-card c-teal" data-modulo="ponto" style="animation-delay:.35s">
       <div class="app-icon">⏱️</div>
@@ -1579,6 +1586,13 @@ function _aplicarPermissoesHub() {
     // relatorios: admin ou quem tem acesso ao módulo
     if (mod === 'relatorios') {
       const ok = isAdm || (Perm && Perm.temAcesso(role, 'relatorios'));
+      card.style.display = ok ? '' : 'none';
+      return;
+    }
+    // cambio: apenas admin/gerente (não colaborador)
+    if (mod === 'cambio') {
+      const PODE_CAMBIO = ['adm','admin','gerente'];
+      const ok = PODE_CAMBIO.includes(role) || (Perm && Perm.temAcesso(role,'cambio'));
       card.style.display = ok ? '' : 'none';
       return;
     }
