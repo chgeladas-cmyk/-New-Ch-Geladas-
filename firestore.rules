@@ -57,6 +57,31 @@ service cloud.firestore {
       return colecao in ['estoque', 'config', 'categorias'];
     }
 
+    // ─── /ch_dados/comandas — qualquer autenticado pode escrever ────
+    // Comandas são criadas por colaboradores/operadores sem adminToken
+    match /ch_dados/comandas {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /ch_dados/fiado — qualquer autenticado pode escrever ───────
+    match /ch_dados/fiado {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /ch_dados/cambio — qualquer autenticado pode escrever ──────
+    match /ch_dados/cambio {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /ch_dados/perfis — qualquer autenticado pode ler, admin escreve ──
+    match /ch_dados/perfis {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data) && temAdminToken(request.resource.data);
+    }
+
     // ─── /ch_dados/{colecao} ─────────────────────────────────────────
     match /ch_dados/{colecao} {
 

@@ -689,9 +689,11 @@ const FirebaseService = (() => {
    } catch(_) {}
    console.info(`[Firebase] ✓ ${pendentes.length} venda(s) sincronizadas.`);
     } else {
-   const docData = { dados, ts: Utils.nowISO() };
-   if (_adminToken) docData.adminToken = _adminToken;
-   await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
+      // Coleções que qualquer autenticado pode escrever (sem adminToken)
+      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio']);
+      const docData = { dados, ts: Utils.nowISO() };
+      if (_adminToken && !_semAdminToken.has(colName)) docData.adminToken = _adminToken;
+      await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
     }
     return true;
   } catch(e) {
