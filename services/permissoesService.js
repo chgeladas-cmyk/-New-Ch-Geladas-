@@ -87,6 +87,25 @@
 
   function _save(perfis) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(perfis)); } catch(e) {}
+    // Sobe para Firestore imediatamente para todos os devices receberem
+    try {
+      if (window.CH?.SyncQueue) {
+        window.CH.SyncQueue.enqueue('salvar', 'perfis', perfis);
+      }
+    } catch(_) {}
+  }
+
+  function _pullPerfis() {
+    // Baixa perfis do Firestore se disponível (para receber mudanças do ADM)
+    try {
+      const fb = window.CH?.FirebaseService;
+      if (!fb) return;
+      fb.ler('perfis').then(dados => {
+        if (!dados) return;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); } catch(_) {}
+        if (window.CH?.EventBus) window.CH.EventBus.emit('perfis:atualizados', dados);
+      }).catch(() => {});
+    } catch(_) {}
   }
 
   function _inicializar() {
@@ -259,7 +278,11 @@
     atualizarPerfil,
     deletarPerfil,
     restaurarPadroes,
+    pullPerfis: _pullPerfis,
   };
 
-  console.info('%c PermissoesService ✓  (perfis dinâmicos por módulo)', 'color:#f59e0b');
+  // Pull automático no boot para garantir que este device tenha os perfis mais recentes
+  setTimeout(_pullPerfis, 1200);
+
+  console.info('%c PermissoesService ✓  (perfis dinâmicos por módulo + sync Firestore)', 'color:#f59e0b');
 })();
