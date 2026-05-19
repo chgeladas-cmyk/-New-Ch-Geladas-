@@ -808,14 +808,39 @@ function confirmarLancamento() {
   const desc  = (document.getElementById('fLancarDesc')?.value||'').trim()||'Compra fiado';
   if (valor <= 0) { UIService.showToast('Valor inválido','','error'); return; }
 
+  let _nomeCliente = '';
   Store.mutateFiado(fiado => {
     const c = fiado.find(x=>x.id===_clienteAtualId);
     if (!c) return;
+    _nomeCliente = c.nome;
     c.saldo = (c.saldo||0) + valor;
     if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
     c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'fiado', descricao:desc, valor, criadoEm:new Date().toISOString() });
     if (c.limite>0 && c.saldo >= c.limite) c.bloqueado = true;
   });
+
+  // Registra no financeiro como venda fiado pendente
+  Store.mutateVendas(vendas => {
+    vendas.unshift({
+      id:             Utils.generateId(),
+      dataCurta:      Utils.todayISO(),
+      data:           Utils.today(),
+      hora:           Utils.nowTime(),
+      criadoEm:       new Date().toISOString(),
+      itens:          [{ nome: desc, quantidade: 1, preco: valor, lucro: 0 }],
+      total:          valor,
+      subtotal:       valor,
+      desconto:       0,
+      lucro:          0,
+      formaPgto:      'Fiado',
+      origem:         'FIADO-LANCAMENTO',
+      status:         'pendente',
+      nomeCliente:    _nomeCliente,
+      _fiadoClienteId: _clienteAtualId,
+      _fiado:         true,
+    });
+  });
+  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
 
   UIService.closeModal('modalLancar');
   UIService.showToast(`+${Utils.formatCurrency(valor)} fiado`, desc, 'warning');
