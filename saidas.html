@@ -509,9 +509,9 @@ const _Store       = window.CH.Store;
 const _AuthService = window.CH.AuthService;
 const _Utils       = window.CH.Utils;
 
-function hoje()    { return __Utils.todayISO(); }
-function nowISO()  { return __Utils.nowISO(); }
-function nowTime() { return __Utils.nowTime(); }
+function hoje()    { return _Utils.todayISO(); }
+function nowISO()  { return _Utils.nowISO(); }
+function nowTime() { return _Utils.nowTime(); }
 
 function fmt(v) { return 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
