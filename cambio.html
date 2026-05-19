@@ -479,7 +479,7 @@ function selFormaEntrada(forma) {
   // Auto-calcula valor espécie com base no que já foi digitado
   const entrada = parseFloat(document.getElementById('novoValorEntrada')?.value) || 0;
   if (entrada > 0) {
-    const saida = +(entrada * (1 - taxa)).toFixed(2);
+    const saida = +(entrada / (1 + taxa)).toFixed(2);
     document.getElementById('novoValorSaida').value = saida.toFixed(2);
   }
   calcLucro();
@@ -494,7 +494,7 @@ function calcLucro() {
   if (_formaEntradaSel && entrada > 0) {
     const saidaInput = document.getElementById('novoValorSaida');
     const saidaAtual = parseFloat(saidaInput?.value) || 0;
-    const saidaEsperada = +(entrada * (1 - taxa)).toFixed(2);
+    const saidaEsperada = +(entrada / (1 + taxa)).toFixed(2);
     // Auto-atualiza se o campo estiver vazio
     if (!saidaAtual) {
       saidaInput.value = saidaEsperada.toFixed(2);
@@ -550,7 +550,38 @@ function salvarRegistro() {
 
   mutateCambio(list => list.unshift(registro));
 
-  // Sync Firestore se disponível
+  // Registra no financeiro (CH_VENDAS) para aparecer nos relatórios
+  if (window.CH?.Store?.mutateVendas) {
+    const vendaCambio = {
+      id:         registro.id,
+      criadoEm:  registro.criadoEm,
+      dataCurta: registro.dataCurta,
+      data:      registro.dataCurta,
+      hora:      registro.hora,
+      operador:  registro.operador,
+      cliente:   registro.cliente || '',
+      origem:    'cambio',
+      formaPgto: registro.formaEntrada,
+      total:     registro.valorEntrada,
+      subtotal:  registro.valorEntrada,
+      desconto:  0,
+      lucro:     registro.lucro,
+      status:    'concluida',
+      itens:     [{
+        nome:       `Câmbio ${registro.formaEntrada} → Espécie`,
+        quantidade: 1,
+        preco:      registro.valorEntrada,
+        lucro:      registro.lucro,
+      }],
+      _fbSynced: false,
+    };
+    window.CH.Store.mutateVendas(v => v.unshift(vendaCambio));
+    if (window.CH.SyncQueue) {
+      window.CH.SyncQueue.enqueue('salvar', 'vendas', [vendaCambio]);
+    }
+  }
+
+  // Sync Firestore câmbio
   if (window.CH?.SyncQueue) {
     window.CH.SyncQueue.enqueue('salvar', 'cambio', getCambios());
   }
@@ -616,6 +647,13 @@ function cancelarRegistro() {
     const r = list.find(x => x.id === _registroAtualId);
     if (r) { r.status = 'cancelado'; r.canceladoEm = new Date().toISOString(); }
   });
+  // Marca como cancelado no financeiro também
+  if (window.CH?.Store?.mutateVendas) {
+    window.CH.Store.mutateVendas(list => {
+      const v = list.find(x => x.id === _registroAtualId);
+      if (v) v.status = 'cancelada';
+    });
+  }
   if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'cambio', getCambios());
   closeModal('modalDetalhe');
   render();
@@ -629,6 +667,13 @@ function excluirRegistro() {
     const idx = list.findIndex(x => x.id === _registroAtualId);
     if (idx >= 0) list.splice(idx, 1);
   });
+  // Remove do financeiro também
+  if (window.CH?.Store?.mutateVendas) {
+    window.CH.Store.mutateVendas(list => {
+      const idx = list.findIndex(x => x.id === _registroAtualId);
+      if (idx >= 0) list.splice(idx, 1);
+    });
+  }
   if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'cambio', getCambios());
   closeModal('modalDetalhe');
   render();
