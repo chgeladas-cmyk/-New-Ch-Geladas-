@@ -270,9 +270,7 @@
     // ── Tenta usar Firebase Transaction (modo online + admin) ──────────
     // PDV não tem adminToken → Firestore rejeitaria a escrita de qualquer forma.
     // Nesse caso, aplica localmente e SyncQueue envia quando admin sincronizar.
-    // Só usa Transaction direta se for ADM — colaborador/PDV usa SyncQueue (evita 429)
-    const _isAdm = window.CH?.SessionService?.isAdmin?.() || false;
-    if (_isOnline() && FirebaseService.isReady() && _isAdm) {
+    if (_isOnline() && FirebaseService.isReady()) {
       try {
         await FirebaseService.runTransaction(async (tx) => {
           // Lê o documento de estoque no Firestore
