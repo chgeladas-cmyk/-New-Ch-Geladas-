@@ -76,7 +76,7 @@
 
     _saveQueue(q);
     UIService_setDot(false);
-    _scheduleProcess(500);
+    _scheduleProcess(2500);
   }
 
   // ── Processar um item ────────────────────────────────────────────
@@ -162,10 +162,29 @@
           console.info(`[SyncQueue] ✓ ${item.colecao} (${item.acao})`);
         } catch(e) {
           item.tentativas++;
-          item.ultimoErro       = e.message || String(e);
-          const delay           = RETRY_DELAYS[item.tentativas - 1] ?? 60_000;
-          item.proximaTentativa = Date.now() + delay;
+          item.ultimoErro = e.message || String(e);
+
+          // permission-denied → nunca vai funcionar sem adminToken, descarta imediatamente
+          const isPermDenied = e.code === 'permission-denied' ||
+                               (e.message || '').toLowerCase().includes('permission-denied') ||
+                               (e.message || '').toLowerCase().includes('permission denied') ||
+                               (e.message || '').toLowerCase().includes('rejeitou');
+          if (isPermDenied) {
+            item.status = 'erro';
+            console.warn(`[SyncQueue] permission-denied em "${item.colecao}" — descartado (sem adminToken)`);
+            continue;
+          }
+
+          // 429 / resource-exhausted → backoff longo para não estourar cota Firestore
+          const is429 = e.code === 'resource-exhausted' ||
+                        (e.message || '').includes('resource-exhausted') ||
+                        (e.message || '').includes('429');
+          const baseDelay = is429
+            ? [15_000, 30_000, 60_000, 120_000, 300_000][Math.min(item.tentativas - 1, 4)]
+            : RETRY_DELAYS[item.tentativas - 1] ?? 60_000;
+          item.proximaTentativa = Date.now() + baseDelay;
           item.status           = item.tentativas >= MAX_RETRY ? 'erro' : 'pendente';
+          if (is429) console.warn(`[SyncQueue] 429 rate-limit — aguardando ${baseDelay/1000}s antes de tentar novamente`);
           console.warn(
             `[SyncQueue] ✗ ${item.colecao} — tentativa ${item.tentativas}/${MAX_RETRY}`,
             `— próxima em ${delay/1000}s:`, e.message
