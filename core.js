@@ -109,19 +109,11 @@ const Utils = Object.freeze({
     style: 'currency', currency: 'BRL', ...CONSTANTS.CURRENCY,
   }).format(Number(v) || 0);
   },
-  // Retorna a data LOCAL do dispositivo no formato YYYY-MM-DD
-  // ⚠️ NÃO usa toISOString() que retorna UTC — Brasil é UTC-3, então
-  //    às 21h no Brasil o UTC já é 00h do dia seguinte (filtro "hoje" falharia)
-  todayISO() {
-    const now = new Date();
-    const offset = now.getTimezoneOffset() * 60000; // offset em ms
-    return new Date(now - offset).toISOString().slice(0, 10);
-  },
-  today()    { return new Date().toLocaleDateString('pt-BR'); },
-  nowTime()  { return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); },
-  nowFull()  { return new Date().toLocaleString('pt-BR'); },
-  // nowISO mantém UTC pois é usado para ordenação e comparação entre dispositivos
-  nowISO()   { return new Date().toISOString(); },
+  todayISO()   { return new Date().toISOString().slice(0, 10); },
+  today()      { return new Date().toLocaleDateString('pt-BR'); },
+  nowTime()    { return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); },
+  nowFull()    { return new Date().toLocaleString('pt-BR'); },
+  nowISO()     { return new Date().toISOString(); },
   generateId() { return crypto.randomUUID?.() ?? ('id_' + Date.now() + '_' + Math.random().toString(36).slice(2)); },
 
   weekISO(date = new Date()) {
@@ -359,12 +351,13 @@ const Store = (() => {
     _mutate('estoque', (data) => {
    fn(data);
    data.forEach(p => {
-     if (p.precoVenda   !== undefined) p.precoUn      = p.precoVenda;
-     else if (p.precoUn !== undefined) p.precoVenda   = p.precoUn;
-     if (p.precoCusto   !== undefined) p.custoUn      = p.precoCusto;
-     else if (p.custoUn !== undefined) p.precoCusto   = p.custoUn;
-     if (p.estoqueAtual !== undefined) p.qtdUn        = p.estoqueAtual;
-     else if (p.qtdUn   !== undefined) p.estoqueAtual = p.qtdUn;
+     // precoUn é fonte da verdade — propaga para alias, nunca o contrário
+     if (p.precoUn      !== undefined) p.precoVenda   = p.precoUn;
+     else if (p.precoVenda !== undefined) p.precoUn   = p.precoVenda;
+     if (p.custoUn      !== undefined) p.precoCusto   = p.custoUn;
+     else if (p.precoCusto !== undefined) p.custoUn   = p.precoCusto;
+     if (p.qtdUn        !== undefined) p.estoqueAtual = p.qtdUn;
+     else if (p.estoqueAtual !== undefined) p.qtdUn   = p.estoqueAtual;
    });
     });
   },
