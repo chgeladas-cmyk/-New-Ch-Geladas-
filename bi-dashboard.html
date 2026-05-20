@@ -611,8 +611,15 @@ let _ate = hj();
 const _charts = {};
 
 // ── Período helpers ─────────────────────────────────────────────────
-function hj()         { return new Date().toISOString().slice(0,10); }
-function _diasAtras(n){ const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10); }
+function hj() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function _diasAtras(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function _mesAtualDe(){ const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01`; }
 
 function setPeriodo(d) {
