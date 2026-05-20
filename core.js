@@ -386,7 +386,7 @@ const Store = (() => {
    * Vendas/financeiro/auditoria/movimentações: mantém só os últimos N dias.
    * Estoque/config/fiado/comandas: não purga (dados operacionais ativos).
    */
-  purgeOldData({ diasVendas = 30, diasFinanceiro = 30, diasAuditoria = 7, diasMovimentacoes = 14 } = {}) {
+  purgeOldData({ diasVendas = 30, diasFinanceiro = 30, diasAuditoria = 7, diasMovimentacoes = 14, diasSaidas = 90 } = {}) {
     const corte = (dias) => {
    const d = new Date();
    d.setDate(d.getDate() - dias);
@@ -429,7 +429,16 @@ const Store = (() => {
    purged.movimentacoes = movAntes - movFiltradas.length;
     }
 
-    ['vendas','financeiro','auditoria','movimentacoes'].forEach(c => delete _cache[c]);
+    // Saídas — mantém 90 dias por padrão (histórico longo)
+    const saiAntes = _read('saidas').length;
+    const cortaSai = corte(diasSaidas);
+    const saiFiltradas = _read('saidas').filter(s => (s.dataCurta || s.data || '') >= cortaSai);
+    if (saiFiltradas.length < saiAntes) {
+   _write('saidas', saiFiltradas);
+   purged.saidas = saiAntes - saiFiltradas.length;
+    }
+
+    ['vendas','financeiro','auditoria','movimentacoes','saidas'].forEach(c => delete _cache[c]);
 
     const total = Object.values(purged).reduce((s, n) => s + n, 0);
     if (total > 0) {
@@ -602,7 +611,7 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'usuarios']
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios']
     : ['estoque', 'config', 'usuarios'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
