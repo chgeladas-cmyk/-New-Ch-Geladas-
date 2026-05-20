@@ -102,6 +102,10 @@
 
       const batch = FirebaseService.getBatch();
 
+      // adminToken é obrigatório pela regra do Firestore para backups
+      const _tok = FirebaseService.getAdminToken();
+      if (_tok) meta.adminToken = _tok;
+
       // Metadados do snapshot
       batch.set(ref, meta);
 
@@ -116,7 +120,9 @@
       const smallData = {};
       colsPequenas.forEach(k => { smallData[k] = dados[k]; });
       smallData.config = dados.config;
-      batch.set(smallRef, { dados: smallData, ts: dados.geradoEm });
+      const smallDoc = { dados: smallData, ts: dados.geradoEm };
+      if (_tok) smallDoc.adminToken = _tok;
+      batch.set(smallRef, smallDoc);
 
       await batch.commit();
       console.info('[Backup] ✓ Salvo no Firestore:', Utils.todayISO());
