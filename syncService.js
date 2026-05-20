@@ -163,6 +163,18 @@
         } catch(e) {
           item.tentativas++;
           item.ultimoErro = e.message || String(e);
+
+          // permission-denied → nunca vai funcionar sem adminToken, descarta imediatamente
+          const isPermDenied = e.code === 'permission-denied' ||
+                               (e.message || '').toLowerCase().includes('permission-denied') ||
+                               (e.message || '').toLowerCase().includes('permission denied') ||
+                               (e.message || '').toLowerCase().includes('rejeitou');
+          if (isPermDenied) {
+            item.status = 'erro';
+            console.warn(`[SyncQueue] permission-denied em "${item.colecao}" — descartado (sem adminToken)`);
+            continue;
+          }
+
           // 429 / resource-exhausted → backoff longo para não estourar cota Firestore
           const is429 = e.code === 'resource-exhausted' ||
                         (e.message || '').includes('resource-exhausted') ||
