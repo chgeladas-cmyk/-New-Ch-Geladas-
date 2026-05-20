@@ -28,8 +28,10 @@
 
   function _vendasPeriodo(de, ate) {
     const vendas = Store.getVendas() || [];
+    // 'aprovada' também conta — é concluída aguardando validação
+    const STATUS_VALIDOS = ['concluida', 'validada', 'aprovada'];
     return vendas.filter(v =>
-      ['concluida', 'validada'].includes(v.status) &&
+      STATUS_VALIDOS.includes(v.status || 'concluida') &&
       (!de  || v.dataCurta >= de) &&
       (!ate || v.dataCurta <= ate)
     );
