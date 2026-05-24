@@ -1144,6 +1144,9 @@ const CartService = (() => {
    data: Utils.today(), hora: Utils.nowTime(), criadoEm: Utils.nowISO(),
    itens, total, subtotal, desconto, lucro,
    formaPgto: formaPgto || _formaPgto || 'Dinheiro',
+   // FIX: status ausente fazia filtros de KPI (v.status==='concluida') nunca encontrarem
+   // estas vendas, zerando faturamento/lucro quando VendasService não estava carregado.
+   status:   'concluida',
    origem: 'PDV', operador: AuthService.getNome(),
    role: AuthService.getRole(), _fbSynced: false,
     };
