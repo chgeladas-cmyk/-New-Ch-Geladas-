@@ -77,6 +77,7 @@
       for (const item of venda.itens || []) {
         const prod = EstoqueService.getProduto(item.prodId);
         if (!prod) continue;
+        if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
         const pack  = prod.packs?.find(pk => pk.label === item.label || (pk.qtd + 'x') === item.label);
         const qtdUn = item.label === 'UNID' ? item.qtd : item.qtd * (pack?.qtd || 1);
         // Disponível = atual − reservas de OUTRAS vendas (excluindo a própria)
@@ -169,6 +170,8 @@
       for (const item of venda.itens || []) {
         try {
           const prod = EstoqueService.getProduto(item.prodId);
+          if (!prod) continue;
+          if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
           const pack = prod?.packs?.find(pk =>
             pk.label === item.label || (pk.qtd + 'x') === item.label
           );
@@ -185,6 +188,7 @@
         (venda.itens || []).forEach(item => {
           const prod = estoque.find(p => p.id === item.prodId);
           if (!prod) return;
+          if (prod.controlaEstoque === false) return; // produto sem controle de estoque (ex: cigarro)
           const qtdDesc = item.label === 'UNID'
             ? item.qtd
             : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
@@ -296,6 +300,8 @@
             for (const item of venda.itens || []) {
               try {
                 const prod = EstoqueService.getProduto(item.prodId);
+                if (!prod) continue;
+                if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
                 const pack = prod?.packs?.find(pk =>
                   pk.label === item.label || (pk.qtd + 'x') === item.label
                 );
@@ -312,6 +318,7 @@
               (venda.itens || []).forEach(item => {
                 const prod = estoque.find(p => p.id === item.prodId);
                 if (!prod) return;
+                if (prod.controlaEstoque === false) return; // produto sem controle de estoque (ex: cigarro)
                 const qtdDesc = item.label === 'UNID'
                   ? item.qtd
                   : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);

@@ -74,6 +74,7 @@
     for (const item of itens) {
       const prod = getProduto(item.prodId);
       if (!prod) continue;
+      if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
       const pack  = prod.packs?.find(pk => pk.label === item.label || (pk.qtd + 'x') === item.label);
       const qtdUn = item.label === 'UNID' ? item.qtd : item.qtd * (pack?.qtd || 1);
       reservas[vendaId][item.prodId] = (reservas[vendaId][item.prodId] || 0) + qtdUn;
@@ -171,10 +172,11 @@
       qtdUn:        Number(dados.qtdUn       || dados.estoqueAtual || 0),
       precoUn:      Number(dados.precoUn     || dados.precoVenda   || 0),
       custoUn:      Number(dados.custoUn     || dados.precoCusto   || 0),
-      ativo:        dados.ativo ?? true,
-      unidade:      dados.unidade || 'UN',
-      fornecedorId: dados.fornecedorId || null,
-      packs:        dados.packs || [],
+      ativo:           dados.ativo ?? true,
+      controlaEstoque: dados.controlaEstoque ?? true,
+      unidade:         dados.unidade || 'UN',
+      fornecedorId:    dados.fornecedorId || null,
+      packs:           dados.packs || [],
       createdAt:    Utils.nowISO(),
       updatedAt:    Utils.nowISO(),
     };
