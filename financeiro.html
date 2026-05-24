@@ -351,12 +351,19 @@ function renderTudo() {
   // FinanceiroService — despesas e saldo real do período
   let despesas = 0;
   if (window.CH?.FinanceiroService) {
+    // FIX [ALTO]: Timezone — toISOString() retorna UTC (UTC-3 = Brazil).
+    // Após 21h BRT a data local é N+1 em UTC, jogando vendas no dia errado.
+    // Usa componentes locais (getFullYear/Month/Date) igual ao Utils.todayISO() correto.
+    const _localISO = (d) => {
+      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    };
     const hoje  = Utils.todayISO();
     const agora = new Date();
     let dataDe  = hoje;
-    if (_periodo === 'semana') { const d=new Date(); d.setDate(d.getDate()-6); dataDe=d.toISOString().slice(0,10); }
-    if (_periodo === 'mes')    { dataDe=new Date(agora.getFullYear(),agora.getMonth(),1).toISOString().slice(0,10); }
-    if (_periodo === 'ano')    { dataDe=new Date(agora.getFullYear(),0,1).toISOString().slice(0,10); }
+    if (_periodo === 'semana') { const d=new Date(); d.setDate(d.getDate()-6); dataDe=_localISO(d); }
+    if (_periodo === 'mes')    { dataDe=_localISO(new Date(agora.getFullYear(),agora.getMonth(),1)); }
+    if (_periodo === 'ano')    { dataDe=_localISO(new Date(agora.getFullYear(),0,1)); }
     if (_periodo === 'geral')  { dataDe='2000-01-01'; }
     const lancamentos = window.CH.FinanceiroService.getLancamentos({ dataDe, dataAte: hoje });
     despesas = lancamentos.filter(l => l.tipo === 'despesa').reduce((s,l) => s + l.valor, 0);
@@ -736,14 +743,13 @@ function cancelarVenda(vendaId) {
   Store.mutateVendas(vendas => {
     const v = vendas.find(x=>x.id===vendaId);
     if (!v) return;
-    v.status = 'CANCELADA';
+    // FIX [MÉDIO]: 'CANCELADA' (maiúsculo) quebrava todos os filtros que testam v.status==='cancelada'
+    v.status = 'cancelada';
     v.motivoCancelamento = motivo.trim();
-    v.canceladoEm = new Date().toISOString();
+    // FIX [MÉDIO]: não zerar total/lucro — histórico de faturamento fica correto;
+    // o estorno no financeiro já desfaz o efeito monetário.
+    v.canceladoEm  = new Date(new Date().getTime() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
     v.canceladoPor = AuthService.getNome();
-    v._totalOriginal = v.total;
-    v._lucroOriginal = v.lucro;
-    v.total = 0;
-    v.lucro = 0;
     vendaAtualizada = { ...v };
   });
 

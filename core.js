@@ -397,8 +397,12 @@ const Store = (() => {
 
     const vendasAntes = _read('vendas').length;
     const cortaVendas = corte(diasVendas);
+    // FIX [CRÍTICO]: Proteção para vendas no fluxo de aprovação.
+    // Sem isso, uma venda 'pendente' ou 'aprovada' com mais de N dias e já sincronizada
+    // seria silenciosamente removida do localStorage — sumia da fila de aprovação.
+    const _STATUS_PROTEGIDOS = new Set(['pendente', 'aprovada']);
     const vendasFiltradas = _read('vendas').filter(v =>
-   (v.dataCurta >= cortaVendas) || !v._fbSynced
+   (v.dataCurta >= cortaVendas) || !v._fbSynced || _STATUS_PROTEGIDOS.has(v.status)
     );
     if (vendasFiltradas.length < vendasAntes) {
    _write('vendas', vendasFiltradas);
