@@ -109,7 +109,7 @@ const Utils = Object.freeze({
     style: 'currency', currency: 'BRL', ...CONSTANTS.CURRENCY,
   }).format(Number(v) || 0);
   },
-  todayISO()   { return new Date().toISOString().slice(0, 10); },
+  todayISO()   { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; },
   today()      { return new Date().toLocaleDateString('pt-BR'); },
   nowTime()    { return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); },
   nowFull()    { return new Date().toLocaleString('pt-BR'); },
@@ -644,6 +644,9 @@ const FirebaseService = (() => {
      _fb.doc(_db, 'ch_dados', col),
      snap => {
        if (!snap.exists()) return;
+       // FIX [ALTO]: hasPendingWrites guard — evita sobrescrever escrita local
+       // ainda não confirmada pelo Firestore (ex: baixa de estoque recém-feita)
+       if (snap.metadata.hasPendingWrites) return;
        const dados = snap.data()?.dados;
        if (!dados) return;
        // Usuarios: salva direto no localStorage de usuários, não via Store genérico
