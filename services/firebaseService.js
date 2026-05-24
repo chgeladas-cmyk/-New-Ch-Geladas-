@@ -78,8 +78,28 @@
       try {
         const q = _fb.query(_fb.collection(_db,'vendas'),_fb.orderBy('criadoEm','desc'),_fb.limit(1000));
         const unsub = _fb.onSnapshot(q, snap=>{
+          // FIX: hasPendingWrites guard — se qualquer documento tem escrita local
+          // ainda não confirmada pelo servidor, aborta a sobrescrita do localStorage.
+          // Sem isso, uma venda salva localmente mas ainda não sincronizada seria
+          // silenciosamente apagada pela chegada do snapshot remoto (que não inclui ela).
+          const temPendentesLocais = snap.docs.some(d => d.metadata.hasPendingWrites);
+          if (temPendentesLocais) return;
+
           const vendas=snap.docs.map(d=>({...d.data(),_fbSynced:true})).filter(v=>!v._deleted);
-          try{localStorage.setItem(CONSTANTS.DB.VENDAS,JSON.stringify(vendas));}catch(_){}
+
+          // Antes de sobrescrever, preserva vendas locais ainda não sincronizadas
+          // que porventura não estejam no snapshot (ex: criadas offline)
+          try {
+            const localRaw = JSON.parse(localStorage.getItem(CONSTANTS.DB.VENDAS)||'[]');
+            const naoSincronizadas = localRaw.filter(v => !v._fbSynced && v.id);
+            const idsRemoto = new Set(vendas.map(v=>v.id));
+            const extras = naoSincronizadas.filter(v => !idsRemoto.has(v.id));
+            const final  = extras.length ? [...extras, ...vendas] : vendas;
+            localStorage.setItem(CONSTANTS.DB.VENDAS, JSON.stringify(final));
+          } catch(_) {
+            try { localStorage.setItem(CONSTANTS.DB.VENDAS,JSON.stringify(vendas)); } catch(_2) {}
+          }
+
           Store?.invalidate('vendas');
           EventBus.emit('store:updated','vendas');
           EventBus.emit('store:vendas');

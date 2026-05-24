@@ -174,7 +174,23 @@
         }
       }
 
-      // Remove concluídos e erros definitivos
+      // FIX: Remove concluídos. Erros definitivos são logados antes de descartar
+      // para garantir rastreabilidade — antes desapareciam silenciosamente.
+      const errosDefinitivos = q.filter(i => i.status === 'erro');
+      if (errosDefinitivos.length) {
+        errosDefinitivos.forEach(i => {
+          console.error(
+            `[SyncQueue] ✗ DESCARTADO após ${MAX_RETRY} tentativas — ${i.colecao} (${i.acao}) | último erro: ${i.ultimoErro}`
+          );
+          EventBus.emit('sync:falha-definitiva', { colecao: i.colecao, acao: i.acao, erro: i.ultimoErro, item: i });
+        });
+        // Notifica UI
+        window.CH?.UIService?.showToast?.(
+          `${errosDefinitivos.length} item(ns) não sincronizado(s)`,
+          'Verifique a conexão e use "Reenviar erros" no monitor de sync.',
+          'error'
+        );
+      }
       const finalQueue = q.filter(i => i.status === 'pendente');
       _saveQueue(finalQueue);
 
