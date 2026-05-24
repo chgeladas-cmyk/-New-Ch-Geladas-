@@ -595,6 +595,7 @@ let _logAtual   = null;  // log aberto no modal
 ───────────────────────────────────────────────── */
 function construirLogs() {
 
+  const st = _getStore();
   if (!st) return [];
 
   const vendas    = st.getVendas()    || [];
