@@ -573,7 +573,7 @@ select.inp option { background: #0f172a; color: #f1f5f9; }
    ALIASES — com fallback seguro
 ───────────────────────────────────────────────── */
 const _CH       = () => window.CH || {};
-const Store     = () => _CH().Store;
+const _getStore = () => _CH().Store;
 const AuthSvc   = () => _CH().AuthService;
 const _Utils    = () => _CH().Utils;
 
@@ -594,7 +594,7 @@ let _logAtual   = null;  // log aberto no modal
    CONSTRUÇÃO DO ARRAY UNIFICADO
 ───────────────────────────────────────────────── */
 function construirLogs() {
-  const st = Store();
+
   if (!st) return [];
 
   const vendas    = st.getVendas()    || [];
