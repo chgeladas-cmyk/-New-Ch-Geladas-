@@ -405,9 +405,22 @@
 
   /**
    * Baixa de estoque por venda — com Firebase Transaction.
-   * Chamado por VendasService ao finalizar uma venda.
+   * FIX [CRÍTICO]: Idempotente — uma segunda chamada com o mesmo vendaId
+   * não baixa o estoque de novo. Protege contra retry do SyncQueue e
+   * reprocessamento em validarTodas() se interrompida no meio do lote.
    */
   async function baixarEstoqueVenda(produtoId, quantidade, vendaId) {
+    // Verifica se essa venda já gerou movimentação de saída para este produto
+    if (vendaId) {
+      const origemKey = `venda:${vendaId}`;
+      const jaProcessado = Store.getMovimentacoes().some(
+        m => m.origem === origemKey && m.produtoId === produtoId && m.tipo === 'venda'
+      );
+      if (jaProcessado) {
+        console.info(`[EstoqueService] baixarEstoqueVenda ignorado — venda ${vendaId} já processada para produto ${produtoId}`);
+        return null; // idempotente: não baixa de novo
+      }
+    }
     return _registrarMovimentacao({
       produtoId, tipo: 'venda', quantidade,
       origem: `venda:${vendaId}`,

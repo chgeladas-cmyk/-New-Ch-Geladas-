@@ -198,13 +198,14 @@
       });
     }
 
-    // 3. Financeiro
-    const FinanceiroService = window.CH.FinanceiroService;
-    if (FinanceiroService) FinanceiroService.registrarReceita(venda);
+    // FIX [CRÍTICO]: registrarReceita REMOVIDO daqui.
+    // financeiroService.js tem hook EventBus.on('venda:finalizada', registrarReceita)
+    // — chamada direta + evento causavam receita duplicada para cada venda validada.
+    // O lote (validarTodas) chama diretamente pois emite venda:finalizada:lote, não venda:finalizada.
 
-    // 4. Eventos — só emite se NÃO estiver em lote (evita N re-renders)
+    // 3. Eventos — só emite se NÃO estiver em lote (evita N re-renders)
     if (!_processandoLote) {
-      EventBus.emit('venda:finalizada', venda);
+      EventBus.emit('venda:finalizada', venda); // ← hook do financeiroService registra a receita aqui
       EventBus.emit('venda:validada', venda);
     }
 
