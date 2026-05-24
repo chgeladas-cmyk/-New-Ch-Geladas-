@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#04060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CH Geladas">
+<title>Auditoria — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg:       #04060d;
+  --surface:  #080b14;
+  --card:     rgba(12,16,26,.95);
+  --border:   rgba(255,255,255,0.06);
+  --border-m: rgba(255,255,255,0.10);
+  --primary:  #3b82f6;
+  --emerald:  #10b981;
+  --amber:    #f59e0b;
+  --red:      #ef4444;
+  --violet:   #8b5cf6;
+  --text:     #f1f5f9;
+  --muted:    #64748b;
+  --dimmed:   #334155;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(59,130,246,.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(139,92,246,.04) 0%, transparent 55%);
+  color: var(--text);
+  min-height: 100vh;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* ── LOCK SCREEN ─────────────────────────────────── */
+#lock {
+  position: fixed; inset: 0; z-index: 9999;
+  background: radial-gradient(ellipse at 50% 40%, #0a1020 0%, var(--bg) 75%);
+  display: flex; align-items: center; justify-content: center;
+}
+#lock.hidden { display: none; }
+
+/* ── APP ─────────────────────────────────────────── */
+#app { min-height: 100vh; padding-bottom: 6rem; }
+
+/* ── TOPBAR ──────────────────────────────────────── */
+#topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(4,6,13,.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  padding: .75rem 1rem;
+  display: flex; align-items: center; gap: .75rem;
+}
+
+/* ── KPI CARDS ───────────────────────────────────── */
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  padding: 1rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, transform .15s;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.kpi-card:hover { transform: translateY(-1px); }
+.kpi-card:hover::before { opacity: 1; }
+
+.kpi-card.blue  { border-top: 2px solid rgba(59,130,246,.5); }
+.kpi-card.green { border-top: 2px solid rgba(16,185,129,.5); }
+.kpi-card.amber { border-top: 2px solid rgba(245,158,11,.5); }
+.kpi-card.red   { border-top: 2px solid rgba(239,68,68,.5);  }
+
+.kpi-icon {
+  width: 2rem; height: 2rem;
+  border-radius: .625rem;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; margin-bottom: .625rem;
+}
+.kpi-val {
+  font-size: 1.3rem; font-weight: 900; letter-spacing: -.02em;
+  line-height: 1.1; margin-bottom: .15rem;
+}
+.kpi-label {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+}
+.kpi-sub {
+  font-size: .6rem; font-weight: 600; color: var(--dimmed);
+  margin-top: .2rem;
+}
+
+/* ── FILTER BAR ──────────────────────────────────── */
+.filter-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  padding: 1rem;
+}
+.inp {
+  font-size: 13px !important;
+  padding: .625rem .875rem;
+  color: #fff;
+  background: rgba(30,41,59,.7);
+  border: 1.5px solid rgba(255,255,255,.08);
+  border-radius: .75rem;
+  width: 100%; outline: none;
+  transition: all .2s;
+  font-family: inherit;
+}
+.inp:focus {
+  border-color: rgba(59,130,246,.6) !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15) !important;
+  background: rgba(15,23,42,.9);
+}
+.inp::placeholder { color: #475569; }
+.inp-label {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .07em; color: #60a5fa; margin-bottom: .3rem; display: block;
+}
+select.inp option { background: #0f172a; color: #f1f5f9; }
+
+/* ── LOG CARDS ───────────────────────────────────── */
+.log-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.125rem;
+  padding: .875rem 1rem;
+  cursor: pointer;
+  transition: all .18s;
+  position: relative;
+  overflow: hidden;
+}
+.log-card::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 2px 0 0 2px;
+}
+.log-card.tipo-CRIACAO  { border-left: none; }
+.log-card.tipo-CRIACAO::after  { background: var(--emerald); }
+.log-card.tipo-ESTORNO  { border-left: none; }
+.log-card.tipo-ESTORNO::after  { background: var(--red); }
+.log-card.tipo-ALTERACAO { border-left: none; }
+.log-card.tipo-ALTERACAO::after { background: var(--amber); }
+.log-card:hover {
+  border-color: var(--border-m);
+  transform: translateX(2px);
+  box-shadow: 0 4px 24px rgba(0,0,0,.3);
+}
+
+/* ── BADGES ──────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  border-radius: 9999px;
+  font-size: .58rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: .18rem .55rem; gap: .25rem;
+}
+.b-green  { background: rgba(16,185,129,.15);  color: #34d399; }
+.b-red    { background: rgba(239,68,68,.15);   color: #f87171; }
+.b-amber  { background: rgba(245,158,11,.15);  color: #fbbf24; }
+.b-blue   { background: rgba(59,130,246,.15);  color: #60a5fa; }
+.b-violet { background: rgba(139,92,246,.15);  color: #a78bfa; }
+.b-gray   { background: rgba(100,116,139,.12); color: #94a3b8; }
+
+/* ── MODAL ───────────────────────────────────────── */
+#modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+  background: rgba(0,0,0,.75);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .25s, visibility .25s;
+}
+#modal.open {
+  opacity: 1; visibility: visible; pointer-events: auto;
+}
+#modal-box {
+  background: rgba(10,14,24,.98);
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 2rem 2rem 0 0;
+  width: 100%; max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform .3s cubic-bezier(.34,1.1,.64,1);
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+#modal.open #modal-box {
+  transform: translateY(0);
+}
+#modal-box::-webkit-scrollbar { width: 3px; }
+#modal-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 10px; }
+
+.modal-handle {
+  width: 2.5rem; height: 3px;
+  background: rgba(255,255,255,.15);
+  border-radius: 9999px;
+  margin: 0 auto .75rem;
+}
+
+.item-row {
+  background: rgba(15,23,42,.6);
+  border: 1px solid var(--border);
+  border-radius: .875rem;
+  padding: .625rem .875rem;
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+
+/* ── JUSTIFICATIVA BOX ───────────────────────────── */
+.just-box {
+  background: rgba(245,158,11,.06);
+  border: 1px solid rgba(245,158,11,.2);
+  border-radius: 1rem;
+  padding: .875rem 1rem;
+}
+
+/* ── SECTION DIVIDER ─────────────────────────────── */
+.sec-title {
+  font-size: .58rem; font-weight: 900;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin-bottom: .5rem;
+  display: flex; align-items: center; gap: .5rem;
+}
+.sec-title::before {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border);
+}
+.sec-title::after {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border);
+}
+
+/* ── FAB / BTN EXPORT ────────────────────────────── */
+#btnExport {
+  display: flex; align-items: center; gap: .5rem;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #fff;
+  border: none; border-radius: .875rem;
+  padding: .625rem 1.125rem;
+  font-family: inherit; font-size: .68rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em;
+  cursor: pointer; transition: all .2s;
+  box-shadow: 0 4px 16px rgba(37,99,235,.35);
+}
+#btnExport:hover {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  box-shadow: 0 6px 24px rgba(37,99,235,.5);
+  transform: translateY(-1px);
+}
+#btnExport:active { transform: translateY(0) scale(.96); }
+
+/* ── EMPTY STATE ─────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 4rem 2rem;
+  color: var(--dimmed);
+}
+.empty-state i { font-size: 2.5rem; margin-bottom: 1rem; opacity: .3; }
+
+/* ── TOAST ───────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 1.5rem; left: 50%;
+  transform: translateX(-50%) translateY(4rem);
+  opacity: 0; pointer-events: none; z-index: 300;
+  transition: opacity .25s, transform .25s;
+  background: rgba(13,17,23,.98);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 1.25rem;
+  padding: .875rem 1.25rem;
+  display: flex; align-items: center; gap: .75rem;
+  box-shadow: 0 24px 48px rgba(0,0,0,.5);
+  min-width: 200px;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── SCROLLBAR ───────────────────────────────────── */
+.scroll::-webkit-scrollbar { width: 3px; }
+.scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 10px; }
+
+/* ── PULSE ANIM ──────────────────────────────────── */
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+.pulse-dot { animation: pulse-dot 2s infinite; }
+
+/* ── FADE IN ─────────────────────────────────────── */
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.log-card { animation: fadeSlide .2s ease both; }
+</style>
+</head>
+<body>
+
+<!-- ══ LOCK SCREEN ══════════════════════════════════════════════════ -->
+<div id="lock">
+  <div class="text-center px-8">
+    <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+      <i class="fas fa-shield-halved text-blue-400 text-2xl"></i>
+    </div>
+    <p class="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">CH Geladas</p>
+    <p class="text-slate-600 text-[10px]">Verificando autenticação…</p>
+  </div>
+</div>
+
+<!-- ══ APP ═══════════════════════════════════════════════════════════ -->
+<div id="app" class="hidden">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <a href="index.html"
+       class="w-8 h-8 rounded-xl bg-white/5 border border-white/08 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white transition-all flex-shrink-0">
+      <i class="fas fa-arrow-left text-xs"></i>
+    </a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-[.8rem] font-black text-white truncate">Auditoria & Logs</h1>
+      <p class="text-[9px] text-slate-600 font-semibold">Rastreabilidade completa do sistema</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="roleTag" class="badge b-violet hidden"></span>
+      <button id="btnExport" onclick="exportarCSV()">
+        <i class="fas fa-file-csv"></i>
+        <span class="hidden sm:inline">Exportar</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <div class="px-3 pt-4 space-y-4 max-w-2xl mx-auto">
+
+    <!-- KPI GRID -->
+    <div class="grid grid-cols-2 gap-2.5">
+
+      <div class="kpi-card blue">
+        <div class="kpi-icon bg-blue-500/10 text-blue-400">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="kpi-val text-white" id="kpiFatur">R$ 0,00</div>
+        <div class="kpi-label">Faturamento Bruto</div>
+        <div class="kpi-sub" id="kpiFaturSub">0 vendas</div>
+      </div>
+
+      <div class="kpi-card green">
+        <div class="kpi-icon bg-emerald-500/10 text-emerald-400">
+          <i class="fas fa-sack-dollar"></i>
+        </div>
+        <div class="kpi-val text-emerald-400" id="kpiLucro">R$ 0,00</div>
+        <div class="kpi-label">Lucro Líquido Real</div>
+        <div class="kpi-sub" id="kpiLucroSub">0% margem</div>
+      </div>
+
+      <div class="kpi-card amber">
+        <div class="kpi-icon bg-amber-500/10 text-amber-400">
+          <i class="fas fa-receipt"></i>
+        </div>
+        <div class="kpi-val text-amber-400" id="kpiTicket">R$ 0,00</div>
+        <div class="kpi-label">Ticket Médio</div>
+        <div class="kpi-sub" id="kpiTicketSub">por venda</div>
+      </div>
+
+      <div class="kpi-card red">
+        <div class="kpi-icon bg-red-500/10 text-red-400">
+          <i class="fas fa-rotate-left"></i>
+        </div>
+        <div class="kpi-val text-red-400" id="kpiEstorno">R$ 0,00</div>
+        <div class="kpi-label">Total Estornado</div>
+        <div class="kpi-sub" id="kpiEstornoSub">0 cancelamentos</div>
+      </div>
+
+    </div>
+
+    <!-- FILTROS AVANÇADOS -->
+    <div class="filter-bar space-y-3">
+      <div class="flex items-center gap-2 mb-1">
+        <i class="fas fa-sliders text-slate-500 text-xs"></i>
+        <span class="text-[.6rem] font-black uppercase tracking-widest text-slate-500">Filtros</span>
+        <button onclick="limparFiltros()"
+          class="ml-auto text-[.58rem] font-bold text-slate-600 hover:text-blue-400 transition-colors uppercase tracking-wide">
+          Limpar
+        </button>
+      </div>
+
+      <!-- Datas -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <span class="inp-label">Data Início</span>
+          <input type="date" id="fDataInicio" class="inp" oninput="aplicarFiltros()">
+        </div>
+        <div>
+          <span class="inp-label">Data Fim</span>
+          <input type="date" id="fDataFim" class="inp" oninput="aplicarFiltros()">
+        </div>
+      </div>
+
+      <!-- Tipo + Pagamento -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <span class="inp-label">Tipo de Evento</span>
+          <select id="fTipo" class="inp" onchange="aplicarFiltros()">
+            <option value="">Todos</option>
+            <option value="CRIACAO">Criação</option>
+            <option value="ESTORNO">Estorno</option>
+            <option value="ALTERACAO">Alteração</option>
+          </select>
+        </div>
+        <div>
+          <span class="inp-label">Forma de Pgto</span>
+          <select id="fPgto" class="inp" onchange="aplicarFiltros()">
+            <option value="">Todos</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Pix">Pix</option>
+            <option value="Débito">Débito</option>
+            <option value="Crédito">Crédito</option>
+            <option value="Fiado">Fiado</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Busca global -->
+      <div>
+        <span class="inp-label">Busca Global</span>
+        <div class="relative">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-xs pointer-events-none"></i>
+          <input type="search" id="fBusca" class="inp" style="padding-left:2.25rem"
+            placeholder="ID, operador, produto, motivo…"
+            oninput="aplicarFiltros()">
+        </div>
+      </div>
+    </div>
+
+    <!-- COUNTER -->
+    <div class="flex items-center justify-between px-1">
+      <span class="text-[.6rem] font-black uppercase tracking-widest text-slate-600">
+        Registros
+      </span>
+      <span id="countLabel" class="text-[.6rem] font-black text-slate-500">0 resultados</span>
+    </div>
+
+    <!-- LOG LIST -->
+    <div id="logList" class="space-y-2">
+      <!-- preenchido dinamicamente -->
+    </div>
+
+    <!-- EMPTY -->
+    <div id="emptyState" class="hidden empty-state">
+      <i class="fas fa-magnifying-glass block"></i>
+      <p class="text-sm font-bold text-slate-600 mt-2">Nenhum registro encontrado</p>
+      <p class="text-xs text-slate-700 mt-1">Ajuste os filtros ou aguarde novas operações</p>
+    </div>
+
+  </div><!-- /conteúdo -->
+</div><!-- /app -->
+
+<!-- ══ MODAL DETALHE ══════════════════════════════════════════════════ -->
+<div id="modal" onclick="fecharModal(event)">
+  <div id="modal-box">
+    <div class="modal-handle"></div>
+
+    <!-- Header modal -->
+    <div class="flex items-start gap-3 mb-4">
+      <div id="mIconWrap" class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+        <i id="mIcon" class="fas fa-check text-sm"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="mBadge" class="badge b-green"></span>
+          <span id="mFormaPgto" class="badge b-blue hidden"></span>
+        </div>
+        <p id="mId" class="text-[9px] font-mono text-slate-600 mt-1 truncate"></p>
+      </div>
+      <button onclick="fecharModal()"
+        class="w-8 h-8 rounded-xl bg-white/05 border border-white/06 flex items-center justify-center text-slate-500 hover:text-white transition-colors flex-shrink-0">
+        <i class="fas fa-xmark text-xs"></i>
+      </button>
+    </div>
+
+    <!-- KPIs do log -->
+    <div class="grid grid-cols-3 gap-2 mb-4" id="mKpiRow">
+      <!-- total, lucro, desconto -->
+    </div>
+
+    <!-- Meta info -->
+    <div class="grid grid-cols-2 gap-2 mb-4" id="mMeta">
+      <!-- operador, data, hora, módulo -->
+    </div>
+
+    <!-- Itens da venda -->
+    <div id="mItensWrap" class="mb-4 hidden">
+      <div class="sec-title">Itens da Venda</div>
+      <div id="mItens" class="space-y-1.5 mt-3"></div>
+    </div>
+
+    <!-- Comparação antes/depois (ALTERACAO) -->
+    <div id="mDiffWrap" class="mb-4 hidden">
+      <div class="sec-title">Modificação</div>
+      <div class="grid grid-cols-2 gap-2 mt-3">
+        <div>
+          <p class="text-[.58rem] font-black uppercase tracking-wide text-red-400 mb-1.5">Antes</p>
+          <div id="mAntes" class="text-[11px] text-slate-400 bg-red-500/05 border border-red-500/15 rounded-xl p-3 font-mono break-all"></div>
+        </div>
+        <div>
+          <p class="text-[.58rem] font-black uppercase tracking-wide text-emerald-400 mb-1.5">Depois</p>
+          <div id="mDepois" class="text-[11px] text-slate-400 bg-emerald-500/05 border border-emerald-500/15 rounded-xl p-3 font-mono break-all"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Justificativa / Motivo Legal -->
+    <div id="mJustWrap" class="hidden">
+      <div class="sec-title">Justificativa</div>
+      <div class="just-box mt-3">
+        <div class="flex items-start gap-2">
+          <i class="fas fa-triangle-exclamation text-amber-400 text-xs mt-0.5 flex-shrink-0"></i>
+          <p id="mJust" class="text-xs font-semibold text-amber-300/80 leading-relaxed"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumo (ALTERACAO) -->
+    <div id="mResumoWrap" class="mt-3 hidden">
+      <div class="sec-title">Resumo da Ação</div>
+      <p id="mResumo" class="text-xs text-slate-400 mt-2 leading-relaxed"></p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ TOAST ══════════════════════════════════════════════════════════ -->
+<div id="toast">
+  <span id="toastIcon" class="text-sm"></span>
+  <div>
+    <span id="toastMsg"  class="text-[11px] font-black uppercase tracking-wide block"></span>
+    <span id="toastSub"  class="text-[9px] text-slate-500 font-bold"></span>
+  </div>
+</div>
+
+<!-- ══ SCRIPTS ════════════════════════════════════════════════════════ -->
+<script src="./core.js"></script>
+<script src="./services/auditService.js"></script>
+<script src="./services/permissoesService.js"></script>
+
+<script>
+'use strict';
+
+/* ─────────────────────────────────────────────────
+   ALIASES — com fallback seguro
+───────────────────────────────────────────────── */
+const _CH       = () => window.CH || {};
+const Store     = () => _CH().Store;
+const AuthSvc   = () => _CH().AuthService;
+const _Utils    = () => _CH().Utils;
+
+const fmt = (v) => {
+  const u = _Utils();
+  if (u && typeof u.formatCurrency === 'function') return u.formatCurrency(v);
+  return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 }).format(Number(v)||0);
+};
+
+/* ─────────────────────────────────────────────────
+   ESTADO GLOBAL
+───────────────────────────────────────────────── */
+let _todosLogs  = [];   // array unificado bruto
+let _logsFiltrados = []; // resultado do filtro atual
+let _logAtual   = null;  // log aberto no modal
+
+/* ─────────────────────────────────────────────────
+   CONSTRUÇÃO DO ARRAY UNIFICADO
+───────────────────────────────────────────────── */
+function construirLogs() {
+  const st = Store();
+  if (!st) return [];
+
+  const vendas    = st.getVendas()    || [];
+  const auditoria = st.getAuditoria() || [];
+  const resultado = [];
+
+  /* 1 ── MAPEAR VENDAS */
+  vendas.forEach(v => {
+    const cancelada = (v.status || '').toUpperCase() === 'CANCELADA';
+    resultado.push({
+      _id:        v.id,
+      _tipo:      cancelada ? 'ESTORNO' : 'CRIACAO',
+      _modulo:    'vendas',
+      _operador:  v.operador  || '—',
+      _role:      v.role      || '—',
+      _data:      v.dataCurta || (v.criadoEm || '').slice(0,10) || '',
+      _dataISO:   v.criadoEm  || v.data || '',
+      _hora:      v.hora      || '',
+      _formaPgto: v.formaPgto || '',
+      _total:     v.total     || 0,
+      _subtotal:  v.subtotal  || v.total || 0,
+      _desconto:  v.desconto  || 0,
+      _lucro:     v.lucro     || 0,
+      _itens:     v.itens     || [],
+      _resumo:    cancelada
+                    ? `Venda estornada — ${fmt(v.total)}`
+                    : `Venda finalizada — ${fmt(v.total)}`,
+      _motivo:    v.motivo    || v.motivoCancelamento || null,
+      _antes:     null,
+      _depois:    null,
+      _origem:    'venda',
+      _raw:       v,
+    });
+  });
+
+  /* 2 ── MAPEAR LOGS DE AUDITORIA */
+  auditoria.forEach(a => {
+    // tenta herdar dados da venda original se existir
+    let vendaRef = null;
+    if (a.id && a.modulo === 'vendas') {
+      vendaRef = (vendas || []).find(v => v.id === a.id);
+    }
+
+    resultado.push({
+      _id:        a.id       || (_Utils()?.generateId?.() ?? ('a_' + Date.now())),
+      _tipo:      'ALTERACAO',
+      _modulo:    a.modulo   || a.acao || 'sistema',
+      _operador:  a.usuario  || a.operador || '—',
+      _role:      a.role     || '—',
+      _data:      a.dataCurta || (a.data || '').slice(0,10) || '',
+      _dataISO:   a.data     || '',
+      _hora:      a.hora     || '',
+      _formaPgto: vendaRef?.formaPgto || a.formaPgto || '',
+      _total:     vendaRef?.total     || a.total     || 0,
+      _subtotal:  vendaRef?.subtotal  || a.total     || 0,
+      _desconto:  vendaRef?.desconto  || 0,
+      _lucro:     vendaRef?.lucro     || 0,
+      _itens:     vendaRef?.itens     || [],
+      _resumo:    a.resumo   || `${a.acao || 'Alteração'} em ${a.modulo || '—'}`,
+      _motivo:    a.resumo   || null,
+      _antes:     a.antes    || null,
+      _depois:    a.depois   || null,
+      _acao:      a.acao     || '—',
+      _device:    a.device   || null,
+      _origem:    'auditoria',
+      _raw:       a,
+    });
+  });
+
+  /* 3 ── ORDENAR: mais recente primeiro */
+  resultado.sort((a, b) => {
+    const da = a._dataISO || a._data || '';
+    const db = b._dataISO || b._data || '';
+    return db.localeCompare(da);
+  });
+
+  return resultado;
+}
+
+/* ─────────────────────────────────────────────────
+   CALCULAR KPIs
+───────────────────────────────────────────────── */
+function calcularKPIs(logs) {
+  // usa apenas logs de venda (origem 'venda')
+  const vendasValidas    = logs.filter(l => l._origem === 'venda' && l._tipo === 'CRIACAO');
+  const vendasCanceladas = logs.filter(l => l._origem === 'venda' && l._tipo === 'ESTORNO');
+
+  const faturBruto = vendasValidas.reduce((s,l) => s + l._total, 0);
+  const estornado  = vendasCanceladas.reduce((s,l) => s + l._total, 0);
+  const ticket     = vendasValidas.length ? faturBruto / vendasValidas.length : 0;
+
+  // Lucro Líquido Real: percorre itens para calcular margem correta
+  let lucroItens = 0;
+  vendasValidas.forEach(l => {
+    if (l._itens && l._itens.length) {
+      l._itens.forEach(item => {
+        const pv = item.preco  || item.precoVenda  || item.precoUn  || 0;
+        const pc = item.custo  || item.precoCusto  || item.custoUn  || 0;
+        const qt = item.qtd    || 1;
+        lucroItens += (pv - pc) * qt;
+      });
+      lucroItens -= (l._desconto || 0);
+    } else {
+      // fallback: usa lucro já calculado na venda
+      lucroItens += l._lucro || 0;
+    }
+  });
+  const margem = faturBruto > 0 ? ((lucroItens / faturBruto) * 100).toFixed(1) : 0;
+
+  return { faturBruto, lucroItens, ticket, estornado, margem,
+           nVendas: vendasValidas.length, nCanceladas: vendasCanceladas.length };
+}
+
+/* ─────────────────────────────────────────────────
+   RENDERIZAR KPIs
+───────────────────────────────────────────────── */
+function renderKPIs(kpi) {
+  _set('kpiFatur',     fmt(kpi.faturBruto));
+  _set('kpiFaturSub',  `${kpi.nVendas} venda${kpi.nVendas!==1?'s':''}`);
+  _set('kpiLucro',     fmt(kpi.lucroItens));
+  _set('kpiLucroSub',  `${kpi.margem}% margem`);
+  _set('kpiTicket',    fmt(kpi.ticket));
+  _set('kpiTicketSub', `${kpi.nVendas} venda${kpi.nVendas!==1?'s':''}`);
+  _set('kpiEstorno',   fmt(kpi.estornado));
+  _set('kpiEstornoSub',`${kpi.nCanceladas} cancelamento${kpi.nCanceladas!==1?'s':''}`);
+}
+
+/* ─────────────────────────────────────────────────
+   APLICAR FILTROS + BUSCA
+───────────────────────────────────────────────── */
+function aplicarFiltros() {
+  const dataInicio = document.getElementById('fDataInicio').value;
+  const dataFim    = document.getElementById('fDataFim').value;
+  const tipo       = document.getElementById('fTipo').value;
+  const pgto       = document.getElementById('fPgto').value;
+  const busca      = (document.getElementById('fBusca').value || '').toLowerCase().trim();
+
+  _logsFiltrados = _todosLogs.filter(l => {
+    // data início
+    if (dataInicio && l._data && l._data < dataInicio) return false;
+    // data fim
+    if (dataFim    && l._data && l._data > dataFim)    return false;
+    // tipo de evento
+    if (tipo && l._tipo !== tipo) return false;
+    // forma de pagamento
+    if (pgto && (l._formaPgto || '').toLowerCase() !== pgto.toLowerCase()) return false;
+    // busca textual
+    if (busca) {
+      const haystack = [
+        l._id, l._operador, l._modulo, l._acao,
+        l._formaPgto, l._resumo, l._motivo,
+        ...(l._itens || []).map(i => i.nome || ''),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  // KPIs baseados nos logs filtrados
+  const kpi = calcularKPIs(_logsFiltrados);
+  renderKPIs(kpi);
+
+  renderLogs(_logsFiltrados);
+}
+
+/* ─────────────────────────────────────────────────
+   RENDERIZAR LISTA DE LOGS
+───────────────────────────────────────────────── */
+function renderLogs(logs) {
+  const list  = document.getElementById('logList');
+  const empty = document.getElementById('emptyState');
+  const count = document.getElementById('countLabel');
+
+  count.textContent = `${logs.length} resultado${logs.length!==1?'s':''}`;
+
+  if (!logs.length) {
+    list.innerHTML  = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  list.innerHTML = logs.map((l, idx) => {
+    const { cor, icon, badgeClass, label } = _tipoMeta(l._tipo);
+    const nItens   = (l._itens || []).length;
+    const itensStr = nItens ? `${nItens} item${nItens>1?'s':''}` : '';
+    const dataStr  = _formatarData(l._data, l._hora);
+
+    return `
+<div class="log-card tipo-${l._tipo}" style="animation-delay:${Math.min(idx*.03,.4)}s"
+     onclick="abrirModal(${idx})">
+  <div class="flex items-start gap-3">
+    <!-- ícone tipo -->
+    <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-xs ${cor}">
+      <i class="${icon}"></i>
+    </div>
+    <!-- info principal -->
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+        <span class="badge ${badgeClass}"><i class="${icon} mr-0.5"></i>${label}</span>
+        ${l._formaPgto ? `<span class="badge b-blue">${l._formaPgto}</span>` : ''}
+        ${l._modulo && l._modulo !== 'vendas' ? `<span class="badge b-gray">${l._modulo}</span>` : ''}
+      </div>
+      <p class="text-[11px] font-bold text-slate-300 truncate leading-snug">${_esc(l._resumo || '—')}</p>
+      <div class="flex items-center gap-2 mt-1 flex-wrap">
+        <span class="text-[9px] text-slate-600 font-semibold">
+          <i class="fas fa-user-circle mr-0.5"></i>${_esc(l._operador)}
+        </span>
+        <span class="text-[9px] text-slate-700">•</span>
+        <span class="text-[9px] text-slate-600 font-semibold">
+          <i class="far fa-clock mr-0.5"></i>${dataStr}
+        </span>
+        ${itensStr ? `<span class="text-[9px] text-slate-700">•</span>
+        <span class="text-[9px] text-slate-600 font-semibold">${itensStr}</span>` : ''}
+      </div>
+    </div>
+    <!-- valor -->
+    <div class="text-right flex-shrink-0">
+      <p class="text-[.75rem] font-black ${l._tipo==='ESTORNO'?'text-red-400':l._tipo==='CRIACAO'?'text-emerald-400':'text-amber-400'}">${fmt(l._total)}</p>
+      <p class="text-[8px] text-slate-700 font-mono mt-0.5 truncate max-w-[5rem]">${(l._id||'').slice(-8)}</p>
+    </div>
+  </div>
+</div>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────────────
+   MODAL — ABRIR
+───────────────────────────────────────────────── */
+function abrirModal(idx) {
+  _logAtual = _logsFiltrados[idx];
+  if (!_logAtual) return;
+  const l = _logAtual;
+  const { cor, icon, badgeClass, label } = _tipoMeta(l._tipo);
+
+  // Ícone wrapper
+  const iconWrap = document.getElementById('mIconWrap');
+  iconWrap.className = `w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cor}`;
+  document.getElementById('mIcon').className = `${icon} text-sm`;
+
+  // Badge tipo
+  const badge = document.getElementById('mBadge');
+  badge.className = `badge ${badgeClass}`;
+  badge.textContent = label;
+
+  // FormaPgto
+  const fp = document.getElementById('mFormaPgto');
+  if (l._formaPgto) {
+    fp.textContent = l._formaPgto;
+    fp.classList.remove('hidden');
+  } else {
+    fp.classList.add('hidden');
+  }
+
+  // ID
+  document.getElementById('mId').textContent = `ID: ${l._id || '—'}`;
+
+  // KPI row
+  document.getElementById('mKpiRow').innerHTML = [
+    ['Total', fmt(l._total), l._tipo==='ESTORNO'?'text-red-400':'text-emerald-400'],
+    ['Lucro', fmt(l._lucro || 0), 'text-blue-400'],
+    ['Desconto', fmt(l._desconto || 0), 'text-amber-400'],
+  ].map(([lbl, val, cls]) => `
+    <div class="bg-white/03 border border-white/05 rounded-xl p-2.5 text-center">
+      <p class="text-[.7rem] font-black ${cls}">${val}</p>
+      <p class="text-[.55rem] font-bold text-slate-600 uppercase tracking-wide mt-0.5">${lbl}</p>
+    </div>`).join('');
+
+  // Meta info
+  document.getElementById('mMeta').innerHTML = [
+    ['fas fa-user-circle', 'Operador',  l._operador || '—'],
+    ['fas fa-id-badge',    'Perfil',    l._role     || '—'],
+    ['far fa-calendar',    'Data',      l._data     || '—'],
+    ['far fa-clock',       'Hora',      l._hora     || '—'],
+  ].map(([ic, lbl, val]) => `
+    <div class="bg-white/03 border border-white/05 rounded-xl px-3 py-2.5">
+      <p class="text-[.55rem] font-black uppercase tracking-wide text-slate-600 mb-0.5">${lbl}</p>
+      <div class="flex items-center gap-1.5">
+        <i class="${ic} text-slate-500 text-[10px]"></i>
+        <p class="text-[11px] font-bold text-slate-300 truncate">${_esc(val)}</p>
+      </div>
+    </div>`).join('');
+
+  // Itens da venda
+  const itensWrap = document.getElementById('mItensWrap');
+  if (l._itens && l._itens.length) {
+    itensWrap.classList.remove('hidden');
+    document.getElementById('mItens').innerHTML = l._itens.map(item => {
+      const pv    = item.preco     || item.precoVenda  || item.precoUn  || 0;
+      const pc    = item.custo     || item.precoCusto  || item.custoUn  || 0;
+      const qt    = item.qtd       || 1;
+      const lucro = (pv - pc) * qt;
+      return `
+<div class="item-row">
+  <div class="flex-1 min-w-0">
+    <p class="text-[11px] font-bold text-slate-200 truncate">${_esc(item.nome||'—')}</p>
+    <p class="text-[9px] text-slate-600 mt-0.5">
+      <span class="text-slate-500">Custo: ${fmt(pc)}</span>
+      <span class="mx-1 text-slate-700">·</span>
+      <span>Venda: ${fmt(pv)}</span>
+      <span class="mx-1 text-slate-700">·</span>
+      <span>Qtd: ${qt}${item.label&&item.label!=='UNID'?' ('+_esc(item.label)+')':''}</span>
+    </p>
+  </div>
+  <div class="text-right flex-shrink-0">
+    <p class="text-[11px] font-black ${lucro>=0?'text-emerald-400':'text-red-400'}">${fmt(lucro)}</p>
+    <p class="text-[8px] text-slate-700">margem</p>
+  </div>
+</div>`;
+    }).join('');
+  } else {
+    itensWrap.classList.add('hidden');
+  }
+
+  // Diff antes/depois (ALTERACAO)
+  const diffWrap = document.getElementById('mDiffWrap');
+  if (l._tipo === 'ALTERACAO' && (l._antes || l._depois)) {
+    diffWrap.classList.remove('hidden');
+    document.getElementById('mAntes').textContent  = l._antes  ? JSON.stringify(l._antes,  null, 2) : '—';
+    document.getElementById('mDepois').textContent = l._depois ? JSON.stringify(l._depois, null, 2) : '—';
+  } else {
+    diffWrap.classList.add('hidden');
+  }
+
+  // Resumo (ALTERACAO)
+  const resumoWrap = document.getElementById('mResumoWrap');
+  if (l._tipo === 'ALTERACAO' && l._resumo) {
+    resumoWrap.classList.remove('hidden');
+    document.getElementById('mResumo').textContent = l._resumo;
+  } else {
+    resumoWrap.classList.add('hidden');
+  }
+
+  // Justificativa / motivo legal
+  const justWrap = document.getElementById('mJustWrap');
+  const motivo   = l._motivo || l._resumo || null;
+  if (l._tipo === 'ESTORNO' || (l._tipo === 'ALTERACAO' && motivo)) {
+    justWrap.classList.remove('hidden');
+    document.getElementById('mJust').textContent =
+      motivo || 'Nenhuma justificativa registrada.';
+  } else {
+    justWrap.classList.add('hidden');
+  }
+
+  document.getElementById('modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharModal(e) {
+  if (e && e.target !== document.getElementById('modal')) return;
+  document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
+  setTimeout(() => { _logAtual = null; }, 300);
+}
+
+/* ─────────────────────────────────────────────────
+   EXPORTAR CSV (UTF-8 BOM — compatível Excel)
+───────────────────────────────────────────────── */
+function exportarCSV() {
+  if (!_logsFiltrados.length) {
+    _toast('Nenhum dado', 'Aplique filtros com resultados', '⚠️');
+    return;
+  }
+
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[,;\n"]/.test(s) ? `"${s}"` : s;
+  };
+
+  const cabecalho = [
+    'ID', 'Tipo', 'Módulo', 'Operador', 'Perfil',
+    'Data', 'Hora', 'Forma Pgto',
+    'Total (R$)', 'Subtotal (R$)', 'Desconto (R$)', 'Lucro (R$)',
+    'Nº Itens', 'Resumo', 'Motivo/Justificativa',
+  ];
+
+  const linhas = _logsFiltrados.map(l => [
+    esc(l._id),
+    esc(l._tipo),
+    esc(l._modulo),
+    esc(l._operador),
+    esc(l._role),
+    esc(l._data),
+    esc(l._hora),
+    esc(l._formaPgto),
+    esc(_numCSV(l._total)),
+    esc(_numCSV(l._subtotal)),
+    esc(_numCSV(l._desconto)),
+    esc(_numCSV(l._lucro)),
+    esc((l._itens||[]).length),
+    esc(l._resumo),
+    esc(l._motivo || ''),
+  ].join(';'));
+
+  const csv     = '\uFEFF' + [cabecalho.join(';'), ...linhas].join('\r\n');
+  const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url     = URL.createObjectURL(blob);
+  const a       = Object.assign(document.createElement('a'), {
+    href:     url,
+    download: `auditoria_chgeladas_${_nowStr()}.csv`,
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  _toast('CSV exportado', `${_logsFiltrados.length} registros`, '📊');
+}
+
+/* ─────────────────────────────────────────────────
+   LIMPAR FILTROS
+───────────────────────────────────────────────── */
+function limparFiltros() {
+  ['fDataInicio','fDataFim','fBusca'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('fTipo').value = '';
+  document.getElementById('fPgto').value = '';
+  aplicarFiltros();
+}
+
+/* ─────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────── */
+function _tipoMeta(tipo) {
+  const m = {
+    CRIACAO:   { cor:'bg-emerald-500/15 text-emerald-400', icon:'fas fa-circle-check',   badgeClass:'b-green', label:'Criação'  },
+    ESTORNO:   { cor:'bg-red-500/15 text-red-400',         icon:'fas fa-rotate-left',    badgeClass:'b-red',   label:'Estorno'  },
+    ALTERACAO: { cor:'bg-amber-500/15 text-amber-400',     icon:'fas fa-pen-to-square',  badgeClass:'b-amber', label:'Alteração'},
+  };
+  return m[tipo] || { cor:'bg-slate-500/15 text-slate-400', icon:'fas fa-circle-dot', badgeClass:'b-gray', label: tipo||'—' };
+}
+
+function _formatarData(dataCurta, hora) {
+  if (!dataCurta) return hora || '—';
+  try {
+    const [y,m,d] = dataCurta.split('-');
+    return `${d}/${m}/${y}${hora ? ' · '+hora : ''}`;
+  } catch { return dataCurta; }
+}
+
+function _numCSV(v) {
+  return (Number(v)||0).toFixed(2).replace('.',',');
+}
+
+function _nowStr() {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+}
+
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _set(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+
+let _toastTimer;
+function _toast(msg, sub = '', icon = 'ℹ️') {
+  document.getElementById('toastMsg').textContent  = msg;
+  document.getElementById('toastSub').textContent  = sub;
+  document.getElementById('toastIcon').textContent = icon;
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ─────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  const auth = AuthSvc();
+
+  /* ── Guarda de rota ── */
+  if (!auth || !auth.isLogged()) {
+    location.href = 'index.html';
+    return;
+  }
+
+  const role = auth.getRole();
+  const rolesPermitidos = ['adm', 'admin', 'gerente'];
+  if (!rolesPermitidos.includes(role)) {
+    location.href = 'bi-dashboard.html';
+    return;
+  }
+
+  /* ── Mostrar app ── */
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  /* ── Role tag ── */
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(role);
+    rt.textContent = _info?.label || role || 'ADM';
+    rt.classList.remove('hidden');
+  }
+
+  /* ── Datas padrão: último mês ── */
+  const hoje = new Date();
+  const umMesAtras = new Date(hoje);
+  umMesAtras.setDate(hoje.getDate() - 30);
+  const fmtDate = d => d.toISOString().slice(0,10);
+  document.getElementById('fDataFim').value    = fmtDate(hoje);
+  document.getElementById('fDataInicio').value = fmtDate(umMesAtras);
+
+  /* ── Carregar dados ── */
+  _todosLogs = construirLogs();
+  aplicarFiltros();
+
+  /* ── Ouvir atualizações em tempo real ── */
+  const eb = _CH().EventBus;
+  if (eb) {
+    ['venda:finalizada', 'venda:cancelada', 'auditoria:registrada'].forEach(ev => {
+      eb.on(ev, () => {
+        _todosLogs = construirLogs();
+        aplicarFiltros();
+      });
+    });
+  }
+});
+</script>
+</body>
+</html>
