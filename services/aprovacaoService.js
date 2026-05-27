@@ -133,6 +133,20 @@
     // Libera a reserva de estoque para que outras vendas possam ser aprovadas
     window.CH.EstoqueService?.liberarReserva?.(vendaId);
 
+    // Para vendas fiado pendentes: o saldo NUNCA foi atualizado (pela correção
+    // do confirmarLancamento), então não há rollback de saldo necessário.
+    // Apenas emitimos o evento específico para que fiado.html possa re-renderizar.
+    if (venda._fiado && venda._fiadoClienteId) {
+      EventBus.emit('fiado:lancamento:rejeitado', {
+        vendaId,
+        clienteId: venda._fiadoClienteId,
+        valor:     venda.total,
+        motivo,
+        operador:  AuthService.getNome(),
+      });
+      console.info(`[AprovacaoService] Fiado rejeitado → cliente ${venda._fiadoClienteId} | motivo: ${motivo || 'sem motivo'}`);
+    }
+
     _sync(vendaId);
     EventBus.emit('venda:rejeitada', { vendaId, motivo, operador: AuthService.getNome() });
     return true;
@@ -203,7 +217,36 @@
     // — chamada direta + evento causavam receita duplicada para cada venda validada.
     // O lote (validarTodas) chama diretamente pois emite venda:finalizada:lote, não venda:finalizada.
 
-    // 3. Eventos — só emite se NÃO estiver em lote (evita N re-renders)
+    // 3. Efetiva débito fiado (saldo + movimentacao) — SÓ AGORA, pós-validação.
+    //    confirmarLancamento() em fiado.html NÃO atualiza c.saldo na criação;
+    //    a atualização fica aqui para garantir que nenhum débito exista sem aprovação.
+    if (venda._fiado && venda._fiadoClienteId) {
+      const _ES_FS = window.CH?.Store;
+      if (_ES_FS) {
+        _ES_FS.mutateFiado(fiado => {
+          const cx = fiado.find(x => x.id === venda._fiadoClienteId);
+          if (!cx) return;
+          cx.saldo = (cx.saldo || 0) + (venda.total || 0);
+          if (!Array.isArray(cx.movimentacoes)) cx.movimentacoes = [];
+          cx.movimentacoes.unshift({
+            id:         Utils.generateId(),
+            tipo:       'fiado',
+            descricao:  venda._fiadoDesc || venda.itens?.[0]?.nome || 'Compra fiado',
+            valor:      venda.total || 0,
+            vendaId:    venda.id,
+            validadoPor: AuthService.getNome(),
+            criadoEm:   Utils.nowISO(),
+          });
+          if (cx.limite > 0 && cx.saldo >= cx.limite) cx.bloqueado = true;
+        });
+        if (window.CH.SyncQueue) {
+          window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+        }
+        console.info(`[AprovacaoService] Fiado efetivado → cliente ${venda._fiadoClienteId} +R$${venda.total}`);
+      }
+    }
+
+    // 4. Eventos — só emite se NÃO estiver em lote (evita N re-renders)
     if (!_processandoLote) {
       EventBus.emit('venda:finalizada', venda); // ← hook do financeiroService registra a receita aqui
       EventBus.emit('venda:validada', venda);
@@ -333,9 +376,36 @@
           const FinanceiroService = window.CH.FinanceiroService;
           if (FinanceiroService) FinanceiroService.registrarReceita(venda);
 
+          // Efetiva débito fiado pós-validação (lote)
+          // Mesmo critério do caminho individual: saldo só sobe aqui.
+          if (venda._fiado && venda._fiadoClienteId) {
+            Store.mutateFiado(fiado => {
+              const cx = fiado.find(x => x.id === venda._fiadoClienteId);
+              if (!cx) return;
+              cx.saldo = (cx.saldo || 0) + (venda.total || 0);
+              if (!Array.isArray(cx.movimentacoes)) cx.movimentacoes = [];
+              cx.movimentacoes.unshift({
+                id:          Utils.generateId(),
+                tipo:        'fiado',
+                descricao:   venda._fiadoDesc || venda.itens?.[0]?.nome || 'Compra fiado',
+                valor:       venda.total || 0,
+                vendaId:     venda.id,
+                validadoPor: operador,
+                criadoEm:    agora,
+              });
+              if (cx.limite > 0 && cx.saldo >= cx.limite) cx.bloqueado = true;
+            });
+          }
+
         } catch (e) {
           erros.push({ id: venda.id, erro: e.message });
         }
+      }
+
+      // Sync do fiado (lote) — uma única enfileirada para todos os clientes afetados
+      const temFiado = aprovadas.some(v => v._fiado && v._fiadoClienteId);
+      if (temFiado && window.CH.SyncQueue) {
+        window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
       }
 
       // ── Passo 4: evento único no final — UI re-renderiza UMA vez ──
