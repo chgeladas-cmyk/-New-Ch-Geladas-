@@ -482,6 +482,26 @@ function init() {
     renderClientes();
   }
   EventBus.on('store:updated', () => { atualizarKpis(); if (_clienteAtualId) renderDetalhe(); else renderClientes(); });
+
+  // Listeners de ciclo de vida do fiado ──────────────────────────
+  // Re-renderiza o detalhe do cliente quando uma venda fiado dele é
+  // validada (saldo efetivado) ou rejeitada (sem impacto no saldo).
+  EventBus.on('venda:validada', venda => {
+    if (venda?._fiado && venda._fiadoClienteId === _clienteAtualId) {
+      UIService.showToast('Fiado aprovado!', `R$ ${(venda.total||0).toFixed(2)} lançado na conta`, 'success');
+      renderDetalhe();
+    }
+  });
+  EventBus.on('venda:validada:lote', () => {
+    if (_clienteAtualId) renderDetalhe();
+    atualizarKpis();
+  });
+  EventBus.on('fiado:lancamento:rejeitado', ({ clienteId, valor, motivo }) => {
+    if (clienteId === _clienteAtualId) {
+      UIService.showToast('Fiado rejeitado', motivo || 'Gestor não aprovou', 'error');
+      renderDetalhe();
+    }
+  });
 }
 
 /* ═══════════ VISTAS ═══════════ */
@@ -533,10 +553,14 @@ function renderClientes() {
   el.innerHTML = clientes.map(c => {
     const saldo    = c.saldo||0;
     const quitado  = saldo <= 0;
+    // Verifica se o cliente tem vendas fiado aguardando aprovação
+    const _vendas = typeof Store !== 'undefined' ? (Store.getVendas() || []) : [];
+    const _pendFiado = _vendas.filter(v => v._fiado && v._fiadoClienteId === c.id && v.status === 'pendente').length;
     const status   = c.bloqueado ? 'bloqueado' : quitado ? 'quitado' : 'devendo';
     const badgeCls = c.bloqueado ? 'b-amber' : quitado ? 'b-green' : 'b-red';
     const badgeTxt = c.bloqueado ? '🔒 Bloqueado' : quitado ? '✓ Quitado' : `Deve ${Utils.formatCurrency(saldo)}`;
     return `<div class="cli-card ${status}" onclick="abrirCliente('${c.id}')">
+      ${_pendFiado > 0 ? `<span class="chip-pend-fiado" style="font-size:.55rem;padding:.1rem .35rem;border-radius:999px;display:inline-block;margin-bottom:.2rem">⏳ ${_pendFiado} aguard. aprovação</span>` : ''}
       <div class="flex items-start justify-between mb-3">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center font-black text-lg text-slate-300 flex-shrink-0">${(c.nome||'?').charAt(0).toUpperCase()}</div>
@@ -808,42 +832,49 @@ function confirmarLancamento() {
   const desc  = (document.getElementById('fLancarDesc')?.value||'').trim()||'Compra fiado';
   if (valor <= 0) { UIService.showToast('Valor inválido','','error'); return; }
 
-  let _nomeCliente = '';
-  Store.mutateFiado(fiado => {
-    const c = fiado.find(x=>x.id===_clienteAtualId);
-    if (!c) return;
-    _nomeCliente = c.nome;
-    c.saldo = (c.saldo||0) + valor;
-    if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
-    c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'fiado', descricao:desc, valor, criadoEm:new Date().toISOString() });
-    if (c.limite>0 && c.saldo >= c.limite) c.bloqueado = true;
-  });
+  // ── BUG FIX: NÃO atualizar c.saldo nem movimentacoes aqui. ──────
+  // O débito só é efetivado APÓS o gestor validar no painel de aprovação.
+  // AprovacaoService.validarVenda() efetivará saldo + movimentacao.
+  const _cfCliente = Store.getFiado().find(x => x.id === _clienteAtualId);
+  if (!_cfCliente) return;
+  const _nomeCliente = _cfCliente.nome;
 
-  // Registra no financeiro como venda fiado pendente
+  // Cria a venda como PENDENTE — entra na fila do gestor.
+  const vendaId = Utils.generateId();
   Store.mutateVendas(vendas => {
     vendas.unshift({
-      id:             Utils.generateId(),
-      dataCurta:      Utils.todayISO(),
-      data:           Utils.today(),
-      hora:           Utils.nowTime(),
-      criadoEm:       new Date().toISOString(),
-      itens:          [{ nome: desc, quantidade: 1, preco: valor, lucro: 0 }],
-      total:          valor,
-      subtotal:       valor,
-      desconto:       0,
-      lucro:          0,
-      formaPgto:      'Fiado',
-      origem:         'FIADO-LANCAMENTO',
-      status:         'pendente',
-      nomeCliente:    _nomeCliente,
+      id:              vendaId,
+      dataCurta:       Utils.todayISO(),
+      data:            Utils.today(),
+      hora:            Utils.nowTime(),
+      criadoEm:        new Date().toISOString(),
+      itens:           [{ prodId: '_fiado_manual', nome: desc, quantidade: 1, qtd: 1, preco: valor, custo: 0, lucro: 0, label: 'UNID' }],
+      total:           valor,
+      subtotal:        valor,
+      desconto:        0,
+      lucro:           0,
+      formaPgto:       'Fiado',
+      origem:          'FIADO-LANCAMENTO',
+      operador:        window.CH?.AuthService?.getNome?.() || 'Colaboradora',
+      role:            window.CH?.AuthService?.getRole?.() || 'colaborador',
+      status:          'pendente',
+      nomeCliente:     _nomeCliente,
       _fiadoClienteId: _clienteAtualId,
-      _fiado:         true,
+      _fiado:          true,
+      _fiadoDesc:      desc,
+      _fbSynced:       false,
     });
   });
-  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+
+  if (window.CH?.SyncQueue) {
+    const v = Store.getVendas().find(x => x.id === vendaId);
+    if (v) window.CH.SyncQueue.enqueue('salvar', 'vendas', [v]);
+  }
+
+  EventBus.emit('venda:pendente', Store.getVendas().find(x => x.id === vendaId));
 
   UIService.closeModal('modalLancar');
-  UIService.showToast(`+${Utils.formatCurrency(valor)} fiado`, desc, 'warning');
+  UIService.showToast('Fiado enviado para aprovação', `R$ ${valor.toFixed(2)} — aguarda gestor`, 'warning');
   renderDetalhe();
 }
 
