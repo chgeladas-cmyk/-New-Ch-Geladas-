@@ -101,6 +101,19 @@ body.is-admin .adm-only{display:flex!important;}
 .baixa-tag { font-size:.58rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; background:rgba(59,130,246,.12); color:#60a5fa; }
 .modal-parcela .modal-box { max-width:26rem; }
 
+/* ── CANCELAMENTO DE ITENS ── */
+.item-cancelado { opacity:.55; background:rgba(239,68,68,.04); border-radius:.5rem; }
+.item-cancelado .ci-nome { text-decoration:line-through; color:#475569; }
+.item-cancelado .ci-val  { text-decoration:line-through; color:#475569; }
+.btn-cancel-item { width:1.5rem; height:1.5rem; border-radius:.4rem; background:rgba(239,68,68,.12); color:#f87171; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; flex-shrink:0; }
+.btn-cancel-item:hover { background:rgba(239,68,68,.28); }
+
+/* ── LOG DE ESTORNOS ── */
+.estorno-row { background:rgba(239,68,68,.05); border:1px solid rgba(239,68,68,.12); border-radius:.875rem; padding:.65rem .875rem; margin-bottom:.4rem; }
+.estorno-row .er-nome  { font-size:.75rem; font-weight:800; color:#fca5a5; }
+.estorno-row .er-meta  { font-size:.62rem; color:#64748b; margin-top:.1rem; }
+.estorno-row .er-valor { font-size:.8rem; font-weight:800; color:#34d399; }
+
 </style>
 </head>
 <body>
@@ -403,6 +416,62 @@ body.is-admin .adm-only{display:flex!important;}
   </div>
 </div>
 
+<!-- ══════ MODAL CANCELAR ITEM (ADM) ══════ -->
+<div id="modalCancelItem" class="modal">
+  <div class="modal-box max-w-sm p-7">
+    <div class="flex items-center gap-3 mb-5">
+      <div class="w-11 h-11 rounded-2xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-ban text-red-400 text-lg"></i>
+      </div>
+      <div>
+        <h3 class="text-sm font-black text-red-400">Cancelar Item</h3>
+        <p class="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Ação restrita ao Administrador</p>
+      </div>
+    </div>
+
+    <!-- Detalhes do item -->
+    <div id="cancelItemDetalhe" class="bg-red-500/5 border border-red-500/15 rounded-2xl p-4 mb-5">
+      <p id="cancelItemNome"  class="text-sm font-black text-white mb-1">—</p>
+      <p id="cancelItemQtd"   class="text-[10px] text-slate-400 font-bold mb-1">—</p>
+      <p id="cancelItemValor" class="text-lg font-black text-red-300">—</p>
+    </div>
+
+    <!-- Impacto em cascata -->
+    <div class="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3 mb-5 space-y-1.5">
+      <p class="text-[8px] text-amber-400 font-black uppercase tracking-widest mb-2">⚡ Impacto em Cascata</p>
+      <div class="flex items-center gap-2 text-[10px] text-slate-300 font-bold">
+        <i class="fas fa-boxes text-blue-400 w-4 text-center"></i>
+        <span>Produto devolvido ao estoque automaticamente</span>
+      </div>
+      <div class="flex items-center gap-2 text-[10px] text-slate-300 font-bold">
+        <i class="fas fa-minus-circle text-emerald-400 w-4 text-center"></i>
+        <span id="cancelItemImpactoSaldo">Saldo devedor reduzido em —</span>
+      </div>
+      <div class="flex items-center gap-2 text-[10px] text-slate-300 font-bold">
+        <i class="fas fa-unlock text-amber-400 w-4 text-center"></i>
+        <span>Limite de crédito liberado proporcionalmente</span>
+      </div>
+      <div class="flex items-center gap-2 text-[10px] text-slate-300 font-bold">
+        <i class="fas fa-database text-slate-400 w-4 text-center"></i>
+        <span>Item marcado como "Cancelado" — <b class="text-red-400">não apagado</b></span>
+      </div>
+    </div>
+
+    <!-- Motivo (opcional) -->
+    <div class="mb-5">
+      <label class="label !text-red-400">Motivo do Cancelamento (opcional)</label>
+      <input type="text" id="cancelItemMotivo" class="inp" placeholder="Ex: produto devolvido, erro de lançamento...">
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="_confirmarCancelItem()" class="flex-1 bg-red-700 hover:bg-red-600 py-3.5 rounded-xl font-black uppercase text-xs text-white transition-all flex items-center justify-center gap-2">
+        <i class="fas fa-ban"></i>Confirmar Cancelamento
+      </button>
+      <button onclick="UIService.closeModal('modalCancelItem')" class="bg-slate-800 px-5 rounded-xl font-black uppercase text-xs text-slate-400">Voltar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast">
   <div id="toastIcon" class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-black"></div>
@@ -633,11 +702,17 @@ function _renderDetalheAbas(c) {
   const histEl = document.getElementById('detHistorico');
   if (!histEl) return;
 
+  const isAdmin = AuthService.isAdmin();
+  const admTab  = isAdmin
+    ? `<div class="rastreio-tab" data-aba="estornos" onclick="_setDetalheAba('estornos')">🔴 Estornos</div>`
+    : '';
+
   // Injeta tabs acima do conteúdo
   histEl.innerHTML = `
     <div class="rastreio-tabs">
       <div class="rastreio-tab on" data-aba="compras"   onclick="_setDetalheAba('compras')">🛒 Compras</div>
       <div class="rastreio-tab"   data-aba="pagamentos" onclick="_setDetalheAba('pagamentos')">💰 Pagamentos</div>
+      ${admTab}
     </div>
     <div id="detalheConteudo"></div>
   `;
@@ -651,6 +726,8 @@ function _renderDetalheConteudo(c) {
 
   if (_detalheAba === 'compras') {
     el.innerHTML = _renderCompras(c);
+  } else if (_detalheAba === 'estornos') {
+    el.innerHTML = _renderEstornos(c);
   } else {
     el.innerHTML = _renderPagamentos(c);
   }
@@ -697,15 +774,38 @@ function _renderCompras(c) {
     const [stCls, stTxt] = stMap[v.status] || stMap['concluida'];
 
     const itens = v.itens || [];
+    const isAdmin = AuthService.isAdmin();
     const itensHTML = itens.length
-      ? itens.map(i => `
-          <div class="compra-item">
-            <div>
-              <div class="ci-nome">${i.nome || '—'}</div>
+      ? itens.map(i => {
+          const cancelado = i.status === 'cancelado';
+          // Use i.id se existir; senão cria índice pelo prodId para lookup
+          const itemKey   = i.id || (i.prodId + '_' + (i.nome||'').replace(/\W/g,''));
+          const cancelBtn = (!cancelado && isAdmin && !v._manual && (v.status === 'concluida' || v.status === 'aprovada'))
+            ? `<button onclick="abrirCancelarItem('${v.id}','${itemKey}')"
+                 title="Cancelar este item"
+                 class="btn-cancel-item ml-1">
+                 <i class="fas fa-times text-[8px]"></i>
+               </button>`
+            : '';
+          const cancelBadge = cancelado
+            ? `<span class="badge b-red ml-1" style="font-size:.48rem;padding:.12rem .35rem">Cancelado</span>`
+            : '';
+          const cancelMeta  = (cancelado && i.canceladoEm)
+            ? `<div class="text-[7px] text-slate-600 font-bold mt-0.5">Por ${i.canceladoPor||'ADM'} · ${new Date(i.canceladoEm).toLocaleString('pt-BR')}</div>`
+            : '';
+          return `
+          <div class="compra-item${cancelado?' item-cancelado':''}">
+            <div class="flex-1 min-w-0">
+              <div class="ci-nome${cancelado?' line-through text-slate-600':''}">${i.nome || '—'}${cancelBadge}</div>
               <div class="ci-qtd">${i.qtd} ${i.label || 'un'} × ${Utils.formatCurrency(i.preco || 0)}</div>
+              ${cancelMeta}
             </div>
-            <div class="ci-val">${Utils.formatCurrency((i.preco || 0) * (i.qtd || 1))}</div>
-          </div>`).join('')
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <div class="ci-val${cancelado?' line-through text-slate-600':''}">${Utils.formatCurrency((i.preco || 0) * (i.qtd || 1))}</div>
+              ${cancelBtn}
+            </div>
+          </div>`;
+        }).join('')
       : `<div class="ci-nome text-slate-600 text-[11px] py-1">${v.descricao || 'Sem itens detalhados'}</div>`;
 
     const bodyId = 'cb_' + idx;
@@ -738,33 +838,35 @@ function _renderCompras(c) {
 
 function _renderPagamentos(c) {
   const pgtos = (c.movimentacoes || [])
-    .filter(m => ['pagamento','parcela','ajuste_adm'].includes(m.tipo))
+    .filter(m => ['pagamento','parcela','ajuste_adm','estorno_item'].includes(m.tipo))
     .slice(0, 100);
 
   if (!pgtos.length) {
     return '<div class="compra-vazio">Nenhum pagamento registrado</div>';
   }
 
-  const totalPago = pgtos.filter(m => m.tipo !== 'ajuste_adm').reduce((s, m) => s + (m.valor || 0), 0);
+  const totalPago = pgtos.filter(m => !['ajuste_adm','estorno_item'].includes(m.tipo)).reduce((s, m) => s + (m.valor || 0), 0);
 
   const linhas = pgtos.map(m => {
     const data = m.criadoEm ? new Date(m.criadoEm).toLocaleString('pt-BR') : '—';
-    const isParcela = m.tipo === 'parcela';
-    const isAdm     = m.tipo === 'ajuste_adm';
-    const cor  = isAdm ? 'text-amber-400' : 'text-emerald-400';
-    const icone= isAdm ? 'fa-eraser' : isParcela ? 'fa-layer-group' : 'fa-arrow-down';
-    const bgCls= isAdm ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400';
+    const isParcela  = m.tipo === 'parcela';
+    const isAdm      = m.tipo === 'ajuste_adm';
+    const isEstorno  = m.tipo === 'estorno_item';
+    const cor   = isAdm ? 'text-amber-400' : isEstorno ? 'text-blue-400' : 'text-emerald-400';
+    const icone = isAdm ? 'fa-eraser' : isEstorno ? 'fa-undo' : isParcela ? 'fa-layer-group' : 'fa-arrow-down';
+    const bgCls = isAdm ? 'bg-amber-500/15 text-amber-400' : isEstorno ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400';
+    const operadorTag = m.operador ? ` · <span class="text-slate-400">${m.operador}</span>` : '';
     return `<div class="movim-row">
       <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${bgCls}">
         <i class="fas ${icone} text-sm"></i>
       </div>
       <div class="flex-1 min-w-0">
         <p class="text-[11px] font-black text-white">${m.descricao || m.tipo}</p>
-        <p class="text-[8px] text-slate-500 font-bold">${data}${m.formaPgto ? ' · ' + m.formaPgto : ''}</p>
+        <p class="text-[8px] text-slate-500 font-bold">${data}${m.formaPgto ? ' · ' + m.formaPgto : ''}${operadorTag}</p>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
-        <p class="text-[12px] font-black ${cor}">-${Utils.formatCurrency(m.valor)}</p>
-        ${AuthService.isAdmin() ? `<button onclick="apagarMovimentacao('${m.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center"><i class="fas fa-times text-[9px]"></i></button>` : ''}
+        <p class="text-[12px] font-black ${cor}">${isEstorno?'+':'-'}${Utils.formatCurrency(m.valor)}</p>
+        ${AuthService.isAdmin() && !isEstorno ? `<button onclick="apagarMovimentacao('${m.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center"><i class="fas fa-times text-[9px]"></i></button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -776,6 +878,192 @@ function _renderPagamentos(c) {
     </div>`;
 
   return `<div style="padding:.5rem 1rem 0">${linhas}</div>` + resumo;
+}
+
+/* ═══════════ LOG DE ESTORNOS (ADM) ═══════════ */
+function _renderEstornos(c) {
+  const logs = (c.cancelamentos || []).slice().sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));
+
+  if (!logs.length) {
+    return `<div class="compra-vazio">
+      <i class="fas fa-ban text-3xl text-slate-700 mb-2 block"></i>
+      Nenhum cancelamento registrado
+    </div>`;
+  }
+
+  const totalEstornado = logs.reduce((s,l) => s + (l.valorEstornado||0), 0);
+
+  const rows = logs.map(l => {
+    const dt  = l.criadoEm ? new Date(l.criadoEm).toLocaleString('pt-BR') : '—';
+    return `<div class="estorno-row">
+      <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0 mr-2">
+          <div class="er-nome"><i class="fas fa-ban text-[9px] mr-1"></i>${l.itemNome || '—'}</div>
+          <div class="er-meta">
+            Qtd: ${l.itemQtd || 1} un
+            ${l.motivo ? ` · <span class="text-slate-400">${l.motivo}</span>` : ''}
+          </div>
+          <div class="er-meta">Por <b class="text-slate-400">${l.operador||'ADM'}</b> · ${dt}</div>
+          ${l.vendaId ? `<div class="er-meta text-[7px]">Venda #${l.vendaId.slice(-6)}</div>` : ''}
+        </div>
+        <div class="er-valor flex-shrink-0">+${Utils.formatCurrency(l.valorEstornado||0)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const resumo = `
+    <div class="compra-resumo" style="margin:.25rem 1rem .75rem;border-radius:.75rem">
+      <span class="cr-label">Total estornado</span>
+      <span class="cr-val">${Utils.formatCurrency(totalEstornado)}</span>
+    </div>`;
+
+  return `<div style="padding:.5rem 1rem 0">${rows}</div>` + resumo;
+}
+
+/* ══════ CANCELAR ITEM (ADM) ══════ */
+let _cancelItemVendaId = null;
+let _cancelItemKey     = null;
+
+function abrirCancelarItem(vendaId, itemKey) {
+  if (!AuthService.isAdmin()) {
+    UIService.showToast('Acesso restrito', 'Apenas administradores podem cancelar itens', 'error');
+    return;
+  }
+
+  const venda = (Store.getVendas() || []).find(v => v.id === vendaId);
+  if (!venda) { UIService.showToast('Venda não encontrada', '', 'error'); return; }
+
+  // Localiza o item pelo id ou pela chave composta
+  const item = venda.itens.find(i =>
+    i.id === itemKey ||
+    (i.prodId + '_' + (i.nome||'').replace(/\W/g,'')) === itemKey
+  );
+  if (!item) { UIService.showToast('Item não encontrado', '', 'error'); return; }
+  if (item.status === 'cancelado') { UIService.showToast('Item já cancelado', '', 'warning'); return; }
+
+  _cancelItemVendaId = vendaId;
+  _cancelItemKey     = itemKey;
+
+  const valorItem = (item.preco || 0) * (item.qtd || 1);
+  document.getElementById('cancelItemNome').textContent  = item.nome || '—';
+  document.getElementById('cancelItemQtd').textContent   = `${item.qtd} ${item.label || 'un'} × ${Utils.formatCurrency(item.preco||0)}`;
+  document.getElementById('cancelItemValor').textContent = Utils.formatCurrency(valorItem);
+  document.getElementById('cancelItemImpactoSaldo').textContent = `Saldo devedor reduzido em ${Utils.formatCurrency(valorItem)}`;
+  document.getElementById('cancelItemMotivo').value = '';
+  UIService.openModal('modalCancelItem');
+}
+
+async function _confirmarCancelItem() {
+  if (!AuthService.isAdmin()) return;
+  if (!_cancelItemVendaId || !_cancelItemKey) return;
+
+  const venda = (Store.getVendas() || []).find(v => v.id === _cancelItemVendaId);
+  if (!venda) { UIService.showToast('Venda não encontrada', '', 'error'); return; }
+
+  const itemIdx = venda.itens.findIndex(i =>
+    i.id === _cancelItemKey ||
+    (i.prodId + '_' + (i.nome||'').replace(/\W/g,'')) === _cancelItemKey
+  );
+  if (itemIdx < 0) { UIService.showToast('Item não encontrado', '', 'error'); return; }
+
+  const item       = venda.itens[itemIdx];
+  const valorItem  = (item.preco || 0) * (item.qtd || 1);
+  const motivo     = (document.getElementById('cancelItemMotivo')?.value || '').trim();
+  const operador   = window.CH?.AuthService?.getNome?.() || 'ADM';
+  const agora      = new Date().toISOString();
+
+  // ── 1) Marca item como cancelado na venda (NÃO deleta) ──────────────
+  Store.mutateVendas(vendas => {
+    const v = vendas.find(x => x.id === _cancelItemVendaId);
+    if (!v) return;
+    const it = v.itens[itemIdx];
+    it.status      = 'cancelado';
+    it.canceladoEm = agora;
+    it.canceladoPor= operador;
+    it.motivoCancelamento = motivo || null;
+    // Recalcula total da venda excluindo itens cancelados
+    v.total = v.itens.reduce((s, i) =>
+      i.status === 'cancelado' ? s : s + ((i.preco||0) * (i.qtd||1)), 0
+    );
+  });
+
+  // ── 2) Estorno de estoque (devolve produto) ─────────────────────────
+  const ES = window.CH?.EstoqueService;
+  if (ES?.registrarMovimentacao) {
+    try {
+      await ES.registrarMovimentacao({
+        produtoId:  item.prodId,
+        tipo:       'estorno',
+        quantidade: item.qtd,
+        origem:     'fiado-cancelamento-item',
+        operador,
+        observacao: `Estorno cancelamento item fiado — ${item.nome}${motivo ? ' · ' + motivo : ''}`,
+      });
+    } catch(e) {
+      Store.mutateEstoque(est => {
+        const p = est.find(x => x.id === item.prodId);
+        if (p) { p.qtdUn = (p.qtdUn || 0) + item.qtd; p.estoqueAtual = p.qtdUn; }
+      });
+    }
+  } else {
+    Store.mutateEstoque(est => {
+      const p = est.find(x => x.id === item.prodId);
+      if (p) { p.qtdUn = (p.qtdUn || 0) + item.qtd; p.estoqueAtual = p.qtdUn; }
+    });
+  }
+
+  // ── 3) Subtrai valor do saldo devedor do cliente + registra log ─────
+  Store.mutateFiado(fiado => {
+    const c = fiado.find(x => x.id === _clienteAtualId);
+    if (!c) return;
+
+    // Subtrai apenas o que o cliente ainda deve (não gera crédito negativo)
+    const estornoReal = Math.min(valorItem, c.saldo || 0);
+    c.saldo = Math.max(0, (c.saldo || 0) - estornoReal);
+    if (c.saldo <= 0) c.bloqueado = false;
+
+    // Log de auditoria no cliente
+    if (!Array.isArray(c.cancelamentos)) c.cancelamentos = [];
+    c.cancelamentos.unshift({
+      id:             Utils.generateId(),
+      vendaId:        _cancelItemVendaId,
+      itemNome:       item.nome,
+      itemQtd:        item.qtd,
+      itemPreco:      item.preco,
+      valorEstornado: estornoReal,
+      motivo:         motivo || null,
+      operador,
+      criadoEm:       agora,
+    });
+
+    // Movimentação no histórico do cliente
+    if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
+    c.movimentacoes.unshift({
+      id:        Utils.generateId(),
+      tipo:      'estorno_item',
+      descricao: `Cancelamento: ${item.nome}${motivo ? ' · ' + motivo : ''}`,
+      valor:     estornoReal,
+      criadoEm:  agora,
+    });
+  });
+
+  // ── 4) Sync ─────────────────────────────────────────────────────────
+  if (window.CH?.SyncQueue) {
+    window.CH.SyncQueue.enqueue('salvar', 'fiado',  Store.getFiado());
+    window.CH.SyncQueue.enqueue('salvar', 'vendas', Store.getVendas().filter(v => v.id === _cancelItemVendaId));
+  }
+
+  UIService.closeModal('modalCancelItem');
+  UIService.showToast(
+    `Item cancelado`,
+    `${item.nome} — ${Utils.formatCurrency(valorItem)} estornado`,
+    'success'
+  );
+  EventBus.emit('fiado:itemCancelado', { clienteId: _clienteAtualId, item, valorItem });
+
+  _cancelItemVendaId = null;
+  _cancelItemKey     = null;
+  renderDetalhe();
 }
 
 /* ═══════════ FORM CLIENTE ═══════════ */
@@ -1002,6 +1290,7 @@ async function confirmarParcela(forma) {
       descricao: isQuitando ? 'Quitação total' : `Parcela ${Utils.formatCurrency(valor)}`,
       valor,
       formaPgto: forma,
+      operador:  window.CH?.AuthService?.getNome?.() || AuthService.getNome?.() || 'PDV',
       proporcao: proporcao.toFixed(4),
       criadoEm:  new Date().toISOString(),
     });
@@ -1113,7 +1402,7 @@ function confirmarRecebimento(forma) {
     _nomeCliente = c.nome;
     c.saldo = Math.max(0, (c.saldo||0) - valor);
     if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
-    c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'pagamento', descricao:'Pagamento recebido', valor, formaPgto:forma, criadoEm:new Date().toISOString() });
+    c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'pagamento', descricao:'Pagamento recebido', valor, formaPgto:forma, operador: window.CH?.AuthService?.getNome?.() || AuthService.getNome?.() || 'PDV', criadoEm:new Date().toISOString() });
     if (c.saldo <= 0) c.bloqueado = false;
   });
   // Registra movimentação financeira separada
