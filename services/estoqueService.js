@@ -272,7 +272,14 @@
     // ── Tenta usar Firebase Transaction (modo online + admin) ──────────
     // PDV não tem adminToken → Firestore rejeitaria a escrita de qualquer forma.
     // Nesse caso, aplica localmente e SyncQueue envia quando admin sincronizar.
-    if (_isOnline() && FirebaseService.isReady()) {
+    // FIX [CRÍTICO]: adminToken obrigatório para escrever ch_dados/estoque nas
+    // Firestore Rules. Sem ele, a Transaction lança permission-denied silencioso,
+    // cai no fallback local e o onSnapshot subsequente sobrescreve a alteração.
+    // Solução: só tenta Transaction quando tem token; caso contrário vai direto
+    // ao modo local + SyncQueue (admin processa na próxima sessão com token).
+    const _tok = FirebaseService.getAdminToken?.();
+
+    if (_isOnline() && FirebaseService.isReady() && _tok) {
       try {
         await FirebaseService.runTransaction(async (tx) => {
           // Lê o documento de estoque no Firestore
@@ -303,9 +310,12 @@
           // Se produto não estava no FB, adiciona
           if (!prodFB) novosDados.push({ ...prod, qtdUn: novaQtd, estoqueAtual: novaQtd });
 
+          // FIX: adminToken incluído — Firestore Rules exigem temAdminToken()
+          // para escrita em ch_dados/{colecao}
           tx.set(estoqueRef, {
-            dados: novosDados,
-            ts:    Utils.nowISO(),
+            dados:      novosDados,
+            ts:         Utils.nowISO(),
+            adminToken: _tok,
           });
 
           // Também salva a movimentação como documento individual
@@ -348,9 +358,9 @@
         _movimentacaoLocal({ produtoId, prod, tipo, delta, estoqueAntes, estoqueDepois, origem, operador, observacao, custo, fornecedorId });
       }
     } else {
-      // ── Modo local: offline, sem adminToken (PDV), ou Firebase não pronto ──
-      // Aplica localmente — SyncQueue garante que admin sincronize depois.
-      const motivo = !_isOnline() ? 'offline' : 'Firebase não pronto';
+      // ── Modo local: offline, sem adminToken (validador/controlador/PDV), ou Firebase não pronto ──
+      // Aplica localmente — SyncQueue garante que admin sincronize na próxima sessão com token.
+      const motivo = !_isOnline() ? 'offline' : !FirebaseService.isReady() ? 'Firebase não pronto' : 'sem adminToken';
       console.info(`[Estoque] Modo local (${motivo}): ${tipo} ${prod.nome}`);
       _movimentacaoLocal({ produtoId, prod, tipo, delta, estoqueAntes, estoqueDepois, origem, operador, observacao, custo, fornecedorId });
     }
