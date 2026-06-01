@@ -79,7 +79,10 @@ const CONSTANTS = Object.freeze({
   }),
   validador: Object.freeze({
     ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
-    escrever: ['aprovacao'],
+    // FIX: inclui 'estoque' para que _mutate enfileire SyncQueue após baixa local.
+    // FirebaseService.salvar() só grava no Firestore quando _adminToken existir
+    // na sessão — o admin processa a fila na próxima abertura do app.
+    escrever: ['aprovacao', 'estoque'],
   }),
   analista: Object.freeze({
     ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
@@ -659,6 +662,36 @@ const FirebaseService = (() => {
        }
        const key = CONSTANTS.DB[col.toUpperCase()];
        if (!key) return;
+
+       // FIX [CRÍTICO]: onSnapshot sobrescrevia baixas de estoque aplicadas
+       // localmente (validador/controlador sem adminToken) antes do admin sincronizar.
+       // Merge inteligente por updatedAt — mantém a versão mais recente de cada
+       // produto; produtos só-locais (ainda não subidos pelo admin) são preservados.
+       if (col === 'estoque' && Array.isArray(dados)) {
+         const localArr = Store.getEstoque();
+         const localMap = new Map(localArr.map(p => [p.id, p]));
+         const fbIds    = new Set(dados.map(p => p.id));
+
+         const merged = dados.map(fbProd => {
+           const local = localMap.get(fbProd.id);
+           if (!local) return fbProd;
+           const tsLocal = local.updatedAt || '';
+           const tsFB    = fbProd.updatedAt || '';
+           // Mantém o mais recente; em empate Firebase vence (fonte de verdade)
+           return tsFB >= tsLocal ? fbProd : local;
+         });
+
+         // Produtos só no local (admin ainda não sincronizou)
+         localArr.forEach(p => { if (!fbIds.has(p.id)) merged.push(p); });
+
+         try { localStorage.setItem(key, JSON.stringify(merged)); } catch(_) {}
+         Store.invalidate(col);
+         EventBus.emit('store:updated', col);
+         EventBus.emit(`store:${col}`);
+         EventBus.emit('sync:ok', col);
+         return; // não cai no setItem genérico abaixo
+       }
+
        try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {}
        Store.invalidate(col);
        EventBus.emit('store:updated', col);
