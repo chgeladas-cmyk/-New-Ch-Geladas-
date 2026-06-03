@@ -335,6 +335,7 @@
             fornecedorId,
             timestamp:     Utils.nowISO(),
             dataCurta:     Utils.todayISO(),
+            adminToken:    _tok,   // FIX: Firestore Rules exigem adminToken em movimentacoes
           });
         });
 
