@@ -663,25 +663,21 @@ const FirebaseService = (() => {
        const key = CONSTANTS.DB[col.toUpperCase()];
        if (!key) return;
 
-       // FIX [CRÍTICO]: onSnapshot sobrescrevia baixas de estoque aplicadas
-       // localmente (validador/controlador sem adminToken) antes do admin sincronizar.
-       // Merge inteligente por updatedAt — mantém a versão mais recente de cada
-       // produto; produtos só-locais (ainda não subidos pelo admin) são preservados.
+       // FIX [CRÍTICO]: Firebase sempre vence para produtos existentes.
+       // O guard hasPendingWrites (acima) já protege o aparelho que fez a escrita
+       // de sobrescrever sua própria transação pendente. Para qualquer outro
+       // aparelho recebendo mudança remota, o Firestore é fonte de verdade.
+       // A lógica anterior de "local vence se updatedAt mais recente" causava
+       // dessincronização: _movimentacaoLocal atualizava updatedAt localmente,
+       // fazendo o merge sempre preferir o valor desatualizado do localStorage.
        if (col === 'estoque' && Array.isArray(dados)) {
          const localArr = Store.getEstoque();
-         const localMap = new Map(localArr.map(p => [p.id, p]));
          const fbIds    = new Set(dados.map(p => p.id));
 
-         const merged = dados.map(fbProd => {
-           const local = localMap.get(fbProd.id);
-           if (!local) return fbProd;
-           const tsLocal = local.updatedAt || '';
-           const tsFB    = fbProd.updatedAt || '';
-           // Mantém o mais recente; em empate Firebase vence (fonte de verdade)
-           return tsFB >= tsLocal ? fbProd : local;
-         });
+         // Firebase sempre vence para produtos que ele conhece
+         const merged = [...dados];
 
-         // Produtos só no local (admin ainda não sincronizou)
+         // Preserva apenas produtos que existem só no local (ainda não sincronizados)
          localArr.forEach(p => { if (!fbIds.has(p.id)) merged.push(p); });
 
          try { localStorage.setItem(key, JSON.stringify(merged)); } catch(_) {}
