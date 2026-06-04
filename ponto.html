@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#04060d">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CH Geladas">
@@ -32,10 +33,8 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
 .inp::placeholder{color:#64748b;}
 .label{color:#34d399;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
 
-/* RELOGIO GRANDE */
 #relogioGrande{font-variant-numeric:tabular-nums;letter-spacing:.05em;}
 
-/* BOTOES DE PONTO */
 .btn-entrada{background:linear-gradient(135deg,rgba(16,185,129,.2),rgba(16,185,129,.08));border:2px solid rgba(16,185,129,.35);color:#34d399;border-radius:1.5rem;padding:1.5rem;font-weight:900;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;transition:all .2s;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.5rem;}
 .btn-entrada:hover{background:rgba(16,185,129,.25);border-color:rgba(16,185,129,.6);transform:translateY(-2px);box-shadow:0 8px 24px rgba(16,185,129,.15);}
 .btn-entrada:active{transform:scale(.97);}
@@ -43,11 +42,9 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
 .btn-saida:hover{background:rgba(239,68,68,.25);border-color:rgba(239,68,68,.6);transform:translateY(-2px);box-shadow:0 8px 24px rgba(239,68,68,.15);}
 .btn-saida:active{transform:scale(.97);}
 
-/* PONTO ROW */
 .ponto-row{background:rgba(13,17,23,.7);border:1px solid rgba(255,255,255,.05);border-radius:1rem;padding:.875rem;display:flex;align-items:center;gap:.875rem;transition:all .15s;}
 .ponto-row:hover{border-color:rgba(255,255,255,.1);}
 
-/* COLABORADOR CARD */
 .colab-card{background:rgba(13,17,23,.7);border:1px solid rgba(255,255,255,.06);border-radius:1.25rem;padding:1rem;transition:all .2s;}
 .colab-card:hover{border-color:rgba(16,185,129,.25);}
 
@@ -57,8 +54,8 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
 .b-blue{background:rgba(59,130,246,.15);color:#60a5fa;}
 .b-amber{background:rgba(245,158,11,.15);color:#fbbf24;}
 .b-slate{background:rgba(100,116,139,.15);color:#94a3b8;}
+.b-orange{background:rgba(249,115,22,.15);color:#fb923c;}
 
-/* TABS */
 .tab-btn{padding:.5rem 1rem;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-radius:.75rem;color:#4b5563;transition:all .15s;cursor:pointer;white-space:nowrap;}
 .tab-btn.active{background:rgba(16,185,129,.12);color:#34d399;}
 
@@ -69,6 +66,13 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
 
 #toast{min-width:220px;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(4rem);opacity:0;pointer-events:none;z-index:200;transition:opacity .25s,transform .25s;background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:1.25rem;padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 24px 48px rgba(0,0,0,.5);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* Ponto inicial/final visual */
+.ponto-pair{background:rgba(13,17,23,.8);border:1px solid rgba(255,255,255,.07);border-radius:1.25rem;padding:.875rem 1rem;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.5rem;}
+.ponto-half{display:flex;flex-direction:column;gap:.15rem;}
+.ponto-time{font-size:.8rem;font-weight:900;letter-spacing:.03em;}
+.discrepancy{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:.875rem;padding:.625rem .875rem;}
+.match{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:.875rem;padding:.625rem .875rem;}
 </style>
 </head>
 <body>
@@ -102,6 +106,7 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
       </div>
     </div>
     <div class="flex items-center gap-2">
+      <span id="roleTag" class="hidden badge b-blue"></span>
       <button onclick="abrirRelatorio()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-emerald-400 transition-all" title="Relatório">
         <i class="fas fa-chart-bar text-xs"></i>
       </button>
@@ -118,6 +123,16 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
       <p id="dataHoje" class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-2"></p>
       <p id="relogioGrande" class="text-5xl font-black text-white tracking-tight mb-1">00:00:00</p>
       <p id="statusTurno" class="text-[10px] text-slate-500 font-bold uppercase tracking-widest"></p>
+    </div>
+
+    <!-- ══ ADMIN: COLABORADORES HOJE ══ -->
+    <div id="secaoColabsAdmin" class="hidden">
+      <div class="bg-slate-900/40 border border-white/5 rounded-3xl p-4">
+        <p class="text-[9px] text-blue-400 font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-users"></i> Colaboradores — Ponto de Hoje
+        </p>
+        <div id="colabsHojeList" class="space-y-2"></div>
+      </div>
     </div>
 
     <!-- REGISTAR PONTO -->
@@ -146,7 +161,9 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
         <span id="caixaStatusBadge" class="badge b-slate">Caixa Fechado</span>
         <p id="caixaAbertoEm" class="text-[8px] text-slate-600 font-bold mt-1 hidden"></p>
       </div>
-      <div class="grid grid-cols-2 gap-2 mb-2">
+
+      <!-- Campos abertura -->
+      <div id="camposAbertura" class="grid grid-cols-2 gap-2 mb-2">
         <div>
           <label class="label !text-amber-400">Troco Inicial (R$)</label>
           <input type="number" id="caixaTrocoInicial" class="inp !py-2" placeholder="0,00" step="0.01" min="0">
@@ -156,6 +173,11 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
           <input type="text" id="caixaObs" class="inp !py-2" placeholder="Opcional">
         </div>
       </div>
+      <p id="caixaHintFechamento" class="hidden text-[8px] text-amber-300/60 font-bold mb-2 px-1">
+        <i class="fas fa-info-circle mr-1"></i> Valor pré-preenchido com fechamento anterior
+      </p>
+
+      <!-- Botões -->
       <div class="grid grid-cols-2 gap-2">
         <button onclick="abrirCaixa()" id="btnAbrirCaixa" class="py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/25 text-emerald-300 font-black text-[9px] uppercase flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-emerald-600/35">
           <i class="fas fa-lock-open"></i>Abrir Caixa
@@ -164,13 +186,20 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
           <i class="fas fa-lock"></i>Fechar Caixa
         </button>
       </div>
-      <div id="caixaResumo" class="hidden mt-3 bg-slate-800/50 rounded-xl p-3">
-        <p class="text-[8px] text-slate-500 font-black uppercase mb-2">Resumo do Caixa</p>
+
+      <!-- Resumo caixa aberto -->
+      <div id="caixaResumo" class="hidden mt-3 bg-slate-800/50 rounded-xl p-3 space-y-2">
+        <p class="text-[8px] text-slate-500 font-black uppercase mb-1">Resumo do Caixa</p>
         <div class="space-y-1">
           <div class="flex justify-between text-[9px] font-bold"><span class="text-slate-400">Troco inicial</span><span id="resumoTroco" class="text-white">R$ 0,00</span></div>
           <div class="flex justify-between text-[9px] font-bold"><span class="text-slate-400">Vendas em dinheiro</span><span id="resumoDinheiro" class="text-emerald-400">R$ 0,00</span></div>
-          <div class="flex justify-between text-[9px] font-bold"><span class="text-slate-400">Total no caixa</span><span id="resumoTotal" class="text-white font-black">R$ 0,00</span></div>
+          <div id="resumoRetiradaRow" class="hidden flex justify-between text-[9px] font-bold"><span class="text-orange-400">Retiradas</span><span id="resumoRetiradas" class="text-orange-400">- R$ 0,00</span></div>
+          <div class="flex justify-between text-[9px] font-bold border-t border-white/5 pt-1 mt-1"><span class="text-slate-300 font-black">Esperado no caixa</span><span id="resumoTotal" class="text-white font-black">R$ 0,00</span></div>
         </div>
+        <!-- Botão retirada -->
+        <button onclick="abrirModalRetirada()" class="w-full mt-1 py-2 rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-300 font-black text-[9px] uppercase flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-orange-500/25">
+          <i class="fas fa-hand-holding-usd"></i>Registar Retirada
+        </button>
       </div>
     </div>
 
@@ -236,6 +265,68 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
   </div>
 </div>
 
+<!-- ══════ MODAL FECHAR CAIXA ══════ -->
+<div id="modalFecharCaixa" class="modal">
+  <div class="modal-box max-w-sm p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-black text-red-400 flex items-center gap-2"><i class="fas fa-lock"></i> Fechar Caixa</h3>
+      <button onclick="UIService.closeModal('modalFecharCaixa')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+    </div>
+
+    <!-- Resumo esperado -->
+    <div class="bg-slate-900/60 border border-white/5 rounded-xl p-3 space-y-1.5">
+      <p class="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-2">💵 Esperado no Caixa</p>
+      <div class="flex justify-between text-[9px] font-bold"><span class="text-slate-400">Troco inicial</span><span id="fcTrocoInicial" class="text-white">R$ 0,00</span></div>
+      <div class="flex justify-between text-[9px] font-bold"><span class="text-slate-400">Vendas em dinheiro</span><span id="fcDinheiro" class="text-emerald-400">R$ 0,00</span></div>
+      <div id="fcRetiradaRow" class="hidden flex justify-between text-[9px] font-bold"><span class="text-orange-400">Total retiradas</span><span id="fcRetiradas" class="text-orange-400">- R$ 0,00</span></div>
+      <div class="flex justify-between text-[9px] font-bold pt-1 border-t border-white/5">
+        <span class="text-slate-300 font-black">Total esperado</span>
+        <span id="fcEsperado" class="text-white font-black">R$ 0,00</span>
+      </div>
+    </div>
+
+    <!-- Caixa físico -->
+    <div>
+      <label class="label !text-amber-400">Caixa Físico (R$) — Valor contado</label>
+      <input type="number" id="fcFisico" class="inp" placeholder="0,00" step="0.01" min="0" oninput="atualizarDiferenca()">
+    </div>
+
+    <!-- Diferença -->
+    <div id="fcDiferencaBox" class="hidden rounded-xl p-3">
+      <div class="flex justify-between items-center">
+        <span class="text-[9px] font-black uppercase tracking-wide" id="fcDiferencaLabel">Diferença</span>
+        <span class="text-sm font-black" id="fcDiferencaValor">R$ 0,00</span>
+      </div>
+      <p id="fcDiferencaMsg" class="text-[8px] font-bold mt-1 opacity-70"></p>
+    </div>
+
+    <button onclick="confirmarFechamentoCaixa()" class="w-full py-3 rounded-xl bg-red-600/25 border border-red-500/35 text-red-300 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all hover:bg-red-600/40">
+      <i class="fas fa-lock mr-2"></i>Confirmar Fechamento
+    </button>
+  </div>
+</div>
+
+<!-- ══════ MODAL RETIRADA ══════ -->
+<div id="modalRetirada" class="modal">
+  <div class="modal-box max-w-sm p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-black text-orange-400 flex items-center gap-2"><i class="fas fa-hand-holding-usd"></i> Retirada de Caixa</h3>
+      <button onclick="UIService.closeModal('modalRetirada')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <div>
+      <label class="label !text-orange-400">Valor da Retirada (R$)</label>
+      <input type="number" id="retiradaValor" class="inp" placeholder="0,00" step="0.01" min="0.01">
+    </div>
+    <div>
+      <label class="label">Motivo</label>
+      <input type="text" id="retiradaMotivo" class="inp" placeholder="Ex: Pagamento fornecedor, troco...">
+    </div>
+    <button onclick="confirmarRetirada()" class="w-full py-3 rounded-xl bg-orange-600/25 border border-orange-500/35 text-orange-300 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
+      <i class="fas fa-check mr-2"></i>Confirmar Retirada
+    </button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast">
   <div id="toastIcon" class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-black"></div>
@@ -243,12 +334,12 @@ body{background-image:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,
 </div>
 
 <script src="core.js"></script>
-  <script src="./services/permissoesService.js"></script>
-  <script src="./services/userService.js"></script>
-  <script src="./services/syncService.js"></script>
-  <script src="./services/auditService.js"></script>
-  <script src="./services/syncMonitor.js"></script>
-  <script src="./services/backupService.js"></script>
+<script src="./services/permissoesService.js"></script>
+<script src="./services/userService.js"></script>
+<script src="./services/syncService.js"></script>
+<script src="./services/auditService.js"></script>
+<script src="./services/syncMonitor.js"></script>
+<script src="./services/backupService.js"></script>
 
 <script>
 'use strict';
@@ -281,8 +372,8 @@ async function doLogin() {
     if (AuthService.isAdmin()) document.body.classList.add('is-admin');
     const rt = document.getElementById('roleTag');
     if (rt) {
-      const _pi = window.CH && window.CH.PermissoesService && window.CH.PermissoesService.getPerfil && window.CH.PermissoesService.getPerfil(_r);
-      rt.textContent = (_pi && _pi.label) || _r || 'PDV';
+      const _pi = window.CH?.PermissoesService?.getPerfil?.(_r);
+      rt.textContent = (_pi?.label) || _r || 'PDV';
       rt.classList.remove('hidden');
     }
     init();
@@ -293,8 +384,8 @@ async function doLogin() {
     document.getElementById('loginSenha').focus();
   }
 }
-document.getElementById('loginSenha').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
-document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
+document.getElementById('loginSenha').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('loginNome').addEventListener('keydown',  e => { if (e.key==='Enter') document.getElementById('loginSenha').focus(); });
 function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
 
 /* ════════════════════════════════
@@ -313,7 +404,24 @@ function init() {
   preencherSugestoes();
   atualizarKpis();
   renderLista();
-  EventBus.on('store:updated', () => { atualizarKpis(); renderLista(); preencherSugestoes(); });
+  // Admin: mostrar painel de colaboradores
+  if (AuthService.isAdmin()) {
+    const sec = document.getElementById('secaoColabsAdmin');
+    if (sec) sec.classList.remove('hidden');
+    renderColabsHoje();
+  }
+  EventBus.on('store:updated', () => {
+    atualizarKpis();
+    renderLista();
+    preencherSugestoes();
+    atualizarUICaixa();
+    if (AuthService.isAdmin()) renderColabsHoje();
+  });
+  EventBus.on('store:ponto', () => {
+    atualizarKpis();
+    renderLista();
+    if (AuthService.isAdmin()) renderColabsHoje();
+  });
 }
 
 function _iniciarRelogioGrande() {
@@ -328,17 +436,15 @@ function _iniciarRelogioGrande() {
 function _atualizarData() {
   const el = document.getElementById('dataHoje');
   if (el) el.textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
-
-  // Status do turno
   const status  = document.getElementById('statusTurno');
   const pontos  = Store.getPonto();
   const hoje    = Utils.todayISO();
-  const pontosHoje = pontos.filter(p => p.dataCurta === hoje);
+  const pontosHoje = pontos.filter(p => p.dataCurta === hoje && (p.tipo==='ENTRADA'||p.tipo==='SAÍDA'));
   const ultimo  = pontosHoje[0];
   if (!status) return;
-  if (!ultimo)              status.textContent = 'Sem registo hoje';
+  if (!ultimo)                        status.textContent = 'Sem registo hoje';
   else if (ultimo.tipo === 'ENTRADA') status.textContent = `Turno em curso desde ${ultimo.hora}`;
-  else                      status.textContent = `Saída registada às ${ultimo.hora}`;
+  else                                status.textContent = `Saída registada às ${ultimo.hora}`;
 }
 
 /* ════════════════════════════════
@@ -356,7 +462,6 @@ function preencherSugestoes() {
 function registarPonto(tipo) {
   const nome = (document.getElementById('nomeColaborador')?.value||'').trim();
   if (!nome) { UIService.showToast('Nome obrigatório', 'Informe o colaborador', 'error'); document.getElementById('nomeColaborador')?.focus(); return; }
-
   const agora = new Date();
   const registo = {
     id:        Utils.generateId(),
@@ -368,15 +473,90 @@ function registarPonto(tipo) {
     dataCurta: Utils.todayISO(),
     criadoEm:  agora.toISOString(),
   };
-
   Store.mutatePonto(ponto => { ponto.unshift(registo); });
-
   const emoji = tipo === 'ENTRADA' ? '✅' : '🔴';
-  UIService.showToast(`${emoji} ${tipo} registada!`, `${nome} — ${registo.hora}`, tipo === 'ENTRADA' ? 'success' : 'warning');
+  UIService.showToast(`${emoji} ${tipo} registada!`, `${nome} — ${registo.hora}`, tipo==='ENTRADA'?'success':'warning');
   document.getElementById('nomeColaborador').value = '';
   _atualizarData();
   atualizarKpis();
   renderLista();
+  if (AuthService.isAdmin()) renderColabsHoje();
+}
+
+/* ════════════════════════════════
+   ADMIN — COLABORADORES HOJE
+════════════════════════════════ */
+function renderColabsHoje() {
+  const el = document.getElementById('colabsHojeList');
+  if (!el) return;
+  const hoje   = Utils.todayISO();
+  const pontos = Store.getPonto()
+    .filter(p => p.dataCurta === hoje && (p.tipo==='ENTRADA'||p.tipo==='SAÍDA'))
+    .sort((a,b) => (a.criadoEm||'').localeCompare(b.criadoEm||''));
+
+  // Agrupa por colaborador
+  const colabs = {};
+  pontos.forEach(p => {
+    if (!colabs[p.nome]) colabs[p.nome] = [];
+    colabs[p.nome].push(p);
+  });
+
+  if (Object.keys(colabs).length === 0) {
+    el.innerHTML = `<p class="text-[9px] text-slate-600 font-bold text-center py-3">Nenhum registo hoje</p>`;
+    return;
+  }
+
+  el.innerHTML = Object.entries(colabs).map(([nome, regs]) => {
+    // Pares entrada/saída
+    const pares = [];
+    const temp  = [...regs];
+    while (temp.length) {
+      const entrada = temp.find(r => r.tipo==='ENTRADA');
+      if (!entrada) { temp.forEach(r => pares.push({ entrada:null, saida:r })); break; }
+      const idxE  = temp.indexOf(entrada);
+      temp.splice(idxE,1);
+      const saida = temp.find(r => r.tipo==='SAÍDA' && (r.criadoEm||'') > (entrada.criadoEm||''));
+      if (saida) { temp.splice(temp.indexOf(saida),1); pares.push({ entrada, saida }); }
+      else { pares.push({ entrada, saida: null }); }
+    }
+
+    const ativo = regs.length > 0 && regs[regs.length-1].tipo === 'ENTRADA';
+
+    const paresHtml = pares.map(({entrada, saida}) => {
+      const duracaoMin = (entrada && saida)
+        ? Math.round((new Date(saida.criadoEm) - new Date(entrada.criadoEm)) / 60000)
+        : null;
+      const duracaoStr = duracaoMin !== null
+        ? `${Math.floor(duracaoMin/60)}h${String(duracaoMin%60).padStart(2,'0')}min`
+        : entrada ? '● em curso' : '';
+
+      return `<div class="ponto-pair mt-2">
+        <div class="ponto-half">
+          <p class="text-[7px] text-emerald-400 font-black uppercase tracking-widest">Entrada</p>
+          <p class="ponto-time text-emerald-400">${entrada ? entrada.hora : '<span class="text-slate-600">—</span>'}</p>
+        </div>
+        <div class="text-center">
+          <i class="fas fa-arrow-right text-slate-600 text-xs"></i>
+          ${duracaoStr ? `<p class="text-[7px] text-slate-500 font-bold mt-0.5">${duracaoStr}</p>` : ''}
+        </div>
+        <div class="ponto-half items-end text-right">
+          <p class="text-[7px] text-red-400 font-black uppercase tracking-widest">Saída</p>
+          <p class="ponto-time ${saida ? 'text-red-400' : 'text-slate-600'}">${saida ? saida.hora : '—'}</p>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="colab-card">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center font-black text-sm text-slate-300">${nome.charAt(0).toUpperCase()}</div>
+          <p class="text-[12px] font-black text-white">${nome}</p>
+        </div>
+        <span class="badge ${ativo ? 'b-green' : 'b-slate'}">${ativo ? '● Ativo' : '○ Saiu'}</span>
+      </div>
+      ${paresHtml}
+    </div>`;
+  }).join('');
 }
 
 /* ════════════════════════════════
@@ -403,19 +583,18 @@ function setTab(tab, btn) {
 }
 
 /* ════════════════════════════════
-   RENDER LISTA / POR COLABORADOR
+   RENDER LISTA
 ════════════════════════════════ */
 function renderLista() {
   if (_tabAtual === 'colaboradores') { renderPorColaborador(); return; }
-
-  const hoje   = Utils.todayISO();
-  const agora  = new Date();
-  let pontos   = Store.getPonto();
+  const hoje  = Utils.todayISO();
+  const agora = new Date();
+  let pontos  = Store.getPonto();
 
   if (_tabAtual === 'hoje') {
     pontos = pontos.filter(p => p.dataCurta === hoje);
   } else if (_tabAtual === 'semana') {
-    const ini = new Date(agora); ini.setDate(ini.getDate() - 6); ini.setHours(0,0,0,0);
+    const ini = new Date(agora); ini.setDate(ini.getDate()-6); ini.setHours(0,0,0,0);
     pontos = pontos.filter(p => new Date(p.criadoEm||p.dataCurta) >= ini);
   } else if (_tabAtual === 'mes') {
     const ini = new Date(agora.getFullYear(), agora.getMonth(), 1);
@@ -424,7 +603,6 @@ function renderLista() {
 
   const el = document.getElementById('listaPonto');
   if (!el) return;
-
   if (pontos.length === 0) {
     el.innerHTML = `<div class="flex flex-col items-center justify-center py-16 opacity-30">
       <i class="fas fa-clock text-5xl text-slate-600 mb-4"></i>
@@ -433,7 +611,6 @@ function renderLista() {
     return;
   }
 
-  // Agrupa por data
   const grupos = {};
   pontos.forEach(p => {
     const key = p.dataCurta || p.data || '?';
@@ -446,9 +623,36 @@ function renderLista() {
     .map(([data, regs]) => {
       const dataFmt = data === hoje
         ? 'Hoje'
-        : new Date(data + 'T12:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' });
+        : new Date(data+'T12:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' });
 
       const linhas = regs.map(p => {
+        if (p.tipo === 'CAIXA_FECHAMENTO') {
+          const d = p.dados||{};
+          return `<div class="ponto-row">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-500/15 text-amber-400">
+              <i class="fas fa-cash-register text-sm"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[10px] font-black text-amber-300">Fechamento de Caixa</p>
+              <p class="text-[8px] text-slate-500 font-bold">${p.nome||d.operador||'—'} · ${Utils.formatCurrency(d.totalCaixa||0)}</p>
+            </div>
+            <span class="badge b-amber flex-shrink-0">Caixa</span>
+          </div>`;
+        }
+        if (p.tipo === 'RETIRADA') {
+          const d = p.dados||{};
+          return `<div class="ponto-row">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-orange-500/15 text-orange-400">
+              <i class="fas fa-hand-holding-usd text-sm"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[10px] font-black text-orange-300">Retirada — ${Utils.formatCurrency(d.valor||0)}</p>
+              <p class="text-[8px] text-slate-500 font-bold">${d.motivo||'—'} · ${p.hora||''}</p>
+            </div>
+            <span class="badge b-orange flex-shrink-0">Retirada</span>
+            ${AuthService.isAdmin() ? `<button onclick="apagarPonto('${p.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition-all ml-1"><i class="fas fa-times text-[9px]"></i></button>` : ''}
+          </div>`;
+        }
         const entrada = p.tipo === 'ENTRADA';
         return `<div class="ponto-row">
           <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${entrada ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}">
@@ -459,7 +663,7 @@ function renderLista() {
             <p class="text-[8px] text-slate-500 font-bold">${p.horaFull||p.hora||'—'}</p>
           </div>
           <span class="badge ${entrada ? 'b-green' : 'b-red'} flex-shrink-0">${p.tipo}</span>
-          ${AuthService.isAdmin() ? `<button onclick="apagarPonto('${p.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition-all ml-1" title="Apagar"><i class="fas fa-times text-[9px]"></i></button>` : ''}
+          ${AuthService.isAdmin() ? `<button onclick="apagarPonto('${p.id}')" class="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center transition-all ml-1"><i class="fas fa-times text-[9px]"></i></button>` : ''}
         </div>`;
       }).join('');
 
@@ -474,29 +678,27 @@ function renderLista() {
    POR COLABORADOR
 ════════════════════════════════ */
 function renderPorColaborador() {
-  const pontos = Store.getPonto();
+  const pontos = Store.getPonto().filter(p => p.tipo==='ENTRADA'||p.tipo==='SAÍDA');
   const hoje   = Utils.todayISO();
   const el     = document.getElementById('listaPonto');
   if (!el) return;
 
-  // Agrupa por nome
   const colabs = {};
   pontos.forEach(p => {
-    if (!colabs[p.nome]) colabs[p.nome] = { entradas: 0, saidas: 0, horasTotais: 0, ultimoHoje: null };
-    if (p.tipo === 'ENTRADA') colabs[p.nome].entradas++;
+    if (!colabs[p.nome]) colabs[p.nome] = { entradas:0, saidas:0, horasTotais:0, ultimoHoje:null };
+    if (p.tipo==='ENTRADA') colabs[p.nome].entradas++;
     else colabs[p.nome].saidas++;
-    if (p.dataCurta === hoje) colabs[p.nome].ultimoHoje = p;
+    if (p.dataCurta===hoje) colabs[p.nome].ultimoHoje = p;
   });
 
-  // Calcula horas por pares entrada/saída por colaborador
   Object.keys(colabs).forEach(nome => {
-    const registos = pontos.filter(p => p.nome === nome).sort((a,b) => (a.criadoEm||'').localeCompare(b.criadoEm||''));
+    const registos = pontos.filter(p=>p.nome===nome).sort((a,b)=>(a.criadoEm||'').localeCompare(b.criadoEm||''));
     let totalMin = 0;
-    for (let i = 0; i < registos.length - 1; i++) {
-      if (registos[i].tipo === 'ENTRADA' && registos[i+1].tipo === 'SAÍDA') {
+    for (let i=0; i<registos.length-1; i++) {
+      if (registos[i].tipo==='ENTRADA' && registos[i+1].tipo==='SAÍDA') {
         const ini = new Date(registos[i].criadoEm||registos[i].dataCurta);
         const fim = new Date(registos[i+1].criadoEm||registos[i+1].dataCurta);
-        totalMin += (fim - ini) / 60000;
+        totalMin += (fim-ini)/60000;
         i++;
       }
     }
@@ -514,11 +716,10 @@ function renderPorColaborador() {
   el.innerHTML = Object.entries(colabs)
     .sort((a,b) => a[0].localeCompare(b[0]))
     .map(([nome, d]) => {
-      const ativo     = d.ultimoHoje?.tipo === 'ENTRADA';
-      const horas     = Math.floor(d.horasTotais / 60);
-      const min       = Math.round(d.horasTotais % 60);
-      const horasStr  = d.horasTotais > 0 ? `${horas}h${String(min).padStart(2,'0')}min` : '—';
-
+      const ativo    = d.ultimoHoje?.tipo === 'ENTRADA';
+      const horas    = Math.floor(d.horasTotais/60);
+      const min      = Math.round(d.horasTotais%60);
+      const horasStr = d.horasTotais>0 ? `${horas}h${String(min).padStart(2,'0')}min` : '—';
       return `<div class="colab-card">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -552,55 +753,41 @@ function renderPorColaborador() {
    RELATÓRIO
 ════════════════════════════════ */
 function abrirRelatorio() {
-  const pontos  = Store.getPonto();
-  const hoje    = Utils.todayISO();
-  const agora   = new Date();
-
-  // Filtra pelo tab atual
+  const pontos = Store.getPonto();
+  const hoje   = Utils.todayISO();
+  const agora  = new Date();
   let filtrados = pontos;
   let label     = 'Todo o período';
-  if (_tabAtual === 'hoje') {
-    filtrados = pontos.filter(p => p.dataCurta === hoje);
-    label     = 'Hoje — ' + Utils.today();
-  } else if (_tabAtual === 'semana') {
-    const ini = new Date(agora); ini.setDate(ini.getDate()-6); ini.setHours(0,0,0,0);
-    filtrados = pontos.filter(p => new Date(p.criadoEm||p.dataCurta) >= ini);
-    label     = 'Últimos 7 dias';
-  } else if (_tabAtual === 'mes') {
-    const ini = new Date(agora.getFullYear(), agora.getMonth(), 1);
-    filtrados = pontos.filter(p => new Date(p.criadoEm||p.dataCurta) >= ini);
-    label     = 'Este mês';
-  }
-
+  if (_tabAtual==='hoje') { filtrados=pontos.filter(p=>p.dataCurta===hoje); label='Hoje — '+Utils.today(); }
+  else if (_tabAtual==='semana') { const ini=new Date(agora); ini.setDate(ini.getDate()-6); ini.setHours(0,0,0,0); filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Últimos 7 dias'; }
+  else if (_tabAtual==='mes') { const ini=new Date(agora.getFullYear(),agora.getMonth(),1); filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Este mês'; }
   _set('relPeriodoLabel', label);
 
-  const entradas  = filtrados.filter(p => p.tipo === 'ENTRADA').length;
-  const saidas    = filtrados.filter(p => p.tipo === 'SAÍDA').length;
-  const colabSet  = new Set(filtrados.map(p => p.nome));
+  const entradas = filtrados.filter(p=>p.tipo==='ENTRADA').length;
+  const saidas   = filtrados.filter(p=>p.tipo==='SAÍDA').length;
+  const colabSet = new Set(filtrados.map(p=>p.nome));
 
-  const linhas = [
+  document.getElementById('relResumo').innerHTML = [
     ['Período',        label],
     ['Total Registos', filtrados.length],
     ['Entradas',       entradas],
     ['Saídas',         saidas],
     ['Colaboradores',  colabSet.size],
-  ];
-  document.getElementById('relResumo').innerHTML = linhas.map(([k,v]) =>
-    `<div class="flex justify-between items-center px-4 py-2.5">
-      <span class="text-[10px] text-slate-400 font-bold">${k}</span>
-      <span class="text-[10px] font-black text-white">${v}</span>
-    </div>`).join('');
+  ].map(([k,v]) => `<div class="flex justify-between items-center px-4 py-2.5">
+    <span class="text-[10px] text-slate-400 font-bold">${k}</span>
+    <span class="text-[10px] font-black text-white">${v}</span>
+  </div>`).join('');
 
   // Por colaborador
   const colabs = {};
-  filtrados.forEach(p => {
+  filtrados.filter(p=>p.tipo==='ENTRADA'||p.tipo==='SAÍDA').forEach(p => {
     if (!colabs[p.nome]) colabs[p.nome] = { entradas:0, saidas:0 };
     if (p.tipo==='ENTRADA') colabs[p.nome].entradas++;
     else colabs[p.nome].saidas++;
   });
   document.getElementById('relColabs').innerHTML = Object.entries(colabs)
     .sort((a,b)=>(a[0]||'').localeCompare(b[0]||''))
-    .map(([nome, d]) => `
+    .map(([nome,d]) => `
       <div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2.5">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center font-black text-xs text-slate-400">${(nome||'?').charAt(0).toUpperCase()}</div>
@@ -612,22 +799,25 @@ function abrirRelatorio() {
         </div>
       </div>`).join('') || '<p class="text-[9px] text-slate-600 text-center py-4 font-bold">Nenhum dado</p>';
 
-  // Caixas (abertura/fechamento)
-  const caixas = Store.getPonto().filter(p => p.tipo === 'CAIXA_FECHAMENTO');
-  const caixaFiltrados = _tabAtual === 'hoje'
-    ? caixas.filter(p => (p.criadoEm||'').startsWith(hoje))
-    : _tabAtual === 'semana'
-    ? caixas.filter(p => new Date(p.criadoEm||'') >= new Date(agora.getTime() - 6*86400000))
-    : _tabAtual === 'mes'
-    ? caixas.filter(p => new Date(p.criadoEm||'') >= new Date(agora.getFullYear(), agora.getMonth(), 1))
+  // Caixas
+  const caixas = Store.getPonto().filter(p=>p.tipo==='CAIXA_FECHAMENTO');
+  const caixaFiltrados = _tabAtual==='hoje'
+    ? caixas.filter(p=>(p.criadoEm||'').startsWith(hoje))
+    : _tabAtual==='semana'
+    ? caixas.filter(p=>new Date(p.criadoEm||'')>=new Date(agora.getTime()-6*86400000))
+    : _tabAtual==='mes'
+    ? caixas.filter(p=>new Date(p.criadoEm||'')>=new Date(agora.getFullYear(),agora.getMonth(),1))
     : caixas;
 
-  document.getElementById('relCaixas').innerHTML = caixaFiltrados.length === 0
+  document.getElementById('relCaixas').innerHTML = caixaFiltrados.length===0
     ? '<p class="text-[9px] text-slate-600 text-center py-3 font-bold">Nenhum fechamento no período</p>'
     : caixaFiltrados.map(c => {
-        const d = c.dados || {};
+        const d   = c.dados||{};
         const aber = d.abertoEm  ? new Date(d.abertoEm).toLocaleString('pt-BR') : '—';
         const fech = d.fechadoEm ? new Date(d.fechadoEm).toLocaleString('pt-BR') : '—';
+        const diff = d.caixaFisico!=null ? (d.caixaFisico - (d.totalCaixa||0)) : null;
+        const diffStr = diff!=null ? (diff>=0?'+':'')+Utils.formatCurrency(diff) : null;
+        const diffColor = diff!=null ? (Math.abs(diff)<0.01?'text-emerald-400':(diff>0?'text-blue-400':'text-red-400')) : '';
         return `<div class="bg-slate-900/60 border border-white/5 rounded-xl p-3 space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="text-[10px] font-black text-emerald-400">💰 ${d.operador||c.nome||'—'}</span>
@@ -638,10 +828,14 @@ function abrirRelatorio() {
             <div><p class="text-[7px] text-slate-600 font-bold uppercase">Fechamento</p><p class="text-[9px] text-slate-300 font-black">${fech}</p></div>
             <div><p class="text-[7px] text-slate-600 font-bold uppercase">Troco Inicial</p><p class="text-[9px] text-blue-400 font-black">${Utils.formatCurrency(d.trocoInicial||0)}</p></div>
             <div><p class="text-[7px] text-slate-600 font-bold uppercase">Dinheiro Vendas</p><p class="text-[9px] text-blue-400 font-black">${Utils.formatCurrency(d.dinheiro||0)}</p></div>
-            <div class="col-span-2 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-2 py-1 flex justify-between">
-              <span class="text-[9px] text-emerald-400 font-black uppercase">Total no Caixa</span>
+            ${d.totalRetiradas ? `<div><p class="text-[7px] text-orange-400 font-bold uppercase">Retiradas</p><p class="text-[9px] text-orange-400 font-black">- ${Utils.formatCurrency(d.totalRetiradas)}</p></div>` : ''}
+            <div class="${d.totalRetiradas?'':'col-span-2'} bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-2 py-1 flex justify-between ${d.totalRetiradas?'col-span-2':''}">
+              <span class="text-[9px] text-emerald-400 font-black uppercase">Total Esperado</span>
               <span class="text-[10px] text-emerald-400 font-black">${Utils.formatCurrency(d.totalCaixa||0)}</span>
             </div>
+            ${d.caixaFisico!=null ? `
+            <div><p class="text-[7px] text-slate-600 font-bold uppercase">Caixa Físico</p><p class="text-[9px] text-white font-black">${Utils.formatCurrency(d.caixaFisico)}</p></div>
+            <div><p class="text-[7px] text-slate-600 font-bold uppercase">Diferença</p><p class="text-[9px] ${diffColor} font-black">${diffStr}</p></div>` : ''}
             <div><p class="text-[7px] text-slate-600 font-bold uppercase">Nº Vendas</p><p class="text-[9px] text-slate-300 font-black">${d.qtdVendas||0}</p></div>
           </div>
         </div>`;
@@ -650,20 +844,344 @@ function abrirRelatorio() {
   UIService.openModal('modalRelatorio');
 }
 
+/* ════════════════════════════════
+   CAIXA
+════════════════════════════════ */
+let _caixaAberto = false;
+let _caixaAtual  = null;
+
+function iniciarCaixa() {
+  // Restaura caixa aberto
+  try {
+    const raw = localStorage.getItem('CH_CAIXA_ATUAL');
+    if (raw) { _caixaAtual=JSON.parse(raw); _caixaAberto=true; }
+  } catch(_) {}
+
+  // Auto-fill: se caixa fechado, preenche troco com valor do último fechamento
+  if (!_caixaAberto) {
+    const ultimoFechamento = Store.getPonto()
+      .filter(p => p.tipo==='CAIXA_FECHAMENTO')
+      .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''))[0];
+
+    if (ultimoFechamento?.dados?.totalCaixa != null) {
+      const inp = document.getElementById('caixaTrocoInicial');
+      if (inp) {
+        inp.value = ultimoFechamento.dados.totalCaixa.toFixed(2);
+        const hint = document.getElementById('caixaHintFechamento');
+        if (hint) hint.classList.remove('hidden');
+      }
+    }
+  }
+
+  atualizarUICaixa();
+}
+
+function abrirCaixa() {
+  if (_caixaAberto) { UIService.showToast('Caixa já aberto','Feche antes de abrir novamente','warning'); return; }
+  const troco = parseFloat(document.getElementById('caixaTrocoInicial')?.value)||0;
+  const obs   = document.getElementById('caixaObs')?.value.trim()||'';
+  _caixaAtual = {
+    id:           Utils.generateId(),
+    turnoId:      Utils.generateId(),
+    abertoEm:     new Date().toISOString(),
+    trocoInicial: troco,
+    retiradas:    [],
+    obs,
+    operador:     AuthService.getNome(),
+  };
+  _caixaAberto = true;
+  try { localStorage.setItem('CH_CAIXA_ATUAL', JSON.stringify(_caixaAtual)); } catch(_) {}
+
+  // Esconde hint de auto-fill
+  const hint = document.getElementById('caixaHintFechamento');
+  if (hint) hint.classList.add('hidden');
+
+  atualizarUICaixa();
+  UIService.showToast('Caixa aberto!', `Troco inicial: ${Utils.formatCurrency(troco)}`, 'success');
+}
+
+/* Abre modal de fechamento com resumo pré-calculado */
+function fecharCaixa() {
+  if (!_caixaAberto || !_caixaAtual) { UIService.showToast('Nenhum caixa aberto','','warning'); return; }
+
+  const trocoInicial    = _caixaAtual.trocoInicial||0;
+  const totalRetiradas  = (_caixaAtual.retiradas||[]).reduce((s,r)=>s+(r.valor||0),0);
+  const abertoEm        = new Date(_caixaAtual.abertoEm);
+  const vendas          = Store.getVendas().filter(v => {
+    const ts = v.criadoEm||v.timestamp||'';
+    return ts ? new Date(ts)>=abertoEm : v.dataCurta===Utils.todayISO();
+  });
+  const dinheiro  = vendas.filter(v=>(v.formaPgto||'').toLowerCase().includes('dinheiro')).reduce((s,v)=>s+v.total,0);
+  const esperado  = trocoInicial + dinheiro - totalRetiradas;
+
+  _set('fcTrocoInicial', Utils.formatCurrency(trocoInicial));
+  _set('fcDinheiro',     Utils.formatCurrency(dinheiro));
+  _set('fcEsperado',     Utils.formatCurrency(esperado));
+
+  const fcRet = document.getElementById('fcRetiradaRow');
+  if (totalRetiradas>0) {
+    if (fcRet) fcRet.classList.remove('hidden');
+    _set('fcRetiradas', '- '+Utils.formatCurrency(totalRetiradas));
+  } else {
+    if (fcRet) fcRet.classList.add('hidden');
+  }
+
+  // Limpa e foca campo físico
+  const fisicoInp = document.getElementById('fcFisico');
+  if (fisicoInp) { fisicoInp.value=''; }
+  const diffBox = document.getElementById('fcDiferencaBox');
+  if (diffBox) diffBox.classList.add('hidden');
+
+  // Guarda dados temporários
+  window._fcTemp = { trocoInicial, dinheiro, totalRetiradas, esperado, vendas };
+
+  UIService.openModal('modalFecharCaixa');
+}
+
+function atualizarDiferenca() {
+  const fisico = parseFloat(document.getElementById('fcFisico')?.value)||0;
+  if (!window._fcTemp) return;
+  const esperado = window._fcTemp.esperado;
+  const diff     = fisico - esperado;
+  const box      = document.getElementById('fcDiferencaBox');
+  if (!box) return;
+
+  if (fisico === 0) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+
+  const label = document.getElementById('fcDiferencaLabel');
+  const valor = document.getElementById('fcDiferencaValor');
+  const msg   = document.getElementById('fcDiferencaMsg');
+
+  _set('fcDiferencaValor', (diff>=0?'+':'')+Utils.formatCurrency(diff));
+  if (Math.abs(diff) < 0.01) {
+    box.className = 'match rounded-xl p-3';
+    if (label) label.textContent = '✅ Caixa conferido';
+    if (label) label.className = 'text-[9px] font-black uppercase tracking-wide text-emerald-400';
+    if (valor) valor.className = 'text-sm font-black text-emerald-400';
+    if (msg)   msg.textContent = 'Valor físico bate com o esperado.';
+  } else if (diff > 0) {
+    box.className = 'discrepancy rounded-xl p-3';
+    if (label) label.textContent = '⚠️ Sobra no caixa';
+    if (label) label.className = 'text-[9px] font-black uppercase tracking-wide text-blue-400';
+    if (valor) valor.className = 'text-sm font-black text-blue-400';
+    if (msg)   msg.textContent = `Caixa físico tem R$ ${Utils.formatCurrency(Math.abs(diff))} a mais que o esperado.`;
+  } else {
+    box.className = 'discrepancy rounded-xl p-3';
+    if (label) label.textContent = '🚨 Falta no caixa';
+    if (label) label.className = 'text-[9px] font-black uppercase tracking-wide text-red-400';
+    if (valor) valor.className = 'text-sm font-black text-red-400';
+    if (msg)   msg.textContent = `Faltam R$ ${Utils.formatCurrency(Math.abs(diff))} no caixa físico.`;
+  }
+}
+
+function confirmarFechamentoCaixa() {
+  UIService.closeModal('modalFecharCaixa');
+  const { trocoInicial, dinheiro, totalRetiradas, esperado, vendas } = window._fcTemp||{};
+  const fisicoInput = parseFloat(document.getElementById('fcFisico')?.value);
+  const caixaFisico = isNaN(fisicoInput) ? null : fisicoInput;
+  const diff        = caixaFisico!=null ? (caixaFisico - esperado) : null;
+
+  const registro = {
+    ..._caixaAtual,
+    fechadoEm:     new Date().toISOString(),
+    trocoInicial:  trocoInicial||0,
+    dinheiro:      dinheiro||0,
+    totalRetiradas:totalRetiradas||0,
+    totalCaixa:    esperado||0,
+    caixaFisico:   caixaFisico,
+    diferenca:     diff,
+    qtdVendas:     (vendas||[]).length,
+  };
+
+  Store.mutatePonto(ponto => {
+    ponto.unshift({
+      id:       Utils.generateId(),
+      tipo:     'CAIXA_FECHAMENTO',
+      nome:     registro.operador,
+      criadoEm: registro.fechadoEm,
+      dataCurta:Utils.todayISO(),
+      dados:    registro,
+    });
+  });
+
+  // Telegram — sempre envia fechamento
+  let msgTelegram =
+    `💰 <b>Fechamento de Caixa — CH Geladas</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `👤 <b>Operador:</b> ${registro.operador}\n` +
+    `🕐 <b>Abertura:</b> ${new Date(registro.abertoEm).toLocaleString('pt-BR')}\n` +
+    `🕐 <b>Fechamento:</b> ${new Date(registro.fechadoEm).toLocaleString('pt-BR')}\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `💵 <b>Troco inicial:</b> ${Utils.formatCurrency(trocoInicial||0)}\n` +
+    `🛒 <b>Dinheiro vendas:</b> ${Utils.formatCurrency(dinheiro||0)}\n`;
+
+  if ((totalRetiradas||0) > 0)
+    msgTelegram += `💸 <b>Retiradas:</b> - ${Utils.formatCurrency(totalRetiradas)}\n`;
+
+  msgTelegram += `💰 <b>Total esperado:</b> ${Utils.formatCurrency(esperado||0)}\n`;
+
+  if (caixaFisico != null) {
+    msgTelegram += `📦 <b>Caixa físico:</b> ${Utils.formatCurrency(caixaFisico)}\n`;
+    if (Math.abs(diff) < 0.01) {
+      msgTelegram += `✅ <b>Conferido — caixa bate!</b>`;
+    } else if (diff > 0) {
+      msgTelegram += `⚠️ <b>SOBRA de ${Utils.formatCurrency(diff)} no caixa!</b>`;
+    } else {
+      msgTelegram += `🚨 <b>FALTA de ${Utils.formatCurrency(Math.abs(diff))} no caixa!</b>`;
+    }
+  }
+  msgTelegram += `\n📦 <b>Nº vendas:</b> ${(vendas||[]).length}`;
+
+  TelegramService.enviar(msgTelegram);
+
+  // Alerta extra se diferença significativa
+  if (caixaFisico != null && Math.abs(diff) >= 0.01) {
+    setTimeout(() => {
+      const tipo = diff < 0 ? 'FALTA' : 'SOBRA';
+      TelegramService.enviar(
+        `🚨 <b>ALERTA CAIXA — ${tipo}</b>\n` +
+        `Operador: ${registro.operador}\n` +
+        `Esperado: ${Utils.formatCurrency(esperado||0)}\n` +
+        `Físico:   ${Utils.formatCurrency(caixaFisico)}\n` +
+        `${tipo}: ${Utils.formatCurrency(Math.abs(diff))}`
+      );
+    }, 500);
+  }
+
+  // Auto-preenche próxima abertura
+  const inp = document.getElementById('caixaTrocoInicial');
+  if (inp) {
+    inp.value = (esperado||0).toFixed(2);
+    const hint = document.getElementById('caixaHintFechamento');
+    if (hint) hint.classList.remove('hidden');
+  }
+
+  try { localStorage.removeItem('CH_CAIXA_ATUAL'); } catch(_) {}
+  _caixaAberto = false;
+  _caixaAtual  = null;
+  window._fcTemp = null;
+  atualizarUICaixa();
+  UIService.showToast('Caixa fechado!', `Total: ${Utils.formatCurrency(esperado||0)}`, 'success');
+}
+
+/* ════════════════════════════════
+   RETIRADA DE CAIXA
+════════════════════════════════ */
+function abrirModalRetirada() {
+  if (!_caixaAberto) return;
+  const el1 = document.getElementById('retiradaValor');
+  const el2 = document.getElementById('retiradaMotivo');
+  if (el1) el1.value = '';
+  if (el2) el2.value = '';
+  UIService.openModal('modalRetirada');
+}
+
+function confirmarRetirada() {
+  const valor  = parseFloat(document.getElementById('retiradaValor')?.value)||0;
+  const motivo = document.getElementById('retiradaMotivo')?.value.trim()||'Retirada';
+  if (valor<=0) { UIService.showToast('Valor inválido','Informe um valor maior que zero','error'); return; }
+
+  const agora = new Date();
+  const retObj = { id:Utils.generateId(), valor, motivo, hora:agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), criadoEm:agora.toISOString() };
+
+  // Adiciona ao caixa atual
+  if (!_caixaAtual.retiradas) _caixaAtual.retiradas=[];
+  _caixaAtual.retiradas.push(retObj);
+  try { localStorage.setItem('CH_CAIXA_ATUAL', JSON.stringify(_caixaAtual)); } catch(_) {}
+
+  // Registra no ponto
+  Store.mutatePonto(ponto => {
+    ponto.unshift({
+      id:        Utils.generateId(),
+      tipo:      'RETIRADA',
+      nome:      _caixaAtual.operador||AuthService.getNome(),
+      hora:      retObj.hora,
+      dataCurta: Utils.todayISO(),
+      criadoEm:  agora.toISOString(),
+      dados:     retObj,
+    });
+  });
+
+  // Telegram
+  TelegramService.enviar(
+    `💸 <b>Retirada de Caixa — CH Geladas</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `👤 <b>Operador:</b> ${_caixaAtual.operador}\n` +
+    `💵 <b>Valor:</b> ${Utils.formatCurrency(valor)}\n` +
+    `📝 <b>Motivo:</b> ${motivo}\n` +
+    `🕐 <b>Hora:</b> ${retObj.hora}`
+  );
+
+  UIService.closeModal('modalRetirada');
+  atualizarUICaixa();
+  renderLista();
+  UIService.showToast('Retirada registrada!', `${Utils.formatCurrency(valor)} — ${motivo}`, 'warning');
+}
+
+/* ════════════════════════════════
+   UI CAIXA
+════════════════════════════════ */
+function atualizarUICaixa() {
+  const btnAbrir  = document.getElementById('btnAbrirCaixa');
+  const btnFechar = document.getElementById('btnFecharCaixa');
+  const badge     = document.getElementById('caixaStatusBadge');
+  const abertoEm  = document.getElementById('caixaAbertoEm');
+  const resumo    = document.getElementById('caixaResumo');
+
+  if (_caixaAberto && _caixaAtual) {
+    if (badge)    { badge.textContent='Caixa Aberto'; badge.className='badge b-green'; }
+    if (abertoEm) { abertoEm.textContent='Aberto: '+new Date(_caixaAtual.abertoEm).toLocaleTimeString('pt-BR'); abertoEm.classList.remove('hidden'); }
+    if (btnAbrir)  btnAbrir.disabled=true;
+    if (btnFechar) btnFechar.disabled=false;
+    if (resumo)    resumo.classList.remove('hidden');
+
+    // Esconde campos de abertura
+    const campos = document.getElementById('camposAbertura');
+    if (campos) campos.classList.add('hidden');
+
+    const abertoEmTs  = new Date(_caixaAtual.abertoEm);
+    const vendas      = Store.getVendas().filter(v=>{const ts=v.criadoEm||v.timestamp||'';return ts?new Date(ts)>=abertoEmTs:v.dataCurta===Utils.todayISO();});
+    const dinheiro    = vendas.filter(v=>(v.formaPgto||'').toLowerCase().includes('dinheiro')).reduce((s,v)=>s+v.total,0);
+    const totalRet    = (_caixaAtual.retiradas||[]).reduce((s,r)=>s+(r.valor||0),0);
+    const total       = (_caixaAtual.trocoInicial||0) + dinheiro - totalRet;
+
+    _set('resumoTroco',    Utils.formatCurrency(_caixaAtual.trocoInicial||0));
+    _set('resumoDinheiro', Utils.formatCurrency(dinheiro));
+    _set('resumoTotal',    Utils.formatCurrency(total));
+
+    const retRow = document.getElementById('resumoRetiradaRow');
+    if (totalRet>0) {
+      if (retRow) retRow.classList.remove('hidden');
+      _set('resumoRetiradas', '- '+Utils.formatCurrency(totalRet));
+    } else {
+      if (retRow) retRow.classList.add('hidden');
+    }
+  } else {
+    if (badge)    { badge.textContent='Caixa Fechado'; badge.className='badge b-slate'; }
+    if (abertoEm)  abertoEm.classList.add('hidden');
+    if (btnAbrir)  btnAbrir.disabled=false;
+    if (btnFechar) btnFechar.disabled=true;
+    if (resumo)    resumo.classList.add('hidden');
+
+    // Mostra campos de abertura
+    const campos = document.getElementById('camposAbertura');
+    if (campos) campos.classList.remove('hidden');
+  }
+}
+
+/* ════════════════════════════════
+   RELATÓRIO TEXTO
+════════════════════════════════ */
 function _gerarTextoRelatorio() {
   const pontos  = Store.getPonto();
   const hoje    = Utils.todayISO();
   const agora   = new Date();
   let filtrados = pontos;
   let label     = 'Todo o período';
-  if (_tabAtual === 'hoje') { filtrados = pontos.filter(p=>p.dataCurta===hoje); label='Hoje — '+Utils.today(); }
-  else if (_tabAtual === 'semana') {
-    const ini=new Date(agora); ini.setDate(ini.getDate()-6); ini.setHours(0,0,0,0);
-    filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Últimos 7 dias';
-  } else if (_tabAtual === 'mes') {
-    const ini=new Date(agora.getFullYear(),agora.getMonth(),1);
-    filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Este mês';
-  }
+  if (_tabAtual==='hoje') { filtrados=pontos.filter(p=>p.dataCurta===hoje); label='Hoje — '+Utils.today(); }
+  else if (_tabAtual==='semana') { const ini=new Date(agora); ini.setDate(ini.getDate()-6); ini.setHours(0,0,0,0); filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Últimos 7 dias'; }
+  else if (_tabAtual==='mes') { const ini=new Date(agora.getFullYear(),agora.getMonth(),1); filtrados=pontos.filter(p=>new Date(p.criadoEm||p.dataCurta)>=ini); label='Este mês'; }
   const cfg  = Store.getConfig();
   const nome = cfg?.nome||'CH Geladas';
   const sep  = '═'.repeat(42);
@@ -672,27 +1190,33 @@ function _gerarTextoRelatorio() {
   txt += `Total registos: ${filtrados.length}\n`;
   txt += `Entradas:       ${filtrados.filter(p=>p.tipo==='ENTRADA').length}\n`;
   txt += `Saídas:         ${filtrados.filter(p=>p.tipo==='SAÍDA').length}\n\n`;
-
-  // Por data
   const grupos = {};
-  filtrados.forEach(p => { const k=p.dataCurta||p.data||'?'; if(!grupos[k]) grupos[k]=[]; grupos[k].push(p); });
+  filtrados.forEach(p=>{ const k=p.dataCurta||p.data||'?'; if(!grupos[k]) grupos[k]=[]; grupos[k].push(p); });
   Object.entries(grupos).sort((a,b)=>b[0].localeCompare(a[0])).forEach(([data,regs]) => {
     txt += `${sep2}\n${data}\n${sep2}\n`;
-    regs.forEach(p => txt += `  ${p.tipo.padEnd(8)} ${p.nome.padEnd(20)} ${p.hora||''}\n`);
+    regs.forEach(p => {
+      if (p.tipo==='RETIRADA') txt += `  RETIRADA  ${Utils.formatCurrency(p.dados?.valor||0).padEnd(12)} ${(p.dados?.motivo||'').substring(0,20)}\n`;
+      else if (p.tipo==='CAIXA_FECHAMENTO') txt += `  CAIXA FX  ${(p.nome||'').padEnd(20)} Total: ${Utils.formatCurrency(p.dados?.totalCaixa||0)}\n`;
+      else txt += `  ${p.tipo.padEnd(8)} ${(p.nome||'').padEnd(20)} ${p.hora||''}\n`;
+    });
     txt += '\n';
   });
-  // Caixas
-  const caixas = Store.getPonto().filter(p => p.tipo === 'CAIXA_FECHAMENTO');
+  const caixas = Store.getPonto().filter(p=>p.tipo==='CAIXA_FECHAMENTO');
   if (caixas.length) {
     txt += `\nABERTURA / FECHAMENTO DE CAIXA\n${sep2}\n`;
     caixas.slice(0,20).forEach(c => {
-      const d = c.dados||{};
+      const d=c.dados||{};
       txt += `  Operador:   ${d.operador||c.nome||'—'}\n`;
-      txt += `  Abertura:   ${d.abertoEm ? new Date(d.abertoEm).toLocaleString('pt-BR') : '—'}\n`;
-      txt += `  Fechamento: ${d.fechadoEm ? new Date(d.fechadoEm).toLocaleString('pt-BR') : '—'}\n`;
+      txt += `  Abertura:   ${d.abertoEm?new Date(d.abertoEm).toLocaleString('pt-BR'):'—'}\n`;
+      txt += `  Fechamento: ${d.fechadoEm?new Date(d.fechadoEm).toLocaleString('pt-BR'):'—'}\n`;
       txt += `  Troco ini:  ${Utils.formatCurrency(d.trocoInicial||0)}\n`;
       txt += `  Dinheiro:   ${Utils.formatCurrency(d.dinheiro||0)}\n`;
-      txt += `  Total cx:   ${Utils.formatCurrency(d.totalCaixa||0)}\n`;
+      if (d.totalRetiradas) txt += `  Retiradas:  - ${Utils.formatCurrency(d.totalRetiradas)}\n`;
+      txt += `  Esperado:   ${Utils.formatCurrency(d.totalCaixa||0)}\n`;
+      if (d.caixaFisico!=null) {
+        txt += `  Físico:     ${Utils.formatCurrency(d.caixaFisico)}\n`;
+        txt += `  Diferença:  ${(d.diferenca>=0?'+':'')+Utils.formatCurrency(d.diferenca||0)}\n`;
+      }
       txt += `  Nº vendas:  ${d.qtdVendas||0}\n\n`;
     });
   }
@@ -701,8 +1225,7 @@ function _gerarTextoRelatorio() {
 }
 
 function copiarRelatorio() {
-  Utils.copyToClipboard(_gerarTextoRelatorio())
-    .then(() => UIService.showToast('Relatório copiado!','','success'));
+  Utils.copyToClipboard(_gerarTextoRelatorio()).then(() => UIService.showToast('Relatório copiado!','','success'));
 }
 function baixarRelatorio() {
   Utils.downloadBlob(_gerarTextoRelatorio(),'text/plain;charset=utf-8;',`relatorio_ponto_${Utils.todayISO()}.txt`);
@@ -715,9 +1238,8 @@ function baixarRelatorio() {
 function _set(id, val) { const el=document.getElementById(id); if(el) el.textContent=val; }
 
 /* ════════════════════════════════
-   INIT CHECK
+   ADM — APAGAR PONTO
 ════════════════════════════════ */
-/* ═══════════ ADM — APAGAR PONTO ═══════════ */
 function apagarPonto(id) {
   if (!AuthService.isAdmin()) return;
   if (!confirm('Apagar este registro de ponto?')) return;
@@ -729,141 +1251,9 @@ function apagarPonto(id) {
   renderLista();
 }
 
-/* ═══════════ CAIXA ═══════════ */
-let _caixaAberto = false;
-let _caixaAtual  = null;
-
-function iniciarCaixa() {
-  // Verificar se há caixa aberto no localStorage
-  try {
-    const raw = localStorage.getItem('CH_CAIXA_ATUAL');
-    if (raw) {
-      _caixaAtual  = JSON.parse(raw);
-      _caixaAberto = true;
-    }
-  } catch(_) {}
-  atualizarUICaixa();
-}
-
-function abrirCaixa() {
-  if (_caixaAberto) { UIService.showToast('Caixa já aberto','Feche antes de abrir novamente','warning'); return; }
-  const troco = parseFloat(document.getElementById('caixaTrocoInicial')?.value)||0;
-  const obs   = document.getElementById('caixaObs')?.value.trim()||'';
-  _caixaAtual = {
-    id:           Utils.generateId(),
-    turnoId:      Utils.generateId(), // identifica o turno; usado para filtrar vendas na virada da meia-noite
-    abertoEm:     new Date().toISOString(),
-    trocoInicial: troco,
-    obs,
-    operador:     AuthService.getNome(),
-  };
-  _caixaAberto = true;
-  try { localStorage.setItem('CH_CAIXA_ATUAL', JSON.stringify(_caixaAtual)); } catch(_) {}
-  atualizarUICaixa();
-  UIService.showToast('Caixa aberto!', `Troco inicial: ${Utils.formatCurrency(troco)}`, 'success');
-}
-
-function fecharCaixa() {
-  if (!_caixaAberto || !_caixaAtual) { UIService.showToast('Nenhum caixa aberto','','warning'); return; }
-  if (!confirm('Fechar o caixa agora?')) return;
-
-  const trocoInicial = _caixaAtual.trocoInicial||0;
-
-  // Filtra as vendas do turno pelo timestamp de abertura do caixa —
-  // corrige o bug de virada de meia-noite onde todayISO() muda para o
-  // dia seguinte mas vendas do turno ainda têm dataCurta do dia anterior.
-  const abertoEm = new Date(_caixaAtual.abertoEm);
-  const vendas   = Store.getVendas().filter(v => {
-    const ts = v.criadoEm || v.timestamp || '';
-    return ts ? new Date(ts) >= abertoEm : v.dataCurta === Utils.todayISO();
-  });
-  const dinheiro     = vendas
-    .filter(v => (v.formaPgto||'').toLowerCase().includes('dinheiro'))
-    .reduce((s,v) => s+v.total, 0);
-  const totalCaixa   = trocoInicial + dinheiro;
-
-  const registro = {
-    ..._caixaAtual,
-    fechadoEm:   new Date().toISOString(),
-    trocoInicial,
-    dinheiro,
-    totalCaixa,
-    qtdVendas:   vendas.length,
-    // turnoId já herdado de _caixaAtual via spread acima
-  };
-
-  // Salva no ponto como registro especial
-  Store.mutatePonto(ponto => {
-    ponto.unshift({
-      id:        Utils.generateId(),
-      tipo:      'CAIXA_FECHAMENTO',
-      nome:      registro.operador,
-      criadoEm:  registro.fechadoEm,
-      dados:     registro,
-    });
-  });
-
-  // Notificação Telegram
-  TelegramService.enviar(
-    `💰 <b>Fechamento de Caixa — CH Geladas</b>
-` +
-    `━━━━━━━━━━━━━━━━━━
-` +
-    `👤 <b>Operador:</b> ${registro.operador}
-` +
-    `🕐 <b>Abertura:</b> ${new Date(registro.abertoEm).toLocaleString('pt-BR')}
-` +
-    `🕐 <b>Fechamento:</b> ${new Date(registro.fechadoEm).toLocaleString('pt-BR')}
-` +
-    `━━━━━━━━━━━━━━━━━━
-` +
-    `💵 <b>Troco inicial:</b> ${Utils.formatCurrency(trocoInicial)}
-` +
-    `🛒 <b>Dinheiro vendas:</b> ${Utils.formatCurrency(dinheiro)}
-` +
-    `💰 <b>Total no caixa:</b> ${Utils.formatCurrency(totalCaixa)}
-` +
-    `📦 <b>Nº vendas:</b> ${vendas.length}`
-  );
-
-  // Limpa caixa
-  try { localStorage.removeItem('CH_CAIXA_ATUAL'); } catch(_) {}
-  _caixaAberto = false;
-  _caixaAtual  = null;
-  atualizarUICaixa();
-  UIService.showToast('Caixa fechado!', `Total: ${Utils.formatCurrency(totalCaixa)}`, 'success');
-}
-
-function atualizarUICaixa() {
-  const btnAbrir  = document.getElementById('btnAbrirCaixa');
-  const btnFechar = document.getElementById('btnFecharCaixa');
-  const badge     = document.getElementById('caixaStatusBadge');
-  const abertoEm  = document.getElementById('caixaAbertoEm');
-  const resumo    = document.getElementById('caixaResumo');
-
-  if (_caixaAberto && _caixaAtual) {
-    if (badge)    { badge.textContent='Caixa Aberto'; badge.className='badge b-green'; }
-    if (abertoEm) { abertoEm.textContent='Aberto: '+new Date(_caixaAtual.abertoEm).toLocaleTimeString('pt-BR'); abertoEm.classList.remove('hidden'); }
-    if (btnAbrir)  btnAbrir.disabled  = true;
-    if (btnFechar) btnFechar.disabled = false;
-    // Resumo
-    const hoje     = Utils.todayISO();
-    const vendas   = Store.getVendas().filter(v=>v.dataCurta===hoje);
-    const dinheiro = vendas.filter(v=>(v.formaPgto||'').toLowerCase().includes('dinheiro')).reduce((s,v)=>s+v.total,0);
-    const total    = (_caixaAtual.trocoInicial||0) + dinheiro;
-    if (resumo) resumo.classList.remove('hidden');
-    _set('resumoTroco',    Utils.formatCurrency(_caixaAtual.trocoInicial||0));
-    _set('resumoDinheiro', Utils.formatCurrency(dinheiro));
-    _set('resumoTotal',    Utils.formatCurrency(total));
-  } else {
-    if (badge)    { badge.textContent='Caixa Fechado'; badge.className='badge b-slate'; }
-    if (abertoEm)  abertoEm.classList.add('hidden');
-    if (btnAbrir)  btnAbrir.disabled  = false;
-    if (btnFechar) btnFechar.disabled = true;
-    if (resumo)    resumo.classList.add('hidden');
-  }
-}
-
+/* ════════════════════════════════
+   DOMCONTENTLOADED
+════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', () => {
   if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
   document.getElementById('lock').classList.add('hidden');
