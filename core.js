@@ -618,7 +618,7 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios']
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios', 'ponto']
     : ['estoque', 'config', 'usuarios'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
@@ -736,7 +736,7 @@ const FirebaseService = (() => {
    console.info(`[Firebase] ✓ ${pendentes.length} venda(s) sincronizadas.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
-      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio']);
+      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
       const docData = { dados, ts: Utils.nowISO() };
       if (_adminToken && !_semAdminToken.has(colName)) docData.adminToken = _adminToken;
       await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
