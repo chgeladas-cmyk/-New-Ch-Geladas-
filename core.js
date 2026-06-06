@@ -70,35 +70,36 @@ const CONSTANTS = Object.freeze({
     escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   colaborador: Object.freeze({
-    ler:      ['vendas', 'comandas', 'fiado', 'perfis'],
-    escrever: ['vendas', 'comandas'],
+    ler:      ['vendas', 'comandas', 'fiado', 'ponto', 'perfis'],
+    // FIX: 'ponto' adicionado — colaborador precisa gravar ponto no Firebase
+    // para que o admin visualize em tempo real. Firestore Rules permitem
+    // escrita sem adminToken (regra explícita em ch_dados/ponto).
+    escrever: ['vendas', 'comandas', 'ponto'],
   }),
   controlador: Object.freeze({
-    ler:      ['vendas','aprovacao', 'perfis'],
-    escrever: ['aprovacao'],
+    ler:      ['vendas', 'aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'ponto'],
   }),
   validador: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
-    // FIX: inclui 'estoque' para que _mutate enfileire SyncQueue após baixa local.
-    // FirebaseService.salvar() só grava no Firestore quando _adminToken existir
-    // na sessão — o admin processa a fila na próxima abertura do app.
-    escrever: ['aprovacao', 'estoque'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'estoque', 'ponto'],
   }),
   analista: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
-    escrever: ['aprovacao'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'ponto'],
   }),
   gerente: Object.freeze({
     ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
     escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','perfis'],
-    escrever: ['vendas','comandas'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','perfis'],
+    // FIX: 'ponto' adicionado — operador também bate ponto
+    escrever: ['vendas','comandas','ponto'],
   }),
   entregador: Object.freeze({
-    ler:      ['pedidos', 'perfis'],
-    escrever: ['pedidos'],
+    ler:      ['pedidos', 'ponto', 'perfis'],
+    escrever: ['pedidos', 'ponto'],
   }),
   }),
 
