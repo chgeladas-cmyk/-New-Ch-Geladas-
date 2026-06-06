@@ -472,6 +472,201 @@
     });
   }
 
+  /**
+   * BAIXA TODOS OS ITENS DE UMA VENDA EM UMA ÚNICA TRANSACTION.
+   * Resolve o bug de múltiplos itens:
+   *  - 1 leitura + 1 escrita em ch_dados/estoque (sem contention)
+   *  - Sem SyncQueue intermediário entre itens (sem race condition)
+   *  - Idempotente: pula produtos já processados para esta venda
+   *
+   * @param {object} venda  - objeto completo da venda
+   * @returns {{ ok: boolean, itensProcessados: number, erros: string[] }}
+   */
+  async function baixarEstoqueVendaLote(venda) {
+    if (!venda?.itens?.length) return { ok: true, itensProcessados: 0, erros: [] };
+
+    const _tok = FirebaseService.getAdminToken?.();
+
+    // ── Monta lista de itens que precisam de baixa ──────────────────
+    const itensParaBaixar = [];
+    for (const item of venda.itens) {
+      const prod = getProduto(item.prodId);
+      if (!prod)                          continue; // produto não encontrado
+      if (prod.controlaEstoque === false) continue; // cigarro, sem controle
+
+      // Idempotência: verifica se já foi processado localmente
+      const origemKey   = `venda:${venda.id}`;
+      const jaProcessado = Store.getMovimentacoes().some(
+        m => m.origem === origemKey && m.produtoId === item.prodId && m.tipo === 'venda'
+      );
+      if (jaProcessado) continue;
+
+      const pack = prod.packs?.find(pk =>
+        pk.label === item.label || (pk.qtd + 'x') === item.label
+      );
+      const qtdUn = item.label === 'UNID'
+        ? item.qtd
+        : item.qtd * (pack?.qtd || 1);
+
+      itensParaBaixar.push({ item, prod, qtdUn, origemKey });
+    }
+
+    if (itensParaBaixar.length === 0) {
+      console.info(`[Estoque] Lote venda ${venda.id}: todos os itens já processados ou sem controle.`);
+      return { ok: true, itensProcessados: 0, erros: [] };
+    }
+
+    const erros    = [];
+    const MAX_RETRY = 3;
+
+    // ── Modo Firebase: UMA transaction para todos os itens ──────────
+    if (_isOnline() && FirebaseService.isReady() && _tok) {
+      let sucesso   = false;
+      let ultimoErr = null;
+      let resultados = [];
+
+      for (let tentativa = 1; tentativa <= MAX_RETRY; tentativa++) {
+        if (tentativa > 1) {
+          console.warn(`[Estoque] Lote retry ${tentativa}/${MAX_RETRY} venda ${venda.id}...`);
+          await new Promise(r => setTimeout(r, 800 * (tentativa - 1)));
+        }
+
+        try {
+          resultados = [];
+
+          await FirebaseService.runTransaction(async (tx) => {
+            // ── Leitura única do estoque ────────────────────────────
+            const estoqueRef = FirebaseService.docRef('ch_dados', 'estoque');
+            const snap       = await tx.get(estoqueRef);
+            const dadosFB    = snap.exists() ? (snap.data().dados || []) : [];
+            const dadosMapa  = new Map(dadosFB.map(p => [p.id, { ...p }]));
+
+            // ── Aplica TODAS as baixas no mapa local da transaction ──
+            for (const { item, prod, qtdUn, origemKey } of itensParaBaixar) {
+              const prodFB   = dadosMapa.get(item.prodId) || prod;
+              const qtdAtual = prodFB.qtdUn ?? prodFB.estoqueAtual ?? 0;
+
+              if (qtdAtual < qtdUn) {
+                // Estoque insuficiente: registra erro mas não aborta os demais
+                erros.push(`"${prod.nome}": insuficiente (${qtdAtual} disponível, ${qtdUn} solicitado)`);
+                console.warn(`[Estoque] Lote: ${prod.nome} insuficiente, pulando`);
+                continue;
+              }
+
+              const novaQtd = Math.max(0, qtdAtual - qtdUn);
+              dadosMapa.set(item.prodId, {
+                ...prodFB,
+                qtdUn:       novaQtd,
+                estoqueAtual: novaQtd,
+                updatedAt:   Utils.nowISO(),
+              });
+              resultados.push({ produtoId: item.prodId, prod, qtdAntes: qtdAtual, qtdDepois: novaQtd, qtdUn, origemKey });
+            }
+
+            if (resultados.length === 0) return; // nada a escrever
+
+            // ── Escrita única do estoque ────────────────────────────
+            const novosDados = [...dadosMapa.values()];
+            tx.set(estoqueRef, {
+              dados:      novosDados,
+              ts:         Utils.nowISO(),
+              adminToken: _tok,
+            });
+
+            // ── Uma movimentação por item processado ────────────────
+            for (const r of resultados) {
+              const movRef = FirebaseService.newDocRef('movimentacoes');
+              tx.set(movRef, {
+                id:            movRef.id,
+                produtoId:     r.produtoId,
+                nomeProduto:   r.prod.nome,
+                tipo:          'venda',
+                quantidade:    -r.qtdUn,
+                estoqueAntes:  r.qtdAntes,
+                estoqueDepois: r.qtdDepois,
+                origem:        r.origemKey,
+                operador:      venda.operador || _usuario(),
+                vendaId:       venda.id,
+                timestamp:     Utils.nowISO(),
+                dataCurta:     Utils.todayISO(),
+                adminToken:    _tok,
+              });
+            }
+          });
+
+          // ── Atualiza store local UMA VEZ após transaction ────────
+          if (resultados.length > 0) {
+            Store.mutateEstoque(estoque => {
+              for (const r of resultados) {
+                const p = estoque.find(x => x.id === r.produtoId);
+                if (p) { p.qtdUn = r.qtdDepois; p.estoqueAtual = r.qtdDepois; p.updatedAt = Utils.nowISO(); }
+              }
+            }, { _semSync: true }); // evita enfileirar SyncQueue — Firestore já tem o dado correto
+          }
+
+          sucesso = true;
+          console.info(`[Estoque] ✓ Lote venda ${venda.id}: ${resultados.length} itens baixados (tentativa ${tentativa})`);
+          break;
+
+        } catch (e) {
+          ultimoErr = e;
+          console.warn(`[Estoque] Lote tentativa ${tentativa} falhou:`, e.message);
+        }
+      }
+
+      if (!sucesso) {
+        console.error(`[Estoque] ✗ Lote falhou após ${MAX_RETRY} tentativas:`, ultimoErr?.message);
+        _registrarFalha({
+          produtoId:   'lote',
+          nomeProduto: `Venda ${venda.id} (${itensParaBaixar.length} itens)`,
+          tipo:        'venda',
+          origem:      `venda:${venda.id}`,
+          erro:        ultimoErr?.message,
+          tentativas:  MAX_RETRY,
+          definitivo:  true,
+        });
+        // Fallback: aplica localmente para não perder a baixa
+        _baixarLoteLocal(venda, itensParaBaixar);
+        erros.push(`Firebase falhou após ${MAX_RETRY} tentativas — aplicado localmente`);
+      }
+
+      return { ok: sucesso, itensProcessados: resultados.length, erros };
+
+    } else {
+      // ── Modo offline / sem token ─────────────────────────────────
+      const motivo = !_isOnline() ? 'offline' : !FirebaseService.isReady() ? 'Firebase não pronto' : 'sem adminToken';
+      console.info(`[Estoque] Lote local (${motivo}) venda ${venda.id}`);
+      _baixarLoteLocal(venda, itensParaBaixar);
+      _agendarReconciliacao(`venda:${venda.id}`);
+      return { ok: false, itensProcessados: itensParaBaixar.length, erros: [motivo] };
+    }
+  }
+
+  /** Baixa local de todos os itens (fallback offline) */
+  function _baixarLoteLocal(venda, itensParaBaixar) {
+    const agora = new Date();
+    Store.mutateEstoque(estoque => {
+      for (const { item, prod, qtdUn, origemKey } of itensParaBaixar) {
+        const p = estoque.find(x => x.id === item.prodId);
+        if (!p) continue;
+        const qtdAntes  = p.qtdUn ?? p.estoqueAtual ?? 0;
+        const qtdDepois = Math.max(0, qtdAntes - qtdUn);
+        p.qtdUn = qtdDepois; p.estoqueAtual = qtdDepois; p.updatedAt = Utils.nowISO();
+
+        // Registra movimentação local
+        Store.mutateMovimentacoes(movs => {
+          movs.unshift({
+            id: Utils.generateId(), produtoId: item.prodId, nomeProduto: prod.nome,
+            tipo: 'venda', quantidade: -qtdUn, estoqueAntes: qtdAntes, estoqueDepois: qtdDepois,
+            origem: origemKey, operador: venda.operador || _usuario(),
+            timestamp: agora.toISOString(), dataCurta: Utils.todayISO(),
+          });
+        });
+      }
+    });
+    console.info(`[Estoque] Lote local aplicado: ${itensParaBaixar.length} itens (venda ${venda.id})`);
+  }
+
   /** Registra avaria/perda */
   async function registrarAvaria(produtoId, quantidade, observacao = '') {
     return _registrarMovimentacao({
@@ -825,6 +1020,9 @@
     getFornecedor,
     adicionarFornecedor,
     atualizarFornecedor,
+
+    // Baixa em lote (todos os itens de uma venda em 1 transaction)
+    baixarEstoqueVendaLote,
 
     // Reconciliação e auditoria de estoque
     reconciliarEstoque,

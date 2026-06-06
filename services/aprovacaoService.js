@@ -178,31 +178,27 @@
     // Só sincroniza individualmente se NÃO estiver em lote
     if (!_processandoLote) _sync(vendaId);
 
-    // 2. Baixa estoque
+    // 2. Baixa estoque — UMA transaction para todos os itens da venda
+    // FIX: loop item-a-item causava race condition no SyncQueue e contention
+    // no Firestore. baixarEstoqueVendaLote processa tudo atomicamente.
     const EstoqueService = window.CH.EstoqueService;
-    if (EstoqueService) {
-      for (const item of venda.itens || []) {
-        try {
-          const prod = EstoqueService.getProduto(item.prodId);
-          if (!prod) continue;
-          if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
-          const pack = prod?.packs?.find(pk =>
-            pk.label === item.label || (pk.qtd + 'x') === item.label
-          );
-          const qtdUn = item.label === 'UNID'
-            ? item.qtd
-            : item.qtd * (pack?.qtd || 1);
-          await EstoqueService.baixarEstoqueVenda(item.prodId, qtdUn, venda.id);
-        } catch (e) {
-          console.warn(`[AprovacaoService] Estoque falhou "${item.nome}":`, e.message);
+    if (EstoqueService?.baixarEstoqueVendaLote) {
+      try {
+        const resultado = await EstoqueService.baixarEstoqueVendaLote(venda);
+        if (!resultado.ok || resultado.erros.length > 0) {
+          console.warn(`[AprovacaoService] Estoque lote parcial:`, resultado);
+        } else {
+          console.info(`[AprovacaoService] ✓ Estoque lote: ${resultado.itensProcessados} itens baixados`);
         }
+      } catch (e) {
+        console.error('[AprovacaoService] baixarEstoqueVendaLote falhou:', e.message);
       }
     } else {
+      // Fallback: EstoqueService não disponível → aplica localmente
       Store.mutateEstoque(estoque => {
         (venda.itens || []).forEach(item => {
           const prod = estoque.find(p => p.id === item.prodId);
-          if (!prod) return;
-          if (prod.controlaEstoque === false) return; // produto sem controle de estoque (ex: cigarro)
+          if (!prod || prod.controlaEstoque === false) return;
           const qtdDesc = item.label === 'UNID'
             ? item.qtd
             : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
@@ -338,31 +334,22 @@
       // Processa sem emitir store:updated a cada item
       for (const venda of aprovadas) {
         try {
-          // Estoque
+          // Estoque — UMA transaction para todos os itens da venda
           const EstoqueService = window.CH.EstoqueService;
-          if (EstoqueService) {
-            for (const item of venda.itens || []) {
-              try {
-                const prod = EstoqueService.getProduto(item.prodId);
-                if (!prod) continue;
-                if (prod.controlaEstoque === false) continue; // produto sem controle de estoque (ex: cigarro)
-                const pack = prod?.packs?.find(pk =>
-                  pk.label === item.label || (pk.qtd + 'x') === item.label
-                );
-                const qtdUn = item.label === 'UNID'
-                  ? item.qtd
-                  : item.qtd * (pack?.qtd || 1);
-                await EstoqueService.baixarEstoqueVenda(item.prodId, qtdUn, venda.id);
-              } catch (e) {
-                console.warn(`[Lote] Estoque falhou "${item.nome}":`, e.message);
+          if (EstoqueService?.baixarEstoqueVendaLote) {
+            try {
+              const resultado = await EstoqueService.baixarEstoqueVendaLote(venda);
+              if (!resultado.ok || resultado.erros.length > 0) {
+                console.warn(`[Lote] Estoque parcial venda ${venda.id}:`, resultado);
               }
+            } catch (e) {
+              console.error(`[Lote] baixarEstoqueVendaLote falhou venda ${venda.id}:`, e.message);
             }
           } else {
             Store.mutateEstoque(estoque => {
               (venda.itens || []).forEach(item => {
                 const prod = estoque.find(p => p.id === item.prodId);
-                if (!prod) return;
-                if (prod.controlaEstoque === false) return; // produto sem controle de estoque (ex: cigarro)
+                if (!prod || prod.controlaEstoque === false) return;
                 const qtdDesc = item.label === 'UNID'
                   ? item.qtd
                   : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
