@@ -161,11 +161,53 @@
     <div id="auditList" class="max-h-60 overflow-y-auto"></div>
   </div>
 
+  <!-- Linha 5: Integridade de Estoque -->
+  <div class="card mt-3">
+    <div class="card-title flex justify-between items-center">
+      <span>🔧 Integridade de Estoque</span>
+      <div class="flex gap-2">
+        <button class="btn btn-yellow text-xs" onclick="verFalhas()">Ver Falhas</button>
+        <button class="btn btn-green text-xs" id="btnReconciliar" onclick="reconciliarEstoque()">
+          Reconciliar Agora
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs reconciliação -->
+    <div class="grid gap-2 mb-3" style="grid-template-columns:repeat(4,1fr)" id="reconcKpis" style="display:none">
+      <div class="text-center p-2 rounded bg-slate-900">
+        <div class="text-lg font-black text-white" id="reconcVerif">—</div>
+        <div class="text-xs text-slate-500">Verificadas</div>
+      </div>
+      <div class="text-center p-2 rounded bg-slate-900">
+        <div class="text-lg font-black text-emerald-400" id="reconcOk">—</div>
+        <div class="text-xs text-slate-500">OK</div>
+      </div>
+      <div class="text-center p-2 rounded bg-slate-900">
+        <div class="text-lg font-black text-yellow-400" id="reconcCorrig">—</div>
+        <div class="text-xs text-slate-500">Corrigidas</div>
+      </div>
+      <div class="text-center p-2 rounded bg-slate-900">
+        <div class="text-lg font-black text-red-400" id="reconcFalhas">—</div>
+        <div class="text-xs text-slate-500">Falhas</div>
+      </div>
+    </div>
+
+    <!-- Status / resultado -->
+    <div id="reconcStatus" class="text-xs text-slate-500 mb-2 text-center">
+      Clique em "Reconciliar Agora" para verificar se todas as vendas tiveram o estoque baixado corretamente.
+    </div>
+
+    <!-- Detalhes -->
+    <div id="reconcDetalhesList" class="max-h-52 overflow-y-auto space-y-1"></div>
+  </div>
+
 </div>
 
 <!-- ── Scripts ─────────────────────────────────────────── -->
 <script src="core.js"></script>
   <script src="./services/permissoesService.js"></script>
+  <script src="./services/estoqueService.js"></script>
 <script src="./services/syncService.js"></script>
 <script src="./services/auditService.js"></script>
 <script src="./services/syncMonitor.js"></script>
@@ -276,6 +318,113 @@
       </div>`;
     }).join('');
   }
+
+  // ── Reconciliação de Estoque ─────────────────────────────────────
+  window.reconciliarEstoque = async function () {
+    const btn = document.getElementById('btnReconciliar');
+    const status = document.getElementById('reconcStatus');
+    const kpis   = document.getElementById('reconcKpis');
+    const lista  = document.getElementById('reconcDetalhesList');
+
+    if (!window.CH?.EstoqueService?.reconciliarEstoque) {
+      status.textContent = '⚠️ EstoqueService não disponível. Verifique se estoqueService.js está carregado.';
+      status.className = 'text-xs text-red-400 mb-2 text-center';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Verificando...';
+    status.textContent = 'Verificando vendas do dia vs estoque no Firebase...';
+    status.className = 'text-xs text-yellow-400 mb-2 text-center';
+    lista.innerHTML = '';
+    kpis.style.display = 'none';
+
+    try {
+      const r = await window.CH.EstoqueService.reconciliarEstoque();
+
+      if (!r.ok && r.motivo) {
+        status.textContent = `⚠️ ${r.motivo}`;
+        status.className = 'text-xs text-red-400 mb-2 text-center';
+        btn.disabled = false; btn.textContent = 'Reconciliar Agora';
+        return;
+      }
+
+      // KPIs
+      const ok = r.verificadas - r.corrigidas - r.falhas;
+      document.getElementById('reconcVerif').textContent  = r.verificadas;
+      document.getElementById('reconcOk').textContent     = ok >= 0 ? ok : 0;
+      document.getElementById('reconcCorrig').textContent = r.corrigidas;
+      document.getElementById('reconcFalhas').textContent = r.falhas;
+      kpis.style.display = 'grid';
+
+      // Status geral
+      if (r.falhas > 0) {
+        status.textContent = `🚨 ${r.falhas} venda(s) não puderam ser corrigidas. Verifique os detalhes.`;
+        status.className = 'text-xs text-red-400 mb-2 text-center';
+      } else if (r.corrigidas > 0) {
+        status.textContent = `✅ ${r.corrigidas} venda(s) corrigidas com sucesso. Telegram enviado.`;
+        status.className = 'text-xs text-emerald-400 mb-2 text-center';
+      } else {
+        status.textContent = `✅ Tudo ok — ${r.verificadas} venda(s) verificadas, nenhuma pendência encontrada.`;
+        status.className = 'text-xs text-emerald-400 mb-2 text-center';
+      }
+
+      // Detalhes
+      if (r.detalhes?.length > 0) {
+        lista.innerHTML = r.detalhes.map(d => {
+          const cor = d.status === 'ok' ? 'text-slate-500'
+            : d.status === 'corrigido' ? 'text-emerald-400'
+            : 'text-red-400';
+          const icon = d.status === 'ok' ? '✓' : d.status === 'corrigido' ? '🔧' : '✗';
+          return `<div class="queue-row">
+            <span class="${cor} font-mono font-bold">${icon} ${d.status}</span>
+            <span class="text-slate-400 font-mono text-xs">${(d.vendaId||'').slice(-8)}</span>
+            <span class="text-slate-500 text-xs">${d.msg || ''}</span>
+          </div>`;
+        }).join('');
+      } else {
+        lista.innerHTML = '<div class="text-xs text-slate-600 text-center py-2">Nenhum detalhe disponível</div>';
+      }
+
+      _log('info', `Reconciliação: ${r.verificadas} verificadas, ${r.corrigidas} corrigidas, ${r.falhas} falhas`);
+
+    } catch (e) {
+      status.textContent = `❌ Erro: ${e.message}`;
+      status.className = 'text-xs text-red-400 mb-2 text-center';
+      _log('error', `Reconciliação falhou: ${e.message}`);
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Reconciliar Agora';
+  };
+
+  window.verFalhas = function () {
+    const lista  = document.getElementById('reconcDetalhesList');
+    const status = document.getElementById('reconcStatus');
+    const falhas = window.CH?.EstoqueService?.getFalhasEstoque?.() || [];
+
+    if (falhas.length === 0) {
+      status.textContent = '✅ Nenhuma falha registrada localmente.';
+      status.className = 'text-xs text-emerald-400 mb-2 text-center';
+      lista.innerHTML = '';
+      return;
+    }
+
+    status.textContent = `⚠️ ${falhas.length} falha(s) registrada(s) localmente:`;
+    status.className = 'text-xs text-red-400 mb-2 text-center';
+
+    lista.innerHTML = falhas.map(f => {
+      const ts = f.timestamp ? new Date(f.timestamp).toLocaleString('pt-BR') : '—';
+      return `<div class="queue-row">
+        <span class="text-red-400 font-bold text-xs">${f.definitivo ? '🚨' : '⚠️'}</span>
+        <span class="text-slate-300 text-xs font-bold">${f.nomeProduto || f.produtoId || '—'}</span>
+        <span class="text-slate-500 text-xs">${f.erro || f.tipo || '—'}</span>
+        <span class="text-slate-600 text-xs">${ts}</span>
+      </div>`;
+    }).join('');
+
+    _log('info', `Falhas de estoque: ${falhas.length} registradas`);
+  };
 
   window.reenviarErros = function () {
     const n = SyncQueue.reenviarErros();
