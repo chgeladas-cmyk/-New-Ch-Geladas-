@@ -689,20 +689,7 @@ const FirebaseService = (() => {
          return; // não cai no setItem genérico abaixo
        }
 
-       // FIX: coleções append-only usam merge — nunca overwrite direto.
-       // O overwrite apagava registros locais ainda não confirmados pelo Firestore
-       // quando o snapshot chegava com uma versão mais antiga do documento.
-       const _appendOnly = new Set(['saidas','financeiro','ponto','movimentacoes','auditoria']);
-       if (_appendOnly.has(col) && Array.isArray(dados)) {
-         try {
-           const localArr = JSON.parse(localStorage.getItem(key) || '[]');
-           const fbIds    = new Set(dados.map(d => d.id).filter(Boolean));
-           const soLocal  = Array.isArray(localArr) ? localArr.filter(d => d.id && !fbIds.has(d.id)) : [];
-           localStorage.setItem(key, JSON.stringify([...dados, ...soLocal]));
-         } catch(_) { try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {} }
-       } else {
-         try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {}
-       }
+       try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {}
        Store.invalidate(col);
        EventBus.emit('store:updated', col);
        EventBus.emit(`store:${col}`);
