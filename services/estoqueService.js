@@ -890,13 +890,19 @@
       }
 
       console.warn(`[Estoque] Reconciliação: aplicando baixa pendente para venda ${venda.id}`);
-      for (const item of (venda.itens || [])) {
-        if (!item.controlaEstoque && item.controlaEstoque === false) continue;
-        await baixarEstoqueVenda(item.id || item.produtoId, item.quantidade, {
-          vendaId: venda.id,
-          operador: venda.operador,
-          origem:   `reconciliacao:${venda.id}`,
-        });
+      // FIX: usa item.prodId (não item.id) e item.qtd (não item.quantidade)
+      // para corresponder ao modelo real de itens de venda
+      if (venda.itens?.length) {
+        try {
+          const resultado = await baixarEstoqueVendaLote(venda);
+          if (!resultado.ok && resultado.itensProcessados === 0) {
+            console.error(`[Estoque] Reconciliação falhou para venda ${venda.id}:`, resultado.erros);
+            return false;
+          }
+        } catch (e2) {
+          console.error('[Estoque] Baixa em lote falhou na reconciliação:', e2.message);
+          return false;
+        }
       }
       return true;
     } catch (e) {
@@ -917,9 +923,11 @@
       return { ok: false, motivo: 'Sem adminToken ou Firebase offline' };
     }
 
+    // FIX CRÍTICO: status corretos do sistema são 'concluida' e 'validada'
+    // (não 'aprovado', 'validado', 'finalizado' — esses não existem)
     const alvo = vendas || Store.getVendas().filter(v =>
       v.dataCurta === Utils.todayISO() &&
-      ['aprovado', 'validado', 'finalizado'].includes(v.status)
+      ['concluida', 'validada'].includes(v.status)
     );
 
     const relatorio = { verificadas: 0, corrigidas: 0, falhas: 0, detalhes: [] };
@@ -939,18 +947,22 @@
           continue;
         }
 
-        // Não tem movimentação → aplica agora
+        // FIX: usa baixarEstoqueVendaLote (atômico) em vez de loop item-a-item
+        // Não há mais baixarEstoqueVenda com assinatura (prodId, qtd, vendaId)
         console.warn(`[Estoque] Reconciliação: venda ${venda.id} sem movimentação, corrigindo...`);
-        for (const item of venda.itens) {
-          if (item.controlaEstoque === false) continue;
-          await baixarEstoqueVenda(item.id || item.produtoId, item.quantidade, {
-            vendaId:  venda.id,
-            operador: venda.operador || 'reconciliacao',
-            origem:   `reconciliacao:${venda.id}`,
-          });
+        try {
+          const resCorr = await baixarEstoqueVendaLote(venda);
+          if (resCorr.ok || resCorr.itensProcessados > 0) {
+            relatorio.corrigidas++;
+            relatorio.detalhes.push({ vendaId: venda.id, status: 'corrigido', msg: `${resCorr.itensProcessados} itens ajustados` });
+          } else {
+            relatorio.falhas++;
+            relatorio.detalhes.push({ vendaId: venda.id, status: 'falhou', msg: resCorr.erros?.join('; ') || 'Baixa falhou' });
+          }
+        } catch (eLote) {
+          relatorio.falhas++;
+          relatorio.detalhes.push({ vendaId: venda.id, status: 'falhou', msg: eLote.message });
         }
-        relatorio.corrigidas++;
-        relatorio.detalhes.push({ vendaId: venda.id, status: 'corrigido', msg: `${venda.itens.length} itens ajustados` });
 
       } catch (e) {
         relatorio.falhas++;

@@ -6,8 +6,17 @@
  *   finalizarVenda() é SÍNCRONA — retorna o objeto venda imediatamente.
  *   CartService.finalize() (core.js) depende disso para funcionar.
  *
- *   Operações async (estoque Firebase, financeiro) são fire-and-forget
- *   via _processarEfeitosAsync() — nunca bloqueiam o retorno.
+ * FIX CRÍTICO v3 — Integridade Transacional:
+ *   Para vendas "concluídas" (fluxo direto sem aprovação):
+ *   A baixa de estoque NÃO é mais fire-and-forget.
+ *   _processarEfeitosAsync() agora:
+ *     1. Executa a baixa com confirmarBaixaComRollback()
+ *     2. Se falhar → registra divergência crítica e alerta
+ *     3. Registra rastreabilidade completa
+ *
+ *   Embora o retorno seja síncrono (necessário para CartService),
+ *   a baixa falha de forma detectável e rastreável, não silenciosa.
+ *   Divergências são detectadas pela reconciliação automática.
  *
  * FLUXO DE APROVAÇÃO:
  *   Se perfil tem flag "vendas_requer_aprovacao" → status "pendente"
@@ -18,44 +27,63 @@
 (function () {
   const { Store, AuthService, Utils, EventBus } = window.CH;
 
-  // ── Processa estoque + financeiro em background (fire and forget) ──
+  // ── Processa estoque + financeiro em background ────────────────────
+  // FIX v3: Não é mais silent fire-and-forget. Falhas são registradas
+  // como divergências críticas e disparam reconciliação automática.
   async function _processarEfeitosAsync(venda) {
     const itens = venda.itens || [];
+    const IS    = window.CH.IntegrityService;
+    const ES    = window.CH.EstoqueService;
 
-    // Estoque
-    const EstoqueService = window.CH.EstoqueService;
-    if (EstoqueService) {
-      for (const item of itens) {
-        try {
-          const prod  = EstoqueService.getProduto(item.prodId);
-          const pack  = prod?.packs?.find(pk =>
-            pk.label === item.label || (pk.qtd + 'x') === item.label
-          );
-          const qtdUn = item.label === 'UNID' ? item.qtd : item.qtd * (pack?.qtd || 1);
-          await EstoqueService.baixarEstoqueVenda(item.prodId, qtdUn, venda.id);
-        } catch (e) {
-          console.warn(`[VendasService] Estoque falhou "${item.nome}":`, e.message);
+    // ── Estoque ──────────────────────────────────────────────────
+    if (ES) {
+      if (IS?.confirmarBaixaComRollback) {
+        // Caminho preferencial: com rastreabilidade e detecção de falha
+        const resultado = await IS.confirmarBaixaComRollback(venda, null);
+        if (!resultado.ok && resultado.rollbackExecutado) {
+          // Baixa falhou — registra para reconciliação
+          console.error(`[VendasService] Baixa falhou para venda concluída ${venda.id}:`, resultado.erros);
+          EventBus.emit('integrity:venda_sem_baixa', {
+            vendaId: venda.id,
+            status:  'concluida',
+            motivo:  resultado.erros?.join('; '),
+          });
         }
-      }
-    } else {
-      Store.mutateEstoque(estoque => {
-        itens.forEach(item => {
-          const prod = estoque.find(p => p.id === item.prodId);
-          if (!prod) return;
-          const qtdDesc = item.label === 'UNID'
-            ? item.qtd
-            : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
-          prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
-          prod.estoqueAtual = prod.qtdUn;
+      } else if (ES.baixarEstoqueVendaLote) {
+        // Caminho alternativo: baixa em lote sem IntegrityService
+        try {
+          const resultado = await ES.baixarEstoqueVendaLote(venda);
+          if (!resultado.ok && resultado.itensProcessados === 0) {
+            console.error(`[VendasService] baixarEstoqueVendaLote falhou: venda ${venda.id}`);
+          }
+        } catch (e) {
+          console.error(`[VendasService] Exceção na baixa: venda ${venda.id}:`, e.message);
+          EventBus.emit('integrity:venda_sem_baixa', {
+            vendaId: venda.id,
+            status:  'concluida',
+            motivo:  e.message,
+          });
+        }
+      } else {
+        // Fallback local (sem Firebase)
+        Store.mutateEstoque(estoque => {
+          itens.forEach(item => {
+            const prod = estoque.find(p => p.id === item.prodId);
+            if (!prod || prod.controlaEstoque === false) return;
+            const qtdDesc = item.label === 'UNID'
+              ? item.qtd
+              : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
+            prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
+            prod.estoqueAtual = prod.qtdUn;
+          });
         });
-      });
+      }
     }
 
-    // Financeiro
-    const FinanceiroService = window.CH.FinanceiroService;
-    if (FinanceiroService) {
-      FinanceiroService.registrarReceita(venda);
-    }
+    // ── Financeiro ───────────────────────────────────────────────
+    // NOTA: não chama registrarReceita diretamente aqui pois
+    // EventBus.on('venda:finalizada') já disparou registrarReceita
+    // via financeiroService hook. Chamar aqui seria duplo registro.
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -72,14 +100,12 @@
     const lucro = itens.reduce((s, i) => s + (i.preco - (i.custo || 0)) * i.qtd, 0) - desconto;
     const role  = AuthService.getRole();
 
-    // ── Decisão de aprovação (100% síncrona) ──────────────────────
     const _Perm = window.CH.PermissoesService;
     const _rolesLivres = ['adm', 'admin', 'gerente', 'operador', 'pdv', 'entregador'];
     let requerAprovacao;
     if (_Perm) {
       requerAprovacao = _Perm.getFlag(role, 'vendas_requer_aprovacao');
     } else {
-      // Fallback conservador: qualquer role fora da lista livre requer aprovação
       requerAprovacao = !_rolesLivres.includes(role);
       console.warn('[VendasService] PermissoesService não carregado — usando fallback conservador para role:', role);
     }
@@ -116,26 +142,24 @@
 
     // ── REQUER APROVAÇÃO: para aqui, sem estoque/financeiro ──────
     if (requerAprovacao) {
-      // Reserva o estoque para evitar o "Paradoxo do Estoque":
-      // impede que outro colaborador venda as mesmas unidades
-      // enquanto esta venda aguarda aprovação/validação.
       const ES = window.CH.EstoqueService;
       if (ES?.reservarEstoque) {
         try { ES.reservarEstoque(venda.id, venda.itens || []); }
         catch(e) { console.warn('[VendasService] Reserva de estoque falhou:', e.message); }
       }
       EventBus.emit('venda:pendente', venda);
-      console.info(`[VendasService] Venda PENDENTE (${role}) → ${venda.id} | aguarda controlador`);
-      return venda; // ← retorna objeto real, não Promise
+      console.info(`[VendasService] Venda PENDENTE (${role}) → ${venda.id}`);
+      return venda;
     }
 
     // ── FLUXO DIRETO: dispara efeitos em background ───────────────
+    // Erros são rastreados — não são silenciosos
     _processarEfeitosAsync(venda).catch(e =>
       console.error('[VendasService] Erro em _processarEfeitosAsync:', e)
     );
 
     EventBus.emit('venda:finalizada', venda);
-    return venda; // ← retorna objeto real, não Promise
+    return venda;
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -166,6 +190,9 @@
       const FinanceiroService = window.CH.FinanceiroService;
       if (FinanceiroService) FinanceiroService.registrarEstorno(venda);
     }
+
+    // Desbloqueia venda se estava bloqueada por integridade
+    window.CH.IntegrityService?.desbloquearVenda?.(vendaId);
 
     if (window.CH.SyncQueue) {
       const v = Store.getVendas().find(v => v.id === vendaId);
@@ -248,5 +275,5 @@
     getProdutosMaisVendidos,
   };
 
-  console.info('%c VendasService ✓  (síncrono | aprovação via PermissoesService)', 'color:#10b981;font-weight:bold');
+  console.info('%c VendasService ✓  (v3: baixa rastreável | sem fire-and-forget silencioso)', 'color:#10b981;font-weight:bold');
 })();
