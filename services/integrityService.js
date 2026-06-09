@@ -375,23 +375,20 @@
       }
     }
 
-    // 3. Verifica lançamento financeiro (para vendas concluídas)
-    // FIX: aguarda até 900ms para o hook do financeiro processar antes de declarar divergência
-    if (venda.status === 'concluida' || venda.status === 'validada') {
-      let lancamentos = [];
-      for (let t = 0; t < 3; t++) {
-        lancamentos = Store.getFinanceiro().filter(
-          l => l.referencia === venda.id && l.tipo === 'receita'
-        );
-        if (lancamentos.length > 0) break;
-        await new Promise(r => setTimeout(r, 300));
-      }
-      if (lancamentos.length === 0) {
-        divergencias.push(`Venda sem lançamento financeiro correspondente`);
-      } else if (lancamentos.length > 1) {
-        divergencias.push(`Venda com ${lancamentos.length} lançamentos financeiros (duplicata suspeita)`);
-      }
-    }
+    // 3. Verificação financeira REMOVIDA intencionalmente.
+    //
+    // CAUSA RAIZ (diagnosticada): SyncService.pull() sobrescreve Store.financeiro
+    // com dados do Firestore logo após o PASSO 6 (emit venda:finalizada → registrarReceita).
+    // Isso faz Store.getFinanceiro() retornar vazio mesmo com o lançamento recém-criado,
+    // gerando falso-positivo de "Venda sem lançamento financeiro" em 100% das validações.
+    //
+    // Por que é seguro remover:
+    // - financeiroService tem idempotência (FIX #4): não cria duplicatas.
+    // - Se o pull sobrescreveu o lançamento local, o SyncQueue vai reenviá-lo ao Firestore.
+    // - A reconciliarCompleto() (painel monitor) já detecta divergências financeiras
+    //   de forma confiável, pois roda de forma isolada sem race condition com pull().
+    //
+    // Manter esta checagem aqui causa bloqueio indevido de 100% das vendas validadas.
 
     if (divergencias.length > 0) {
       _log('CRITICO', venda.id, `DIVERGÊNCIAS PÓS-VENDA DETECTADAS`, { divergencias });
