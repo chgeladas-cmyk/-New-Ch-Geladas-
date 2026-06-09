@@ -43,6 +43,29 @@ hr { border-color: #334155; margin: 1rem 0; }
 <button class="btn btn-red" onclick="resetProcessando()">🔄 Resetar itens "processando"</button>
 
 <script>
+// FIX #8: Bloquear acesso sem autenticação admin
+(function() {
+  try {
+    const sess = JSON.parse(sessionStorage.getItem('CH_SESSION') || 'null');
+    const rolesPermitidos = ['admin', 'adm', 'gerente'];
+    if (!sess || !rolesPermitidos.includes(sess.role)) {
+      document.documentElement.innerHTML =
+        '<body style="font-family:sans-serif;padding:2rem;color:#c0392b">' +
+        '<h2>⛔ Acesso negado</h2>' +
+        '<p>Esta página é restrita a administradores autenticados.</p>' +
+        '</body>';
+      throw new Error('[debug.html] Acesso não autorizado bloqueado');
+    }
+  } catch(e) {
+    if (e.message.includes('Acesso não autorizado')) throw e;
+    // JSON.parse falhou = sem sessão = bloquear
+    document.documentElement.innerHTML =
+      '<body style="font-family:sans-serif;padding:2rem;color:#c0392b">' +
+      '<h2>⛔ Acesso negado</h2><p>Sessão inválida.</p></body>';
+    throw new Error('[debug.html] Sessão inválida');
+  }
+})();
+
 const SYNC_KEY    = 'CH_SYNC_QUEUE';
 const SESSION_KEY = 'CH_SESSION';
 

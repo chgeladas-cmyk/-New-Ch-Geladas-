@@ -51,9 +51,12 @@ const CONSTANTS = Object.freeze({
   MAX_SAIDAS:        5_000,
   MAX_SYNC_QUEUE:    500,
 
+  // FIX #9: Hashes hardcoded removidos — vulneráveis a rainbow table (a665a4 = SHA256('123')).
+  // Os hashes DEVEM ser configurados via cfg.pinHashAdmin / cfg.pinHashPdv em runtime
+  // (gravados no Firestore por um admin autenticado, nunca no código-fonte).
   PIN_HASH: Object.freeze({
-  ADMIN: '7a3e6b16cb75f48fb897eff3ae732f3154f6d203b53f33660f01b4c3b6bc2df9',
-  PDV:   'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3',
+    ADMIN: null, // configurar via cfg.pinHashAdmin
+    PDV:   null, // configurar via cfg.pinHashPdv
   }),
 
   PERMISSOES: Object.freeze({
@@ -70,41 +73,48 @@ const CONSTANTS = Object.freeze({
     escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   colaborador: Object.freeze({
-    ler:      ['vendas', 'comandas', 'fiado', 'perfis'],
-    escrever: ['vendas', 'comandas'],
+    ler:      ['vendas', 'comandas', 'fiado', 'ponto', 'perfis'],
+    // FIX: 'ponto' adicionado — colaborador precisa gravar ponto no Firebase
+    // para que o admin visualize em tempo real. Firestore Rules permitem
+    // escrita sem adminToken (regra explícita em ch_dados/ponto).
+    escrever: ['vendas', 'comandas', 'ponto'],
   }),
   controlador: Object.freeze({
-    ler:      ['vendas','aprovacao', 'perfis'],
-    escrever: ['aprovacao'],
+    ler:      ['vendas', 'aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'ponto'],
   }),
   validador: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
-    // FIX: inclui 'estoque' para que _mutate enfileire SyncQueue após baixa local.
-    // FirebaseService.salvar() só grava no Firestore quando _adminToken existir
-    // na sessão — o admin processa a fila na próxima abertura do app.
-    escrever: ['aprovacao', 'estoque'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'estoque', 'ponto'],
   }),
   analista: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'perfis'],
-    escrever: ['aprovacao'],
+    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'ponto'],
   }),
   gerente: Object.freeze({
     ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
     escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','perfis'],
-    escrever: ['vendas','comandas'],
+    ler:      ['estoque','vendas','comandas','fiado','ponto','perfis'],
+    // FIX: 'ponto' adicionado — operador também bate ponto
+    escrever: ['vendas','comandas','ponto'],
   }),
   entregador: Object.freeze({
-    ler:      ['pedidos', 'perfis'],
-    escrever: ['pedidos'],
+    ler:      ['pedidos', 'ponto', 'perfis'],
+    escrever: ['pedidos', 'ponto'],
   }),
   }),
 
   TIPOS_MOVIMENTACAO: Object.freeze(['entrada','venda','avaria','ajuste','transferencia','cancelamento','inventario']),
   ROLES:              Object.freeze(['admin','adm','gerente','operador','entregador','pdv','colaborador','controlador','validador','analista']),
 });
+
+// FIX #5: helper para datas locais sem UTC drift
+function _localDateISO(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 const Utils = Object.freeze({
   formatCurrency(v) {
@@ -237,10 +247,10 @@ const Store = (() => {
      const cortaAudit  = new Date(); cortaAudit.setDate(cortaAudit.getDate() - 3);
      const cortaFin    = new Date(); cortaFin.setDate(cortaFin.getDate() - 7);
      const cortaMov    = new Date(); cortaMov.setDate(cortaMov.getDate() - 7);
-     const dtV = cortaVendas.toISOString().slice(0,10);
-     const dtA = cortaAudit.toISOString().slice(0,10);
-     const dtF = cortaFin.toISOString().slice(0,10);
-     const dtM = cortaMov.toISOString().slice(0,10);
+     const dtV = _localDateISO(cortaVendas) // FIX #5c;
+     const dtA = _localDateISO(cortaAudit) // FIX #5c;
+     const dtF = _localDateISO(cortaFin) // FIX #5c;
+     const dtM = _localDateISO(cortaMov) // FIX #5c;
 
      const purgeCol = (c, dtCorte, key) => {
        try {
@@ -393,7 +403,7 @@ const Store = (() => {
     const corte = (dias) => {
    const d = new Date();
    d.setDate(d.getDate() - dias);
-   return d.toISOString().slice(0, 10);
+   return _localDateISO(d) // FIX #5: data local, não UTC;
     };
 
     let purged = {};
@@ -618,7 +628,7 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios']
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios', 'ponto']
     : ['estoque', 'config', 'usuarios'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
@@ -663,25 +673,21 @@ const FirebaseService = (() => {
        const key = CONSTANTS.DB[col.toUpperCase()];
        if (!key) return;
 
-       // FIX [CRÍTICO]: onSnapshot sobrescrevia baixas de estoque aplicadas
-       // localmente (validador/controlador sem adminToken) antes do admin sincronizar.
-       // Merge inteligente por updatedAt — mantém a versão mais recente de cada
-       // produto; produtos só-locais (ainda não subidos pelo admin) são preservados.
+       // FIX [CRÍTICO]: Firebase sempre vence para produtos existentes.
+       // O guard hasPendingWrites (acima) já protege o aparelho que fez a escrita
+       // de sobrescrever sua própria transação pendente. Para qualquer outro
+       // aparelho recebendo mudança remota, o Firestore é fonte de verdade.
+       // A lógica anterior de "local vence se updatedAt mais recente" causava
+       // dessincronização: _movimentacaoLocal atualizava updatedAt localmente,
+       // fazendo o merge sempre preferir o valor desatualizado do localStorage.
        if (col === 'estoque' && Array.isArray(dados)) {
          const localArr = Store.getEstoque();
-         const localMap = new Map(localArr.map(p => [p.id, p]));
          const fbIds    = new Set(dados.map(p => p.id));
 
-         const merged = dados.map(fbProd => {
-           const local = localMap.get(fbProd.id);
-           if (!local) return fbProd;
-           const tsLocal = local.updatedAt || '';
-           const tsFB    = fbProd.updatedAt || '';
-           // Mantém o mais recente; em empate Firebase vence (fonte de verdade)
-           return tsFB >= tsLocal ? fbProd : local;
-         });
+         // Firebase sempre vence para produtos que ele conhece
+         const merged = [...dados];
 
-         // Produtos só no local (admin ainda não sincronizou)
+         // Preserva apenas produtos que existem só no local (ainda não sincronizados)
          localArr.forEach(p => { if (!fbIds.has(p.id)) merged.push(p); });
 
          try { localStorage.setItem(key, JSON.stringify(merged)); } catch(_) {}
@@ -740,7 +746,7 @@ const FirebaseService = (() => {
    console.info(`[Firebase] ✓ ${pendentes.length} venda(s) sincronizadas.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
-      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio']);
+      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
       const docData = { dados, ts: Utils.nowISO() };
       if (_adminToken && !_semAdminToken.has(colName)) docData.adminToken = _adminToken;
       await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
@@ -869,6 +875,7 @@ const FirebaseService = (() => {
   newDocRef,
   getBatch,
   serverTimestamp,
+  getDoc: (ref) => { if (!_ready) throw new Error('Firebase não inicializado'); return _fb.getDoc(ref); }, // FIX #3
   };
 })();
 
