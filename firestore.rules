@@ -76,14 +76,6 @@ service cloud.firestore {
       allow write: if autenticado() && docValido(request.resource.data);
     }
 
-    // ─── /ch_dados/ponto — qualquer autenticado pode escrever ───────
-    // Ponto é registrado por colaboradores sem adminToken.
-    // Controle de edição/cancelamento é feito no app (admin only).
-    match /ch_dados/ponto {
-      allow read:  if autenticado();
-      allow write: if autenticado() && docValido(request.resource.data);
-    }
-
     // ─── /ch_dados/perfis — qualquer autenticado pode ler, admin escreve ──
     match /ch_dados/perfis {
       allow read:  if autenticado();
