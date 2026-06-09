@@ -247,10 +247,10 @@ const Store = (() => {
      const cortaAudit  = new Date(); cortaAudit.setDate(cortaAudit.getDate() - 3);
      const cortaFin    = new Date(); cortaFin.setDate(cortaFin.getDate() - 7);
      const cortaMov    = new Date(); cortaMov.setDate(cortaMov.getDate() - 7);
-     const dtV = _localDateISO(cortaVendas) // FIX #5c;
-     const dtA = _localDateISO(cortaAudit) // FIX #5c;
-     const dtF = _localDateISO(cortaFin) // FIX #5c;
-     const dtM = _localDateISO(cortaMov) // FIX #5c;
+     const dtV = _localDateISO(cortaVendas); // FIX #5c
+     const dtA = _localDateISO(cortaAudit); // FIX #5c
+     const dtF = _localDateISO(cortaFin); // FIX #5c
+     const dtM = _localDateISO(cortaMov); // FIX #5c
 
      const purgeCol = (c, dtCorte, key) => {
        try {
@@ -403,7 +403,7 @@ const Store = (() => {
     const corte = (dias) => {
    const d = new Date();
    d.setDate(d.getDate() - dias);
-   return _localDateISO(d) // FIX #5: data local, não UTC;
+   return _localDateISO(d); // FIX #5: data local, não UTC
     };
 
     let purged = {};
