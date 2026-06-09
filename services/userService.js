@@ -191,20 +191,8 @@
   async function login(nome, senha) {
     let user = null;
 
-    // 0) Sincronizar usuários do Firestore antes de validar
-    // Garante que dispositivos novos ou sem cache local consigam autenticar
-    if (_loadUsers().length === 0) {
-      await syncUsers().catch(() => {});
-    }
-
     // 1) nome + senha (novo fluxo)
     if (nome && senha !== undefined && nome.trim()) {
-      user = await validarCredenciais(nome, senha);
-    }
-
-    // 1b) Se não achou localmente, tenta sync e revalida uma vez
-    if (!user && nome && senha !== undefined && nome.trim()) {
-      await syncUsers().catch(() => {});
       user = await validarCredenciais(nome, senha);
     }
 
