@@ -964,10 +964,34 @@ const SyncService = (() => {
         writeRaw(merged);
         console.info(`[Sync] Merge ${col}: +${novosDaNuvem.length} da nuvem.`);
       }
+    } else if (col === 'financeiro' || col === 'saidas' || col === 'movimentacoes') {
+      // FIX: financeiro/saidas/movimentacoes são append-only — NUNCA sobrescrever local com Firestore
+      // (causaria perda de lançamentos recém-criados que ainda não subiram ao Firestore)
+      const getLocal = col === 'financeiro'    ? () => Store.getFinanceiro()
+                     : col === 'saidas'        ? () => Store.getSaidas()
+                     : () => Store.getMovimentacoes();
+
+      const local    = getLocal();
+      const localIds = new Set(local.map(v => v.id).filter(Boolean));
+
+      // Só adiciona registros do Firestore que ainda não existem localmente
+      const novosDaNuvem = (dados || []).filter(v => v.id && !localIds.has(v.id));
+
+      if (novosDaNuvem.length > 0) {
+        const merged = [...novosDaNuvem, ...local];
+        const key = CONSTANTS.DB[col.toUpperCase()];
+        if (key) { try { localStorage.setItem(key, JSON.stringify(merged)); } catch(_) {} }
+        Store.invalidate(col);
+        console.info(`[Sync] Merge append-only ${col}: +${novosDaNuvem.length} da nuvem.`);
+      } else {
+        // Nada novo da nuvem — não toca o local
+        Store.invalidate(col);
+      }
+
     } else {
-   const key = CONSTANTS.DB[col.toUpperCase()];
-   if (key) { try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {} }
-   Store.invalidate(col);
+      const key = CONSTANTS.DB[col.toUpperCase()];
+      if (key) { try { localStorage.setItem(key, JSON.stringify(dados)); } catch(_) {} }
+      Store.invalidate(col);
     }
     EventBus.emit('store:updated', col);
     EventBus.emit(`store:${col}`);
