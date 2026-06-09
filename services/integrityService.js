@@ -661,10 +661,10 @@
       di = df = hoje;
     } else if (periodo === 'semana') {
       const d = new Date(); d.setDate(d.getDate() - 7);
-      di = _localDateISO(d) // FIX #5c; df = hoje;
+      di = _localDateISO(d); df = hoje; // FIX #5c
     } else if (periodo === 'mes') {
       const d = new Date(); d.setDate(1);
-      di = _localDateISO(d) // FIX #5c; df = hoje;
+      di = _localDateISO(d); df = hoje; // FIX #5c
     } else {
       di = df = hoje;
     }
@@ -680,7 +680,7 @@
   function getVendasSemMovimentacao(dias = 7) {
     const limite = new Date();
     limite.setDate(limite.getDate() - dias);
-    const di = _localDateISO(limite) // FIX #5c;
+    const di = _localDateISO(limite); // FIX #5c
 
     const vendas = Store.getVendas().filter(v => {
       const data = v.dataCurta || v.data?.slice(0, 10) || '';
