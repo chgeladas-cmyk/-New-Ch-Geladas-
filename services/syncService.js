@@ -41,8 +41,13 @@
   // ── Colapsar itens duplicados ────────────────────────────────────
   // Vendas NUNCA são colapsadas (cada venda é um documento único).
   // Outros módulos (estoque, config, fiado, etc.) sobrescrevem o pendente.
+  // FIX #2: coleções que NUNCA colapsam — cada registro é único e acumulativo.
+  // Colapsar saidas/financeiro/ponto apagava registros anteriores quando um novo
+  // era enfileirado antes do Firebase processar o anterior.
+  const _NUNCA_COLAPSAR = new Set(['vendas', 'saidas', 'financeiro', 'movimentacoes', 'ponto']);
+
   function _colapsar(q, acao, colecao, dados) {
-    if (colecao === 'vendas') return false; // FIX: vendas nunca colapsam
+    if (_NUNCA_COLAPSAR.has(colecao)) return false; // FIX #2: proteção ampliada
     const idx = q.findIndex(i =>
       i.status   === 'pendente' &&
       i.acao     === acao &&

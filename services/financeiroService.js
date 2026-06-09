@@ -34,6 +34,17 @@
   function _lancar({ tipo, categoria, descricao, valor, formaPgto = '', referencia = '', extra = {} }) {
     if (!valor || valor <= 0) return null;
 
+    // FIX #4: Idempotência — impede duplo lançamento para a mesma referência+tipo
+    if (referencia) {
+      const jaExiste = Store.getFinanceiro().some(
+        l => l.referencia === referencia && l.tipo === tipo
+      );
+      if (jaExiste) {
+        console.info(`[Financeiro] Lançamento ignorado — referencia "${referencia}" tipo "${tipo}" já existe`);
+        return null;
+      }
+    }
+
     const lancamento = {
       id:         Utils.generateId(),
       tipo,       // 'receita' | 'despesa' | 'estorno'

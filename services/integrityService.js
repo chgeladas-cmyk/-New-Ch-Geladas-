@@ -244,7 +244,10 @@
     tracer.resultado = resultado;
 
     // ── Caso 3: Baixa com falha total ────────────────────────────
-    if (!resultado.ok && resultado.itensProcessados === 0 && tracer.itensTotal > 0) {
+    // FIX-E2: localFallback=true significa que a baixa foi aplicada localmente
+    // (Firebase indisponível/quota) — NÃO fazer rollback nem bloquear a venda
+    if (!resultado.ok && resultado.itensProcessados === 0 && tracer.itensTotal > 0
+        && !resultado.localFallback) {
       const motivoFalha = resultado.erros?.join('; ') || 'Erro desconhecido';
 
       _log('CRITICO', venda.id, `Baixa de estoque FALHOU COMPLETAMENTE — ROLLBACK`, {
@@ -272,6 +275,16 @@
         erros:            resultado.erros,
         rollbackExecutado: true,
       };
+    }
+
+    // ── Caso 3b: Firebase falhou mas fallback local aplicado ──────
+    if (!resultado.ok && resultado.localFallback) {
+      _log('WARN', venda.id, `Firebase indisponível — baixa aplicada localmente. Reconciliação agendada.`, {
+        itensProcessados: resultado.itensProcessados,
+        erros: resultado.erros,
+      });
+      // Venda segue como concluída — estoque foi baixado localmente
+      // Não bloquear, não fazer rollback
     }
 
     // ── Caso 4: Baixa parcial (alguns itens falharam) ────────────
@@ -648,10 +661,10 @@
       di = df = hoje;
     } else if (periodo === 'semana') {
       const d = new Date(); d.setDate(d.getDate() - 7);
-      di = d.toISOString().slice(0, 10); df = hoje;
+      di = _localDateISO(d) // FIX #5c; df = hoje;
     } else if (periodo === 'mes') {
       const d = new Date(); d.setDate(1);
-      di = d.toISOString().slice(0, 10); df = hoje;
+      di = _localDateISO(d) // FIX #5c; df = hoje;
     } else {
       di = df = hoje;
     }
@@ -667,7 +680,7 @@
   function getVendasSemMovimentacao(dias = 7) {
     const limite = new Date();
     limite.setDate(limite.getDate() - dias);
-    const di = limite.toISOString().slice(0, 10);
+    const di = _localDateISO(limite) // FIX #5c;
 
     const vendas = Store.getVendas().filter(v => {
       const data = v.dataCurta || v.data?.slice(0, 10) || '';

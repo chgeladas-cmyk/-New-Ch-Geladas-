@@ -40,7 +40,7 @@
   function _diasAtras(n) {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    return _localDateISO(d); // FIX #5c
   }
 
   function _mesAtual() {
