@@ -376,10 +376,16 @@
     }
 
     // 3. Verifica lançamento financeiro (para vendas concluídas)
+    // FIX: aguarda até 900ms para o hook do financeiro processar antes de declarar divergência
     if (venda.status === 'concluida' || venda.status === 'validada') {
-      const lancamentos = Store.getFinanceiro().filter(
-        l => l.referencia === venda.id && l.tipo === 'receita'
-      );
+      let lancamentos = [];
+      for (let t = 0; t < 3; t++) {
+        lancamentos = Store.getFinanceiro().filter(
+          l => l.referencia === venda.id && l.tipo === 'receita'
+        );
+        if (lancamentos.length > 0) break;
+        await new Promise(r => setTimeout(r, 300));
+      }
       if (lancamentos.length === 0) {
         divergencias.push(`Venda sem lançamento financeiro correspondente`);
       } else if (lancamentos.length > 1) {
