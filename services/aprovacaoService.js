@@ -287,21 +287,25 @@
       console.info(`[AprovacaoService] Fiado efetivado → cliente ${vendaAtualizada._fiadoClienteId}`);
     }
 
-    // ── PASSO 6: Validação pós-venda ──────────────────────────────
+    // ── PASSO 6: Eventos (financeiro precisa registrar ANTES da validação pós-venda) ──
+    if (!_processandoLote) {
+      const vendaFinal = Store.getVendas().find(v => v.id === vendaId) || venda;
+      EventBus.emit('venda:finalizada', vendaFinal); // hook financeiro registra receita aqui
+      EventBus.emit('venda:validada', vendaFinal);
+    }
+
+    // ── PASSO 7: Validação pós-venda (após emit — financeiro já foi lançado) ──────
+    // FIX: era antes do emit → financeiro ainda não existia → falsa divergência
     if (IS?.validarIntegridadePosVenda) {
       const vendaFinal = Store.getVendas().find(v => v.id === vendaId);
       if (vendaFinal) {
-        IS.validarIntegridadePosVenda(vendaFinal).catch(e => {
-          console.error('[AprovacaoService] Erro na validação pós-venda:', e.message);
-        });
+        // Pequeno delay para garantir que hooks síncronos do EventBus terminaram
+        setTimeout(() => {
+          IS.validarIntegridadePosVenda(vendaFinal).catch(e => {
+            console.error('[AprovacaoService] Erro na validação pós-venda:', e.message);
+          });
+        }, 200);
       }
-    }
-
-    // ── PASSO 7: Eventos ──────────────────────────────────────────
-    if (!_processandoLote) {
-      const vendaFinal = Store.getVendas().find(v => v.id === vendaId) || venda;
-      EventBus.emit('venda:finalizada', vendaFinal); // ← hook financeiro registra receita aqui
-      EventBus.emit('venda:validada', vendaFinal);
     }
 
     console.info(`[AprovacaoService] ✓ Venda ${vendaId} validada (baixa: ${baixaOk ? 'OK' : 'PARCIAL'})`);
