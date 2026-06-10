@@ -309,10 +309,10 @@
           // Se produto não estava no FB, adiciona
           if (!prodFB) novosDados.push({ ...prod, qtdUn: novaQtd, estoqueAtual: novaQtd });
 
-          tx.set(estoqueRef, {
-            dados: novosDados,
-            ts:    Utils.nowISO(),
-          });
+          const _tkn = FirebaseService.getAdminToken?.();
+          const _estoqueDoc = { dados: novosDados, ts: Utils.nowISO() };
+          if (_tkn) _estoqueDoc.adminToken = _tkn;
+          tx.set(estoqueRef, _estoqueDoc);
 
           // Também salva a movimentação como documento individual
           const movRef = FirebaseService.newDocRef('movimentacoes');
@@ -515,7 +515,11 @@
           }
 
           // Escreve o array completo atualizado em uma única operação
-          tx.set(estoqueRef, { dados: novosDados, ts: Utils.nowISO() });
+          // FIX: inclui adminToken para passar na regra do Firestore (mesma lógica do salvar())
+          const _adminToken = FirebaseService.getAdminToken?.();
+          const estoqueDoc = { dados: novosDados, ts: Utils.nowISO() };
+          if (_adminToken) estoqueDoc.adminToken = _adminToken;
+          tx.set(estoqueRef, estoqueDoc);
         });
 
         // Atualiza Store local com os valores confirmados pelo Firestore
