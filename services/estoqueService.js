@@ -254,6 +254,11 @@
 
     const estoqueAntes = prod.estoqueAtual ?? prod.qtdUn ?? 0;
 
+    // FIX: declarado no escopo da função para que o log de movimentação local
+    // use o valor real confirmado pelo Firestore (não o local possivelmente desatualizado).
+    // Preenchido dentro da Transaction; permanece null se offline (usa estoqueDepois).
+    let _novaQtdFB = null;
+
     // _forceDelta permite ajuste bidirecional (positivo ou negativo)
     // Quando não passado, calcula pelo tipo: saídas subtraem, entradas somam
     let delta;
@@ -264,6 +269,8 @@
       delta = eSaida ? -Math.abs(quantidade) : Math.abs(quantidade);
     }
 
+    // estoqueDepois LOCAL — usado apenas como fallback (offline/sem adminToken).
+    // No modo online com Transaction, o valor real vem do Firestore (novaQtdFB).
     const estoqueDepois = Math.max(0, estoqueAntes + delta);
     const eSaida = delta < 0; // recalcula para validação de estoque insuficiente
 
@@ -290,6 +297,7 @@
           }
 
           const novaQtd = Math.max(0, qtdAtualFB + delta);
+          _novaQtdFB = novaQtd; // FIX: captura para uso no Store local e no log abaixo
 
           // Atualiza o produto no array dentro do documento
           const novosDados = dadosFB.map(p =>
@@ -326,14 +334,17 @@
           });
         });
 
-        console.info(`[Estoque] ✓ Transação ${tipo}: ${prod.nome} (${estoqueAntes}→${estoqueDepois})`);
+        // FIX: usa _novaQtdFB (valor confirmado pelo Firestore) em vez de
+        // estoqueDepois (calculado com localStorage, potencialmente desatualizado).
+        const qtdConfirmada = _novaQtdFB ?? estoqueDepois;
+        console.info(`[Estoque] ✓ Transação ${tipo}: ${prod.nome} (FB:${_novaQtdFB ?? '?'} | local era:${estoqueAntes})`);
 
-        // Atualiza Store local com o valor calculado
+        // Atualiza Store local com o valor CONFIRMADO pelo Firestore
         Store.mutateEstoque(estoque => {
           const p = estoque.find(p => p.id === produtoId);
           if (p) {
-            p.qtdUn = estoqueDepois;
-            p.estoqueAtual = estoqueDepois;
+            p.qtdUn = qtdConfirmada;
+            p.estoqueAtual = qtdConfirmada;
             p.updatedAt = Utils.nowISO();
           }
         });
@@ -360,7 +371,7 @@
       tipo,
       quantidade:    delta,
       estoqueAntes,
-      estoqueDepois,
+      estoqueDepois: _novaQtdFB ?? estoqueDepois, // FIX: usa valor confirmado do Firestore quando disponível
       origem,
       operador:      operador || _usuario(),
       observacao,
