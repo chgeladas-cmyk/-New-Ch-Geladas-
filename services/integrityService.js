@@ -34,6 +34,18 @@
 (function () {
   const { Store, AuthService, Utils, EventBus, FirebaseService } = window.CH;
 
+  /**
+   * Converte um objeto Date para string 'YYYY-MM-DD' no timezone local.
+   * Utils.todayISO() usa UTC (toISOString), o que causa off-by-one no UTC-3.
+   * Esta função usa getFullYear/getMonth/getDate (valores locais).
+   */
+  function _localDateISO(d) {
+    const y  = d.getFullYear();
+    const m  = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
+
   // ── Constantes ───────────────────────────────────────────────────
   const _LOG_KEY          = 'CH_INTEGRITY_LOG';
   const _BLOQUEIOS_KEY    = 'CH_VENDAS_BLOQUEADAS';
