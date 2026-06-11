@@ -515,22 +515,15 @@ function nowTime() { return _Utils.nowTime(); }
 
 function fmt(v) { return 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
-// FIX: _dataRefHoje é fixada no momento em que "hoje" é selecionado
-// (ou no carregamento da página). Não muda com a virada da meia-noite
-// enquanto a página estiver aberta — evita que os registros "somam"
-// quando o dia vira e o render é acionado pelo store.
-let _dataRefHoje = hoje();
-
 function getRange(per) {
   const d = hoje();
-  if (per === 'hoje')   return { de: _dataRefHoje, ate: _dataRefHoje };
+  if (per === 'hoje')   return { de: d, ate: d };
   if (per === 'semana') {
-    // Semana que contém hoje (dom→sab)
-    const dt  = new Date(d + 'T12:00:00');
-    const dom = new Date(dt); dom.setDate(dt.getDate() - dt.getDay());
-    const sab = new Date(dom); sab.setDate(dom.getDate() + 6);
-    const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-    return { de: iso(dom), ate: iso(sab) };
+    const dt = new Date(d + 'T00:00:00');
+    const day = dt.getDay(); // 0=dom
+    const lunes = new Date(dt); lunes.setDate(dt.getDate() - day);
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+    return { de: lunes.toISOString().slice(0,10), ate: domingo.toISOString().slice(0,10) };
   }
   if (per === 'mes') {
     const m = d.slice(0,7);
@@ -594,23 +587,18 @@ function mudarAba(aba, btn) {
 
 /* ═══ PERÍODO ═══ */
 function setPeriodo(per, btn) {
-  // FIX: ao clicar "Hoje" explicitamente, atualiza a data de referência
-  // para o dia atual. Assim o usuário pode "avançar" para o dia novo.
-  if (per === 'hoje') _dataRefHoje = hoje();
   _periodo = per;
   document.querySelectorAll('[data-per]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderDashboard();
 }
 function setPeriodo2(per, btn) {
-  if (per === 'hoje') _dataRefHoje = hoje();
   _periodo2 = per;
   document.querySelectorAll('[data-per2]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderHistorico();
 }
 function setPeriodo3(per, btn) {
-  if (per === 'hoje') _dataRefHoje = hoje();
   _periodo3 = per;
   document.querySelectorAll('[data-per3]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
