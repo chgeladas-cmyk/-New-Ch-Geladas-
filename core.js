@@ -109,7 +109,11 @@ const Utils = Object.freeze({
     style: 'currency', currency: 'BRL', ...CONSTANTS.CURRENCY,
   }).format(Number(v) || 0);
   },
-  todayISO()   { return new Date().toISOString().slice(0, 10); },
+  todayISO()   {
+    const d = new Date();
+    const tz = d.getTimezoneOffset() * 60000;
+    return new Date(d - tz).toISOString().slice(0, 10);
+  },
   today()      { return new Date().toLocaleDateString('pt-BR'); },
   nowTime()    { return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); },
   nowFull()    { return new Date().toLocaleString('pt-BR'); },
@@ -234,10 +238,11 @@ const Store = (() => {
      const cortaAudit  = new Date(); cortaAudit.setDate(cortaAudit.getDate() - 3);
      const cortaFin    = new Date(); cortaFin.setDate(cortaFin.getDate() - 7);
      const cortaMov    = new Date(); cortaMov.setDate(cortaMov.getDate() - 7);
-     const dtV = cortaVendas.toISOString().slice(0,10);
-     const dtA = cortaAudit.toISOString().slice(0,10);
-     const dtF = cortaFin.toISOString().slice(0,10);
-     const dtM = cortaMov.toISOString().slice(0,10);
+     const _local = (dt) => { const tz = dt.getTimezoneOffset() * 60000; return new Date(dt - tz).toISOString().slice(0,10); };
+     const dtV = _local(cortaVendas);
+     const dtA = _local(cortaAudit);
+     const dtF = _local(cortaFin);
+     const dtM = _local(cortaMov);
 
      const purgeCol = (c, dtCorte, key) => {
        try {
@@ -390,7 +395,8 @@ const Store = (() => {
     const corte = (dias) => {
    const d = new Date();
    d.setDate(d.getDate() - dias);
-   return d.toISOString().slice(0, 10);
+   const tz = d.getTimezoneOffset() * 60000;
+   return new Date(d - tz).toISOString().slice(0, 10);
     };
 
     let purged = {};
