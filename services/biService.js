@@ -40,7 +40,8 @@
   function _diasAtras(n) {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    const tz = d.getTimezoneOffset() * 60000;
+    return new Date(d - tz).toISOString().slice(0, 10);
   }
 
   function _mesAtual() {
