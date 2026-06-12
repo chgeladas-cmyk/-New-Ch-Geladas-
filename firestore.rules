@@ -38,7 +38,7 @@ service cloud.firestore {
     function temAdminToken(data) {
       return data.keys().hasAny(['adminToken'])
           && data.adminToken is string
-          && data.adminToken.size() >= 16;
+          && data.adminToken.size() == 64; // FIX #6: SHA-256 tem exatamente 64 chars
     }
 
     function vendaValida(data) {
@@ -72,6 +72,14 @@ service cloud.firestore {
 
     // ─── /ch_dados/cambio — qualquer autenticado pode escrever ──────
     match /ch_dados/cambio {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /ch_dados/ponto — qualquer autenticado pode escrever ───────
+    // Ponto é registrado por colaboradores sem adminToken.
+    // Controle de edição/cancelamento é feito no app (admin only).
+    match /ch_dados/ponto {
       allow read:  if autenticado();
       allow write: if autenticado() && docValido(request.resource.data);
     }
@@ -143,23 +151,31 @@ service cloud.firestore {
     // (A regra geral ja cobre, mas deixamos explícito para clareza.)
 
     // ─── SaaS: empresas, usuários, convites ─────────────────────────
+    // FIX #7: Isolamento multi-tenant SaaS
+    // Cada empresa só acessa os próprios dados.
+    // Requer custom claim 'empresaId' no Firebase Auth (setear via Cloud Function no login).
     match /saas_empresas/{empresaId} {
-      allow read:  if autenticado();
-      allow write: if autenticado();
+      allow read:  if autenticado() && request.auth.token.empresaId == empresaId;
+      allow write: if autenticado() && request.auth.token.empresaId == empresaId
+                   && request.auth.token.role == 'dono';
     }
 
     match /saas_usuarios/{uid} {
-      allow read:  if autenticado();
-      allow write: if autenticado();
+      // Usuário lê/edita apenas próprio perfil; dono lê todos da sua empresa
+      allow read:  if autenticado() && (request.auth.uid == uid
+                   || request.auth.token.role == 'dono');
+      allow write: if autenticado() && request.auth.uid == uid;
     }
 
     match /saas_convites/{codigo} {
       allow read:  if autenticado();
-      allow write: if autenticado();
+      allow write: if autenticado() && request.auth.token.role == 'dono';
     }
 
     match /saas_dados/{empresaId}/{colecao}/{docId} {
-      allow read, write: if autenticado();
+      // FIX #7: isolamento cross-tenant — só acessa dados da própria empresa
+      allow read, write: if autenticado()
+                         && request.auth.token.empresaId == empresaId;
     }
 
     // ─── /ch_tripwire/{docId} — Log imutável de intrusões ────────────
