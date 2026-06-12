@@ -51,12 +51,12 @@ const CONSTANTS = Object.freeze({
   MAX_SAIDAS:        5_000,
   MAX_SYNC_QUEUE:    500,
 
-  // FIX #9: Hashes hardcoded removidos — vulneráveis a rainbow table (a665a4 = SHA256('123')).
-  // Os hashes DEVEM ser configurados via cfg.pinHashAdmin / cfg.pinHashPdv em runtime
-  // (gravados no Firestore por um admin autenticado, nunca no código-fonte).
+  // Hashes de emergência (fallback legado): SHA256('001') e SHA256('123').
+  // Prioridade: cfg.pinHashAdmin > CH_USERS > estes hashes.
+  // Servem apenas para recuperação quando CH_CONFIG.pinHashAdmin não está configurado.
   PIN_HASH: Object.freeze({
-    ADMIN: null, // configurar via cfg.pinHashAdmin
-    PDV:   null, // configurar via cfg.pinHashPdv
+    ADMIN: '7a3e6b16cb75f48fb897eff3ae732f3154f6d203b53f33660f01b4c3b6bc2df9', // SHA256('001')
+    PDV:   'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', // SHA256('123')
   }),
 
   PERMISSOES: Object.freeze({
