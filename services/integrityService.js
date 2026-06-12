@@ -34,18 +34,6 @@
 (function () {
   const { Store, AuthService, Utils, EventBus, FirebaseService } = window.CH;
 
-  /**
-   * Converte um objeto Date para string 'YYYY-MM-DD' no timezone local.
-   * Utils.todayISO() usa UTC (toISOString), o que causa off-by-one no UTC-3.
-   * Esta função usa getFullYear/getMonth/getDate (valores locais).
-   */
-  function _localDateISO(d) {
-    const y  = d.getFullYear();
-    const m  = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${dd}`;
-  }
-
   // ── Constantes ───────────────────────────────────────────────────
   const _LOG_KEY          = 'CH_INTEGRITY_LOG';
   const _BLOQUEIOS_KEY    = 'CH_VENDAS_BLOQUEADAS';
@@ -387,20 +375,17 @@
       }
     }
 
-    // 3. Verificação financeira REMOVIDA intencionalmente.
-    //
-    // CAUSA RAIZ (diagnosticada): SyncService.pull() sobrescreve Store.financeiro
-    // com dados do Firestore logo após o PASSO 6 (emit venda:finalizada → registrarReceita).
-    // Isso faz Store.getFinanceiro() retornar vazio mesmo com o lançamento recém-criado,
-    // gerando falso-positivo de "Venda sem lançamento financeiro" em 100% das validações.
-    //
-    // Por que é seguro remover:
-    // - financeiroService tem idempotência (FIX #4): não cria duplicatas.
-    // - Se o pull sobrescreveu o lançamento local, o SyncQueue vai reenviá-lo ao Firestore.
-    // - A reconciliarCompleto() (painel monitor) já detecta divergências financeiras
-    //   de forma confiável, pois roda de forma isolada sem race condition com pull().
-    //
-    // Manter esta checagem aqui causa bloqueio indevido de 100% das vendas validadas.
+    // 3. Verifica lançamento financeiro (para vendas concluídas)
+    if (venda.status === 'concluida' || venda.status === 'validada') {
+      const lancamentos = Store.getFinanceiro().filter(
+        l => l.referencia === venda.id && l.tipo === 'receita'
+      );
+      if (lancamentos.length === 0) {
+        divergencias.push(`Venda sem lançamento financeiro correspondente`);
+      } else if (lancamentos.length > 1) {
+        divergencias.push(`Venda com ${lancamentos.length} lançamentos financeiros (duplicata suspeita)`);
+      }
+    }
 
     if (divergencias.length > 0) {
       _log('CRITICO', venda.id, `DIVERGÊNCIAS PÓS-VENDA DETECTADAS`, { divergencias });
@@ -704,14 +689,6 @@
 
     const resultado = [];
     for (const venda of vendas) {
-      // FIX: ignorar vendas onde TODOS os itens são sem controle de estoque
-      // (ex: cigarros com controlaEstoque=false nunca geram movimentacao)
-      const itensComControle = (venda.itens || []).filter(item => {
-        const p = window.CH.EstoqueService?.getProduto?.(item.prodId);
-        return !p || p.controlaEstoque !== false;
-      });
-      if (itensComControle.length === 0) continue;
-
       const movs = Store.getMovimentacoes().filter(
         m => m.origem === `venda:${venda.id}` && m.tipo === 'venda'
       );
@@ -722,7 +699,7 @@
           data:      venda.dataCurta,
           total:     venda.total,
           operador:  venda.operador,
-          itens:     itensComControle.length,
+          itens:     venda.itens?.length || 0,
           severity:  'CRITICO',
         });
       }
@@ -846,41 +823,11 @@
   };
 
   // ── Hooks automáticos ────────────────────────────────────────────
-  // Varredura de startup — executa UMA VEZ por sessão
-  // FIX: firebase:ready pode disparar várias vezes (subscribeRealtime), gerando logs duplicados
-  let _startupExecutado = false;
+  // Varredura automática de integridade ao iniciar o sistema
   EventBus.on('firebase:ready', async () => {
-    if (_startupExecutado) return;
-    _startupExecutado = true;
     try {
-      // Aguarda 5s para Store + movimentacoes sincronizarem do Firestore
-      await new Promise(r => setTimeout(r, 5000));
-
-      // FIX: Limpar bloqueios de vendas já finalizadas (status terminal)
-      // Evita que vendas antigas bloqueadas por falso-positivo fiquem presas
-      try {
-        const bloqueios = JSON.parse(localStorage.getItem(_BLOQUEIOS_KEY) || '{}');
-        const vendas    = Store.getVendas();
-        let   limpou    = false;
-        for (const vendaId of Object.keys(bloqueios)) {
-          const v = vendas.find(v => v.id === vendaId);
-          // Remove bloqueio se venda não existe mais ou já está em status terminal
-          if (!v || STATUS_TERMINAIS.includes(v.status)) {
-            delete bloqueios[vendaId];
-            limpou = true;
-          }
-        }
-        if (limpou) localStorage.setItem(_BLOQUEIOS_KEY, JSON.stringify(bloqueios));
-      } catch (_) {}
-
-      // FIX: só verifica vendas dos ÚLTIMOS 2 DIAS com movimentacoes no Store
-      // Usa âncora: se não há movimentacoes no Store, pula (sistema recém-inicializado)
-      const totalMovs = Store.getMovimentacoes().length;
-      if (totalMovs === 0) {
-        console.info('[IntegrityService] Startup: sem movimentacoes no Store — varredura adiada');
-        return;
-      }
-
+      // Aguarda 3 segundos para deixar o Store carregar dados do Firestore
+      await new Promise(r => setTimeout(r, 3000));
       const vendasOrfas = getVendasSemMovimentacao(1);
       if (vendasOrfas.length > 0) {
         _log('CRITICO', null, `STARTUP: ${vendasOrfas.length} venda(s) sem baixa detectada(s)`, {

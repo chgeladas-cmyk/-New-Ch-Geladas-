@@ -41,8 +41,13 @@
   // ── Colapsar itens duplicados ────────────────────────────────────
   // Vendas NUNCA são colapsadas (cada venda é um documento único).
   // Outros módulos (estoque, config, fiado, etc.) sobrescrevem o pendente.
+  // FIX #2: coleções que NUNCA colapsam — cada registro é único e acumulativo.
+  // Colapsar saidas/financeiro/ponto apagava registros anteriores quando um novo
+  // era enfileirado antes do Firebase processar o anterior.
+  const _NUNCA_COLAPSAR = new Set(['vendas', 'saidas', 'financeiro', 'movimentacoes', 'ponto']);
+
   function _colapsar(q, acao, colecao, dados) {
-    if (colecao === 'vendas') return false; // FIX: vendas nunca colapsam
+    if (_NUNCA_COLAPSAR.has(colecao)) return false; // FIX #2: proteção ampliada
     const idx = q.findIndex(i =>
       i.status   === 'pendente' &&
       i.acao     === acao &&
@@ -174,7 +179,23 @@
         }
       }
 
-      // Remove concluídos e erros definitivos
+      // FIX: Remove concluídos. Erros definitivos são logados antes de descartar
+      // para garantir rastreabilidade — antes desapareciam silenciosamente.
+      const errosDefinitivos = q.filter(i => i.status === 'erro');
+      if (errosDefinitivos.length) {
+        errosDefinitivos.forEach(i => {
+          console.error(
+            `[SyncQueue] ✗ DESCARTADO após ${MAX_RETRY} tentativas — ${i.colecao} (${i.acao}) | último erro: ${i.ultimoErro}`
+          );
+          EventBus.emit('sync:falha-definitiva', { colecao: i.colecao, acao: i.acao, erro: i.ultimoErro, item: i });
+        });
+        // Notifica UI
+        window.CH?.UIService?.showToast?.(
+          `${errosDefinitivos.length} item(ns) não sincronizado(s)`,
+          'Verifique a conexão e use "Reenviar erros" no monitor de sync.',
+          'error'
+        );
+      }
       const finalQueue = q.filter(i => i.status === 'pendente');
       _saveQueue(finalQueue);
 
