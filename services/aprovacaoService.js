@@ -287,21 +287,29 @@
       console.info(`[AprovacaoService] Fiado efetivado → cliente ${vendaAtualizada._fiadoClienteId}`);
     }
 
-    // ── PASSO 6: Validação pós-venda ──────────────────────────────
-    if (IS?.validarIntegridadePosVenda) {
-      const vendaFinal = Store.getVendas().find(v => v.id === vendaId);
-      if (vendaFinal) {
-        IS.validarIntegridadePosVenda(vendaFinal).catch(e => {
-          console.error('[AprovacaoService] Erro na validação pós-venda:', e.message);
-        });
-      }
-    }
-
-    // ── PASSO 7: Eventos ──────────────────────────────────────────
+    // ── PASSO 6: Eventos — ANTES da validação de integridade ────────
+    // FIX: o evento 'venda:finalizada' registra a receita financeira.
+    // A verificação pós-venda precisa encontrar esse lançamento → deve vir depois.
     if (!_processandoLote) {
       const vendaFinal = Store.getVendas().find(v => v.id === vendaId) || venda;
       EventBus.emit('venda:finalizada', vendaFinal); // ← hook financeiro registra receita aqui
       EventBus.emit('venda:validada', vendaFinal);
+    }
+
+    // ── PASSO 7: Validação pós-venda (após eventos/financeiro) ──────
+    // FIX: aguarda microtask para garantir que o lançamento financeiro
+    // do evento 'venda:finalizada' já foi persistido no Store antes de verificar.
+    if (IS?.validarIntegridadePosVenda) {
+      const capturedId = vendaId;
+      setTimeout(async () => {
+        const vendaFinal = Store.getVendas().find(v => v.id === capturedId);
+        if (!vendaFinal) return;
+        try {
+          await IS.validarIntegridadePosVenda(vendaFinal);
+        } catch (e) {
+          console.error('[AprovacaoService] Erro na validação pós-venda:', e.message);
+        }
+      }, 300); // 300ms garante que o Store foi atualizado pelo handler do evento
     }
 
     console.info(`[AprovacaoService] ✓ Venda ${vendaId} validada (baixa: ${baixaOk ? 'OK' : 'PARCIAL'})`);
