@@ -92,13 +92,27 @@
       if (!fb?.isReady) return;
       const remote = await fb.ler('usuarios');
       if (!Array.isArray(remote) || remote.length === 0) return;
-      const local  = _loadUsers();
-      const merged = [...remote];
+      const local = _loadUsers();
+
+      // Merge: remoto é base, mas local prevalece quando tem senhaHash válido
+      // (evita sobrescrever credenciais com registros antigos sem hash do Firestore)
+      const merged = remote.map(r => {
+        const loc = local.find(u => u.id === r.id);
+        if (!loc) return r;
+        // Local tem credencial válida → preserva o hash local, mescla demais campos
+        const temHashLocal = loc.senhaHash || loc.pinHash;
+        if (temHashLocal) {
+          return { ...r, ...loc }; // local sobrepõe remoto (credencial local é fonte de verdade)
+        }
+        // Remoto tem hash e local não → usa remoto
+        return (r.senhaHash || r.pinHash) ? r : { ...r, ...loc };
+      });
+      // Usuários que só existem no local (criados offline)
       for (const u of local) {
         if (!merged.find(r => r.id === u.id)) merged.push(u);
       }
       _saveUsers(merged);
-      console.info('[UserService] ' + merged.length + ' usuario(s) carregado(s) do Firestore.');
+      console.info('[UserService] ' + merged.length + ' usuario(s) sincronizado(s) (local prevalece em credenciais).');
     } catch(e) {
       console.warn('[UserService] syncUsers falhou:', e.message);
     }
@@ -179,7 +193,17 @@
     const hash  = await CryptoService.sha256(String(pin).trim());
     const users = _loadUsers();
     const user  = users.find(u => u.ativo && (u.senhaHash === hash || u.pinHash === hash));
-    if (user) return { id: user.id, nome: user.nome, role: user.role };
+    if (user) {
+      // Migração silenciosa: pinHash legado → senhaHash
+      if (user.pinHash && !user.senhaHash) {
+        user.senhaHash = user.pinHash;
+        delete user.pinHash;
+        _saveUsers(users);
+        _pushFirebase(users).catch(() => {});
+        console.info('[UserService] pinHash migrado para senhaHash:', user.nome);
+      }
+      return { id: user.id, nome: user.nome, role: user.role };
+    }
     const legacyRole = await window.CH.CryptoService.validatePin(pin);
     if (legacyRole) {
       return { id: 'legacy', nome: legacyRole === 'admin' ? 'Administrador' : 'Colaborador', role: legacyRole };
