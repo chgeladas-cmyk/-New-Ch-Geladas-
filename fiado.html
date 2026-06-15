@@ -759,7 +759,7 @@ function _renderCompras(c) {
     return '<div class="compra-vazio">Nenhuma compra registrada</div>';
   }
 
-  const totalGeral = tudo.reduce((s, v) => s + (v.total || 0), 0);
+  const totalGeral = tudo.reduce((s, v) => s + (v.status==='cancelada'?0:(v.total || 0)), 0);
 
   const blocos = tudo.map((v, idx) => {
     const dt       = v.criadoEm ? new Date(v.criadoEm) : null;
@@ -770,6 +770,7 @@ function _renderCompras(c) {
       aprovada: ['cs-apr', '✅ Aprovada'],
       concluida:['cs-ok',  '✓ Concluída'],
       rejeitada:['cs-rej', '❌ Rejeitada'],
+      cancelada:['cs-rej', '✗ Cancelada'],
     };
     const [stCls, stTxt] = stMap[v.status] || stMap['concluida'];
 
