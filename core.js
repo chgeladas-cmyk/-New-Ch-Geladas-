@@ -586,6 +586,127 @@ const FirebaseService = (() => {
   let _ready = false, _adminToken = null;
   let _unsubscribers = [];
 
+  // ───────────────────────────────────────────────────────────────────
+  // LEADER-ELECTION ENTRE ABAS (mesma origem/dispositivo).
+  // Hoje, toda aba/página que loga chama subscribeRealtime() e abre até
+  // 10 onSnapshot (9 docs + 1 query). Com várias abas abertas no MESMO
+  // dispositivo isso multiplica leituras sem necessidade — só uma aba
+  // precisa manter a conexão viva; as demais recebem via localStorage
+  // (que já é compartilhado nativamente entre abas da mesma origem).
+  // IMPORTANTE: isto NÃO reduz custo entre dispositivos diferentes —
+  // cada dispositivo é uma conexão Firestore independente, sem
+  // transporte compartilhado entre eles (BroadcastChannel só funciona
+  // dentro do mesmo navegador/perfil).
+  // ───────────────────────────────────────────────────────────────────
+  const _rtSupported  = typeof BroadcastChannel !== 'undefined';
+  const _rtTabId       = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const _rtHeartbeatMs = 4000;
+  const _rtStaleMs     = 10000;
+  let   _rtRole          = null;
+  let   _rtIsLeader      = false;
+  let   _rtChannel       = null;
+  let   _rtHeartbeatTimer= null;
+  let   _rtWatchTimer    = null;
+  let   _rtBridgeBound   = false;
+  let   _rtUnloadBound   = false;
+  const _rtKeyToCol      = {};
+
+  function _rtLeaderKey(role) { return `CH_RT_LEADER_${role}`; }
+
+  function _rtReadLeader(role) {
+    try { return JSON.parse(localStorage.getItem(_rtLeaderKey(role)) || 'null'); }
+    catch(_) { return null; }
+  }
+  function _rtWriteLeader(role, entry) {
+    try { localStorage.setItem(_rtLeaderKey(role), JSON.stringify(entry)); } catch(_) {}
+  }
+  function _rtClearLeader(role) {
+    try { localStorage.removeItem(_rtLeaderKey(role)); } catch(_) {}
+  }
+  function _rtStopTimers() {
+    if (_rtHeartbeatTimer) { clearInterval(_rtHeartbeatTimer); _rtHeartbeatTimer = null; }
+    if (_rtWatchTimer)     { clearInterval(_rtWatchTimer);     _rtWatchTimer     = null; }
+  }
+  function _rtStepDown(role) {
+    if (!role) return;
+    _rtStopTimers();
+    const cur = _rtReadLeader(role);
+    if (cur?.tabId === _rtTabId) _rtClearLeader(role);
+    try { _rtChannel?.postMessage({ type:'stepdown', role, tabId:_rtTabId }); } catch(_) {}
+    try { _rtChannel?.close(); } catch(_) {}
+    _rtChannel = null;
+    if (_rtIsLeader) { _unsubscribers.forEach(fn => { try { fn(); } catch(_) {} }); _unsubscribers = []; }
+    _rtIsLeader = false;
+  }
+  function _rtStartHeartbeat(role) {
+    _rtStopTimers();
+    _rtWriteLeader(role, { tabId:_rtTabId, ts:Date.now() });
+    _rtHeartbeatTimer = setInterval(() => _rtWriteLeader(role, { tabId:_rtTabId, ts:Date.now() }), _rtHeartbeatMs);
+  }
+  function _rtStartFollowerWatch(role) {
+    _rtStopTimers();
+    _rtWatchTimer = setInterval(() => {
+      const cur = _rtReadLeader(role);
+      if (!cur || (Date.now() - cur.ts) > _rtStaleMs) _rtTryBecomeLeader(role);
+    }, _rtHeartbeatMs + 1000);
+  }
+  function _rtTryBecomeLeader(role) {
+    _rtWriteLeader(role, { tabId:_rtTabId, ts:Date.now() });
+    setTimeout(() => {
+      const cur = _rtReadLeader(role);
+      if (cur?.tabId === _rtTabId) {
+        _rtIsLeader = true;
+        console.info('[RT-Leader] ✓ Esta aba assumiu liderança realtime:', role);
+        _rtStartHeartbeat(role);
+        _attachRealtimeListeners();
+      } else {
+        _rtIsLeader = false;
+        _rtStartFollowerWatch(role);
+      }
+    }, 80 + Math.floor(Math.random() * 120)); // jitter evita duas abas ganharem ao mesmo tempo
+  }
+  function _rtColForKey(key) {
+    if (_rtKeyToCol[key]) return _rtKeyToCol[key];
+    for (const col of ['estoque','config','fiado','comandas','pedidos','saidas','financeiro','ponto']) {
+      if (CONSTANTS.DB[col.toUpperCase()] === key) { _rtKeyToCol[key] = col; return col; }
+    }
+    return null;
+  }
+  function _rtBindStorageBridge() {
+    if (_rtBridgeBound) return;
+    _rtBridgeBound = true;
+    // Abas seguidoras reagem aos dados que a aba líder já grava no
+    // localStorage (compartilhado nativamente entre abas da mesma
+    // origem) em vez de abrir seus próprios listeners do Firestore.
+    window.addEventListener('storage', e => {
+      if (_rtIsLeader || !e.key) return;
+      if (e.key === CONSTANTS.DB.VENDAS) {
+        Store.invalidate('vendas');
+        EventBus.emit('store:updated', 'vendas');
+        EventBus.emit('store:vendas');
+        EventBus.emit('sync:ok', 'vendas');
+        return;
+      }
+      if (e.key === 'CH_USERS') {
+        try { EventBus.emit('usuarios:atualizados', JSON.parse(e.newValue || '[]')); } catch(_) {}
+        return;
+      }
+      const col = _rtColForKey(e.key);
+      if (!col) return;
+      Store.invalidate(col);
+      EventBus.emit('store:updated', col);
+      EventBus.emit(`store:${col}`);
+      EventBus.emit('sync:ok', col);
+    });
+  }
+  function _rtBindUnload() {
+    if (_rtUnloadBound) return;
+    _rtUnloadBound = true;
+    // Handoff rápido: ao fechar a aba líder, avisa as seguidoras em vez
+    // de esperar o timeout de heartbeat (~10s) para eleger outra.
+    window.addEventListener('pagehide', () => _rtStepDown(_rtRole));
+  }
+
   async function init() {
   if (_ready) return true;
   if (!CONFIG.apiKey) { console.info('[Firebase] Sem config — offline.'); return false; }
@@ -621,7 +742,7 @@ const FirebaseService = (() => {
   }
   }
 
-  function _subscribeRealtime() {
+  function _attachRealtimeListeners() {
   _unsubscribers.forEach(fn => { try { fn(); } catch(_) {} });
   _unsubscribers = [];
   const role = AuthService.getRole();
@@ -709,6 +830,45 @@ const FirebaseService = (() => {
    _unsubscribers.push(unsub);
     } catch(e) { console.warn('[RT] subscribe falhou:', col, e.message); }
   });
+  }
+
+  // Ponto de entrada público (chamado por init() e pelas páginas via
+  // FirebaseService.subscribeRealtime()). Decide se esta aba deve abrir
+  // os listeners reais do Firestore (líder) ou apenas escutar os dados
+  // que outra aba já está gravando no localStorage (seguidora).
+  function _subscribeRealtime() {
+  const role = AuthService.getRole();
+  if (!role || !_db || !_fb) return;
+
+  if (!_rtSupported) { _attachRealtimeListeners(); return; } // sem BroadcastChannel: comportamento de sempre
+
+  if (_rtRole && _rtRole !== role) _rtStepDown(_rtRole); // trocou de papel na mesma aba
+  _rtRole = role;
+  _rtBindStorageBridge();
+  _rtBindUnload();
+
+  if (!_rtChannel) {
+    try {
+      _rtChannel = new BroadcastChannel(`ch_rt_${role}`);
+      _rtChannel.onmessage = ev => {
+        if (ev.data?.type === 'stepdown' && ev.data.role === role && !_rtIsLeader && !_rtReadLeader(role)) {
+          _rtTryBecomeLeader(role);
+        }
+      };
+    } catch(_) { _rtChannel = null; }
+  }
+
+  const cur = _rtReadLeader(role);
+  if (cur?.tabId === _rtTabId) {
+    _rtIsLeader = true;             // já era líder desta aba — só reanexa (ex: permissões mudaram)
+    _attachRealtimeListeners();
+  } else if (!cur || (Date.now() - cur.ts) > _rtStaleMs) {
+    _rtTryBecomeLeader(role);
+  } else {
+    _rtIsLeader = false;
+    _rtStartFollowerWatch(role);
+    console.info('[RT-Leader] Aba seguidora — recebendo dados via localStorage, papel:', role);
+  }
   }
 
   async function gerarAdminToken(pin) {
