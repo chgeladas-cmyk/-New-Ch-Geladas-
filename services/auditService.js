@@ -101,6 +101,13 @@
   }
 
   function auditarMovimentacao(mov) {
+    // origem pode ser 'venda:<id>' ou 'cancelamento:<id>' — extrai o vendaId quando aplicável
+    let vendaId = mov.vendaId || null;
+    if (!vendaId && mov.origem) {
+      if (mov.origem.startsWith('venda:'))        vendaId = mov.origem.slice('venda:'.length);
+      else if (mov.origem.startsWith('cancelamento:')) vendaId = mov.origem.slice('cancelamento:'.length);
+    }
+
     return registrar('movimentacao', 'estoque', {
       depois: {
         produto:       mov.nomeProduto,
@@ -108,6 +115,9 @@
         quantidade:    mov.quantidade,
         estoqueAntes:  mov.estoqueAntes,
         estoqueDepois: mov.estoqueDepois,
+        origem:        mov.origem || null,
+        vendaId,
+        produtoId:     mov.produtoId || null,
       },
       resumo: `${mov.tipo} de ${Math.abs(mov.quantidade)} un. — ${mov.nomeProduto} (${mov.estoqueAntes}→${mov.estoqueDepois})`,
     });

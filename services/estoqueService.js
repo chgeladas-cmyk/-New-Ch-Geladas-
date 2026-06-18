@@ -516,6 +516,19 @@
               if (p) { p.qtdUn = r.qtdDepois; p.estoqueAtual = r.qtdDepois; p.updatedAt = Utils.nowISO(); }
             }
           }, { _semSync: true });
+
+          for (const r of resultados) {
+            window.CH.AuditService?.auditarMovimentacao({
+              nomeProduto:   r.prod.nome,
+              produtoId:     r.produtoId,
+              tipo:          'venda',
+              quantidade:    -r.qtdUn,
+              estoqueAntes:  r.qtdAntes,
+              estoqueDepois: r.qtdDepois,
+              origem:        r.origemKey,
+              vendaId:       venda.id,
+            });
+          }
         }
 
         console.info(`[Estoque] ✓ Lote venda ${venda.id}: ${resultados.length} itens baixados`);
@@ -560,6 +573,17 @@
             origem: origemKey, operador: venda.operador || _usuario(),
             timestamp: agora.toISOString(), dataCurta: Utils.todayISO(),
           });
+        });
+
+        window.CH.AuditService?.auditarMovimentacao({
+          nomeProduto:   prod.nome,
+          produtoId:     item.prodId,
+          tipo:          'venda',
+          quantidade:    -qtdUn,
+          estoqueAntes:  qtdAntes,
+          estoqueDepois: qtdDepois,
+          origem:        origemKey,
+          vendaId:       venda.id,
         });
       }
     });
