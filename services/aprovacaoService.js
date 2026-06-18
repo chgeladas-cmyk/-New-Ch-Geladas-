@@ -41,6 +41,23 @@
     if (lote.length) window.CH.SyncQueue.enqueue('atualizar', 'vendas', lote);
   }
 
+  // Marca a venda como erro_validacao, mantendo o estado anterior preservado em _statusAnterior
+  // para que "Tentar novamente" e "Resolver manualmente" saibam pra onde reverter/avançar.
+  function _marcarErroValidacao(vendaId, motivo, agora, operador) {
+    Store.mutateVendas(list => {
+      const v = list.find(v => v.id === vendaId);
+      if (v && v.status !== 'erro_validacao') {
+        v._statusAnterior   = v.status; // sempre 'aprovada' neste fluxo, mas guarda por segurança
+        v.status             = 'erro_validacao';
+        v.erroValidacaoEm    = agora;
+        v.erroValidacaoMotivo = motivo;
+        v.erroValidacaoOperador = operador;
+      }
+    });
+    _sync(vendaId);
+    EventBus.emit('venda:erro_validacao', { vendaId, motivo, operador });
+  }
+
   // ── Queries ───────────────────────────────────────────────────────
   function getPendentes() {
     return Store.getVendas()
@@ -62,8 +79,14 @@
       .filter(v => v.status === 'validada')
       .sort((a, b) => (b.validadaEm || '').localeCompare(a.validadaEm || ''));
   }
+  function getErrosValidacao() {
+    return Store.getVendas()
+      .filter(v => v.status === 'erro_validacao')
+      .sort((a, b) => (b.erroValidacaoEm || '').localeCompare(a.erroValidacaoEm || ''));
+  }
   function contarPendentes() { return getPendentes().length; }
   function contarAprovadas() { return getAprovadas().length; }
+  function contarErrosValidacao() { return getErrosValidacao().length; }
 
   // ── APROVAR individual (pendente → aprovada) ──────────────────────
   function aprovarVenda(vendaId) {
@@ -120,7 +143,7 @@
 
     const venda = Store.getVendas().find(v => v.id === vendaId);
     if (!venda) throw new Error('Venda não encontrada');
-    if (!['pendente', 'aprovada'].includes(venda.status))
+    if (!['pendente', 'aprovada', 'erro_validacao'].includes(venda.status))
       throw new Error(`Venda "${venda.status}" não pode ser rejeitada`);
 
     Store.mutateVendas(list => {
@@ -260,6 +283,101 @@
     return true;
   }
 
+  // ── TENTAR NOVAMENTE (erro_validacao → aprovada → tenta validar de novo) ──
+  // Reverte a venda para 'aprovada' e chama validarVenda novamente.
+  // Útil quando o erro foi temporário (rede instável) ou o estoque já foi corrigido.
+  async function tentarNovamenteValidacao(vendaId) {
+    if (!_perm('aprovacao_validacao'))
+      throw new Error('Sem permissão para validar vendas');
+
+    const venda = Store.getVendas().find(v => v.id === vendaId);
+    if (!venda) throw new Error('Venda não encontrada');
+    if (venda.status !== 'erro_validacao')
+      throw new Error(`Venda está "${venda.status}", esperado "erro_validacao"`);
+
+    Store.mutateVendas(list => {
+      const v = list.find(v => v.id === vendaId);
+      if (v) {
+        v.status = 'aprovada';
+        // limpa rastro do erro anterior (mantém histórico no log de auditoria, não na venda)
+        delete v.erroValidacaoEm;
+        delete v.erroValidacaoMotivo;
+        delete v.erroValidacaoOperador;
+      }
+    });
+    _sync(vendaId);
+
+    return validarVenda(vendaId);
+  }
+
+  // ── RESOLVER MANUALMENTE (erro_validacao → validada, sem repetir a baixa) ──
+  // Para quando o admin já ajustou o estoque na mão e quer apenas finalizar a venda,
+  // sem que o sistema tente baixar o estoque de novo (evitaria baixa duplicada).
+  function resolverManualmenteValidacao(vendaId, justificativa = '') {
+    if (!_perm('aprovacao_validacao'))
+      throw new Error('Sem permissão para validar vendas');
+    if (!justificativa.trim())
+      throw new Error('Justificativa obrigatória para resolução manual');
+
+    const venda = Store.getVendas().find(v => v.id === vendaId);
+    if (!venda) throw new Error('Venda não encontrada');
+    if (venda.status !== 'erro_validacao')
+      throw new Error(`Venda está "${venda.status}", esperado "erro_validacao"`);
+
+    const agora    = Utils.nowISO();
+    const operador = AuthService.getNome();
+
+    Store.mutateVendas(list => {
+      const v = list.find(v => v.id === vendaId);
+      if (v) {
+        v.status              = 'validada';
+        v.validadaEm           = agora;
+        v.validadaPor          = operador;
+        v._baixaOk             = false;
+        v._resolvidaManualmente = true;
+        v._justificativaManual = justificativa;
+        delete v.erroValidacaoEm;
+        delete v.erroValidacaoMotivo;
+        delete v.erroValidacaoOperador;
+      }
+    });
+
+    window.CH.AuditService?.registrar?.('resolucao_manual', 'aprovacao', {
+      depois:  { vendaId, justificativa },
+      resumo:  `Venda ${vendaId} validada manualmente sem baixa automática — ${justificativa}`,
+    });
+
+    _sync(vendaId);
+
+    // Financeiro e fiado seguem o mesmo caminho de uma validação normal
+    const FS = window.CH.FinanceiroService;
+    if (FS) FS.registrarReceita(venda);
+
+    if (venda._fiado && venda._fiadoClienteId) {
+      Store.mutateFiado(fiado => {
+        const cx = fiado.find(x => x.id === venda._fiadoClienteId);
+        if (!cx) return;
+        cx.saldo = (cx.saldo || 0) + (venda.total || 0);
+        if (!Array.isArray(cx.movimentacoes)) cx.movimentacoes = [];
+        cx.movimentacoes.unshift({
+          id: Utils.generateId(), tipo: 'fiado',
+          descricao: venda._fiadoDesc || venda.itens?.[0]?.nome || 'Compra fiado',
+          valor: venda.total || 0, vendaId: venda.id,
+          validadoPor: operador, criadoEm: agora,
+        });
+        if (cx.limite > 0 && cx.saldo >= cx.limite) cx.bloqueado = true;
+      });
+      if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+    }
+
+    const vendaFinal = Store.getVendas().find(v => v.id === vendaId) || venda;
+    EventBus.emit('venda:finalizada', vendaFinal);
+    EventBus.emit('venda:validada', vendaFinal);
+
+    console.info(`[AprovacaoService] ⚠ Venda ${vendaId} resolvida manualmente (sem baixa automática)`);
+    return true;
+  }
+
   // ── APROVAR EM LOTE ───────────────────────────────────────────────
   function aprovarTodas() {
     if (!_perm('aprovacao_controle'))
@@ -329,7 +447,9 @@
                 errosEstoque.push(`"${prod.nome}": disponível ${disponivel}, necessário ${qtdUn}`);
             }
             if (errosEstoque.length > 0) {
-              erros.push({ id: venda.id, erro: `Estoque insuficiente: ${errosEstoque.join('; ')}` });
+              const motivo = `Estoque insuficiente: ${errosEstoque.join('; ')}`;
+              erros.push({ id: venda.id, erro: motivo });
+              _marcarErroValidacao(venda.id, motivo, agora, operador);
               continue;
             }
           }
@@ -343,10 +463,16 @@
 
           if (ES?.baixarEstoqueVendaLote) {
             const res = await ES.baixarEstoqueVendaLote(venda);
-            baixaOk    = res.ok || res.localFallback || false;
+            baixaOk    = res.ok && !res.erros?.length; // só considera OK se 100% dos itens baixaram, sem erro algum
             baixaErros = res.erros || [];
-            if (!res.ok && !res.localFallback && res.itensProcessados === 0) {
-              erros.push({ id: venda.id, erro: `Baixa falhou: ${res.erros?.join('; ')}` });
+
+            // Qualquer falha (total, parcial, ou fallback local com erro) bloqueia a venda
+            if (!baixaOk) {
+              const motivo = res.localFallback
+                ? `Baixa aplicada apenas localmente (sem confirmação do Firebase): ${baixaErros.join('; ') || 'motivo desconhecido'}`
+                : `Baixa falhou ou parcial: ${baixaErros.join('; ') || 'erro desconhecido'}`;
+              erros.push({ id: venda.id, erro: motivo });
+              _marcarErroValidacao(venda.id, motivo, agora, operador);
               continue;
             }
           } else {
@@ -432,9 +558,10 @@
 
   // Exposição
   window.CH.AprovacaoService = {
-    getPendentes, getAprovadas, getRejeitadas, getValidadas,
-    contarPendentes, contarAprovadas,
+    getPendentes, getAprovadas, getRejeitadas, getValidadas, getErrosValidacao,
+    contarPendentes, contarAprovadas, contarErrosValidacao,
     aprovarVenda, rejeitarVenda, validarVenda,
+    tentarNovamenteValidacao, resolverManualmenteValidacao,
     aprovarTodas, validarTodas,
     isProcessandoLote: () => _processandoLote,
   };
