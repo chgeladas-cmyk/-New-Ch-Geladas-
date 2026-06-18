@@ -187,6 +187,7 @@ select.inp option { background: #0f172a; color: #f1f5f9; }
 .b-blue   { background: rgba(59,130,246,.15);  color: #60a5fa; }
 .b-violet { background: rgba(139,92,246,.15);  color: #a78bfa; }
 .b-gray   { background: rgba(100,116,139,.12); color: #94a3b8; }
+.b-cyan   { background: rgba(6,182,212,.15);   color: #22d3ee; }
 
 /* ── MODAL ───────────────────────────────────────── */
 #modal {
@@ -428,6 +429,7 @@ select.inp option { background: #0f172a; color: #f1f5f9; }
             <option value="CRIACAO">Criação</option>
             <option value="ESTORNO">Estorno</option>
             <option value="ALTERACAO">Alteração</option>
+            <option value="MOVIMENTACAO">Estoque</option>
           </select>
         </div>
         <div>
@@ -632,7 +634,84 @@ function construirLogs() {
   });
 
   /* 2 ── MAPEAR LOGS DE AUDITORIA */
+  // Agrupador de movimentações de estoque por venda (pra exibir 1 card por venda)
+  const movEstoquePorVenda = new Map(); // vendaId -> { ...log, _itensMov: [] }
+  const movEstoqueSoltas   = []; // avaria / ajuste / sem vendaId identificável
+
   auditoria.forEach(a => {
+    const isMovEstoque = a.modulo === 'estoque' && a.acao === 'movimentacao';
+
+    if (isMovEstoque) {
+      const d        = a.depois || {};
+      const vendaId  = d.vendaId || d.origem?.replace(/^venda:/, '') || null;
+      const tipoMov  = (d.tipo || '').toLowerCase(); // venda | avaria | ajuste | entrada | transferencia
+      const item = {
+        produto:       d.produto       || '—',
+        tipo:          tipoMov,
+        quantidade:    d.quantidade    ?? 0,
+        estoqueAntes:  d.estoqueAntes  ?? null,
+        estoqueDepois: d.estoqueDepois ?? null,
+      };
+
+      if ((tipoMov === 'venda' || tipoMov === 'cancelamento') && vendaId) {
+        // agrupa por venda (baixa normal ou estorno/cancelamento)
+        if (!movEstoquePorVenda.has(vendaId)) {
+          const vRef = (vendas || []).find(v => v.id === vendaId);
+          movEstoquePorVenda.set(vendaId, {
+            _id:        vendaId,
+            _tipo:      'MOVIMENTACAO',
+            _modulo:    'estoque',
+            _operador:  a.usuario  || '—',
+            _role:      a.role     || '—',
+            _data:      a.dataCurta || (a.data || '').slice(0,10) || '',
+            _dataISO:   a.data     || '',
+            _hora:      a.hora     || '',
+            _formaPgto: '',
+            _total:     0,
+            _vendaId:   vendaId,
+            _vendaTotal: vRef?.total || 0,
+            _movTipo:   tipoMov, // 'venda' (baixa) ou 'cancelamento' (estorno) — define a cor do card
+            _itensMov:  [],
+            _motivo:    null,
+            _antes:     null,
+            _depois:    null,
+            _acao:      a.acao,
+            _origem:    'estoque',
+            _raw:       a,
+          });
+        }
+        const grupo = movEstoquePorVenda.get(vendaId);
+        // se já houver um item de cancelamento no grupo, marca o grupo inteiro como cancelamento
+        if (tipoMov === 'cancelamento') grupo._movTipo = 'cancelamento';
+        grupo._itensMov.push(item);
+      } else {
+        // avaria, ajuste, entrada, transferência ou venda sem vendaId identificável: card individual
+        movEstoqueSoltas.push({
+          _id:        a.id || (_Utils()?.generateId?.() ?? ('m_' + Date.now())),
+          _tipo:      'MOVIMENTACAO',
+          _modulo:    'estoque',
+          _operador:  a.usuario  || '—',
+          _role:      a.role     || '—',
+          _data:      a.dataCurta || (a.data || '').slice(0,10) || '',
+          _dataISO:   a.data     || '',
+          _hora:      a.hora     || '',
+          _formaPgto: '',
+          _total:     0,
+          _vendaId:   null,
+          _vendaTotal: 0,
+          _movTipo:   tipoMov,
+          _itensMov:  [item],
+          _motivo:    null,
+          _antes:     null,
+          _depois:    null,
+          _acao:      a.acao,
+          _origem:    'estoque',
+          _raw:       a,
+        });
+      }
+      return; // não duplica como ALTERACAO genérica
+    }
+
     // tenta herdar dados da venda original se existir
     let vendaRef = null;
     if (a.id && a.modulo === 'vendas') {
@@ -664,6 +743,9 @@ function construirLogs() {
       _raw:       a,
     });
   });
+
+  // Finaliza os cards de movimentação agrupados por venda + soltas
+  resultado.push(...movEstoquePorVenda.values(), ...movEstoqueSoltas);
 
   /* 3 ── ORDENAR: mais recente primeiro */
   resultado.sort((a, b) => {
@@ -746,8 +828,9 @@ function aplicarFiltros() {
     if (busca) {
       const haystack = [
         l._id, l._operador, l._modulo, l._acao,
-        l._formaPgto, l._resumo, l._motivo,
+        l._formaPgto, l._resumo, l._motivo, l._vendaId,
         ...(l._itens || []).map(i => i.nome || ''),
+        ...(l._itensMov || []).map(i => i.produto || ''),
       ].filter(Boolean).join(' ').toLowerCase();
       if (!haystack.includes(busca)) return false;
     }
@@ -780,6 +863,52 @@ function renderLogs(logs) {
 
   list.innerHTML = logs.map((l, idx) => {
     const { cor, icon, badgeClass, label } = _tipoMeta(l._tipo);
+
+    if (l._tipo === 'MOVIMENTACAO') {
+      const isCancelamento = l._movTipo === 'cancelamento';
+      const nItensMov  = (l._itensMov || []).length;
+      const totalQtd   = (l._itensMov || []).reduce((s,i) => s + Math.abs(i.quantidade || 0), 0);
+      const movMeta    = isCancelamento
+        ? { cor:'bg-red-500/15 text-red-400', icon:'fas fa-rotate-left', badgeClass:'b-red', label:'Estorno estoque' }
+        : { cor, icon, badgeClass, label };
+      const resumoStr  = l._vendaId
+        ? `${isCancelamento?'Estorno':'Baixa'} de estoque — venda ${l._vendaId.slice(-8)}`
+        : `${(l._itensMov?.[0]?.tipo || 'Movimentação')} de estoque`;
+      const dataStr2   = _formatarData(l._data, l._hora);
+
+      return `
+<div class="log-card tipo-MOVIMENTACAO" style="animation-delay:${Math.min(idx*.03,.4)}s"
+     onclick="abrirModal(${idx})">
+  <div class="flex items-start gap-3">
+    <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-xs ${movMeta.cor}">
+      <i class="${movMeta.icon}"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+        <span class="badge ${movMeta.badgeClass}"><i class="${movMeta.icon} mr-0.5"></i>${movMeta.label}</span>
+        <span class="badge b-gray">estoque</span>
+      </div>
+      <p class="text-[11px] font-bold text-slate-300 truncate leading-snug">${_esc(resumoStr)}</p>
+      <div class="flex items-center gap-2 mt-1 flex-wrap">
+        <span class="text-[9px] text-slate-600 font-semibold">
+          <i class="fas fa-user-circle mr-0.5"></i>${_esc(l._operador)}
+        </span>
+        <span class="text-[9px] text-slate-700">•</span>
+        <span class="text-[9px] text-slate-600 font-semibold">
+          <i class="far fa-clock mr-0.5"></i>${dataStr2}
+        </span>
+        <span class="text-[9px] text-slate-700">•</span>
+        <span class="text-[9px] text-slate-600 font-semibold">${nItensMov} produto${nItensMov>1?'s':''}</span>
+      </div>
+    </div>
+    <div class="text-right flex-shrink-0">
+      <p class="text-[.75rem] font-black ${isCancelamento?'text-red-400':'text-cyan-400'}">${isCancelamento?'+':'-'}${totalQtd} un.</p>
+      <p class="text-[8px] text-slate-700 font-mono mt-0.5 truncate max-w-[5rem]">${(l._id||'').slice(-8)}</p>
+    </div>
+  </div>
+</div>`;
+    }
+
     const nItens   = (l._itens || []).length;
     const itensStr = nItens ? `${nItens} item${nItens>1?'s':''}` : '';
     const dataStr  = _formatarData(l._data, l._hora);
@@ -854,15 +983,29 @@ function abrirModal(idx) {
   document.getElementById('mId').textContent = `ID: ${l._id || '—'}`;
 
   // KPI row
-  document.getElementById('mKpiRow').innerHTML = [
-    ['Total', fmt(l._total), l._tipo==='ESTORNO'?'text-red-400':'text-emerald-400'],
-    ['Lucro', fmt(l._lucro || 0), 'text-blue-400'],
-    ['Desconto', fmt(l._desconto || 0), 'text-amber-400'],
-  ].map(([lbl, val, cls]) => `
+  if (l._tipo === 'MOVIMENTACAO') {
+    const totalQtd = (l._itensMov || []).reduce((s,i) => s + Math.abs(i.quantidade || 0), 0);
+    const nProd    = (l._itensMov || []).length;
+    document.getElementById('mKpiRow').innerHTML = [
+      ['Qtd. total', `${totalQtd} un.`, l._movTipo==='cancelamento'?'text-red-400':'text-cyan-400'],
+      ['Produtos', `${nProd}`, 'text-blue-400'],
+      ['Venda', l._vendaId ? `#${l._vendaId.slice(-8)}` : '—', 'text-amber-400'],
+    ].map(([lbl, val, cls]) => `
     <div class="bg-white/03 border border-white/05 rounded-xl p-2.5 text-center">
       <p class="text-[.7rem] font-black ${cls}">${val}</p>
       <p class="text-[.55rem] font-bold text-slate-600 uppercase tracking-wide mt-0.5">${lbl}</p>
     </div>`).join('');
+  } else {
+    document.getElementById('mKpiRow').innerHTML = [
+      ['Total', fmt(l._total), l._tipo==='ESTORNO'?'text-red-400':'text-emerald-400'],
+      ['Lucro', fmt(l._lucro || 0), 'text-blue-400'],
+      ['Desconto', fmt(l._desconto || 0), 'text-amber-400'],
+    ].map(([lbl, val, cls]) => `
+    <div class="bg-white/03 border border-white/05 rounded-xl p-2.5 text-center">
+      <p class="text-[.7rem] font-black ${cls}">${val}</p>
+      <p class="text-[.55rem] font-bold text-slate-600 uppercase tracking-wide mt-0.5">${lbl}</p>
+    </div>`).join('');
+  }
 
   // Meta info
   document.getElementById('mMeta').innerHTML = [
@@ -879,9 +1022,30 @@ function abrirModal(idx) {
       </div>
     </div>`).join('');
 
-  // Itens da venda
+  // Itens da venda OU itens de movimentação de estoque
   const itensWrap = document.getElementById('mItensWrap');
-  if (l._itens && l._itens.length) {
+  if (l._tipo === 'MOVIMENTACAO' && l._itensMov && l._itensMov.length) {
+    itensWrap.classList.remove('hidden');
+    document.getElementById('mItens').innerHTML = l._itensMov.map(item => {
+      const qtdAbs = Math.abs(item.quantidade || 0);
+      const saida  = (item.quantidade || 0) < 0;
+      return `
+<div class="item-row">
+  <div class="flex-1 min-w-0">
+    <p class="text-[11px] font-bold text-slate-200 truncate">${_esc(item.produto||'—')}</p>
+    <p class="text-[9px] text-slate-600 mt-0.5">
+      <span class="text-slate-500">Estoque: ${item.estoqueAntes ?? '—'} → ${item.estoqueDepois ?? '—'}</span>
+      <span class="mx-1 text-slate-700">·</span>
+      <span>${item.tipo || '—'}</span>
+    </p>
+  </div>
+  <div class="text-right flex-shrink-0">
+    <p class="text-[11px] font-black ${saida?'text-red-400':'text-emerald-400'}">${saida?'-':'+'}${qtdAbs}</p>
+    <p class="text-[8px] text-slate-700">unid.</p>
+  </div>
+</div>`;
+    }).join('');
+  } else if (l._itens && l._itens.length) {
     itensWrap.classList.remove('hidden');
     document.getElementById('mItens').innerHTML = l._itens.map(item => {
       const pv    = item.preco     || item.precoVenda  || item.precoUn  || 0;
@@ -973,23 +1137,32 @@ function exportarCSV() {
     'Nº Itens', 'Resumo', 'Motivo/Justificativa',
   ];
 
-  const linhas = _logsFiltrados.map(l => [
-    esc(l._id),
-    esc(l._tipo),
-    esc(l._modulo),
-    esc(l._operador),
-    esc(l._role),
-    esc(l._data),
-    esc(l._hora),
-    esc(l._formaPgto),
-    esc(_numCSV(l._total)),
-    esc(_numCSV(l._subtotal)),
-    esc(_numCSV(l._desconto)),
-    esc(_numCSV(l._lucro)),
-    esc((l._itens||[]).length),
-    esc(l._resumo),
-    esc(l._motivo || ''),
-  ].join(';'));
+  const linhas = _logsFiltrados.map(l => {
+    const isMov     = l._tipo === 'MOVIMENTACAO';
+    const nItensMov = (l._itensMov || []).length;
+    const qtdTotal  = isMov ? (l._itensMov||[]).reduce((s,i)=>s+Math.abs(i.quantidade||0),0) : null;
+    const resumoMov = isMov
+      ? `${l._movTipo==='cancelamento'?'Estorno':'Baixa'} de estoque${l._vendaId?` — venda ${l._vendaId}`:''} (${qtdTotal} un. em ${nItensMov} produto${nItensMov!==1?'s':''})`
+      : (l._resumo || '');
+
+    return [
+      esc(l._id),
+      esc(l._tipo),
+      esc(l._modulo),
+      esc(l._operador),
+      esc(l._role),
+      esc(l._data),
+      esc(l._hora),
+      esc(l._formaPgto),
+      esc(isMov ? '' : _numCSV(l._total)),
+      esc(isMov ? '' : _numCSV(l._subtotal)),
+      esc(isMov ? '' : _numCSV(l._desconto)),
+      esc(isMov ? '' : _numCSV(l._lucro)),
+      esc(isMov ? nItensMov : (l._itens||[]).length),
+      esc(resumoMov),
+      esc(l._motivo || ''),
+    ].join(';');
+  });
 
   const csv     = '\uFEFF' + [cabecalho.join(';'), ...linhas].join('\r\n');
   const blob    = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1022,9 +1195,10 @@ function limparFiltros() {
 ───────────────────────────────────────────────── */
 function _tipoMeta(tipo) {
   const m = {
-    CRIACAO:   { cor:'bg-emerald-500/15 text-emerald-400', icon:'fas fa-circle-check',   badgeClass:'b-green', label:'Criação'  },
-    ESTORNO:   { cor:'bg-red-500/15 text-red-400',         icon:'fas fa-rotate-left',    badgeClass:'b-red',   label:'Estorno'  },
-    ALTERACAO: { cor:'bg-amber-500/15 text-amber-400',     icon:'fas fa-pen-to-square',  badgeClass:'b-amber', label:'Alteração'},
+    CRIACAO:      { cor:'bg-emerald-500/15 text-emerald-400', icon:'fas fa-circle-check',   badgeClass:'b-green', label:'Criação'      },
+    ESTORNO:      { cor:'bg-red-500/15 text-red-400',         icon:'fas fa-rotate-left',    badgeClass:'b-red',   label:'Estorno'      },
+    ALTERACAO:    { cor:'bg-amber-500/15 text-amber-400',     icon:'fas fa-pen-to-square',  badgeClass:'b-amber', label:'Alteração'    },
+    MOVIMENTACAO: { cor:'bg-cyan-500/15 text-cyan-400',       icon:'fas fa-boxes-stacked',  badgeClass:'b-cyan',  label:'Estoque'      },
   };
   return m[tipo] || { cor:'bg-slate-500/15 text-slate-400', icon:'fas fa-circle-dot', badgeClass:'b-gray', label: tipo||'—' };
 }
