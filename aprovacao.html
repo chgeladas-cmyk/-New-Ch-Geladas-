@@ -133,6 +133,9 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:#e2e8f0; mi
   </div>
   <div class="tab" data-tab="validadas" onclick="switchTab('validadas')">Validadas</div>
   <div class="tab" data-tab="rejeitadas" onclick="switchTab('rejeitadas')">Rejeitadas</div>
+  <div class="tab" data-tab="erros" onclick="switchTab('erros')">
+    ⚠️ Erros <span class="badge" id="badgeErros" style="display:none"></span>
+  </div>
   <div class="tab" data-tab="rastreio"   onclick="switchTab('rastreio')">📊 Rastreio</div>
 </div>
 
@@ -172,6 +175,23 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:#e2e8f0; mi
     <div style="display:flex;gap:.75rem;margin-top:.875rem">
       <button onclick="fecharModal()" style="flex:1;padding:.6rem;border-radius:.625rem;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#94a3b8;font-size:.8rem;font-weight:600;cursor:pointer">Cancelar</button>
       <button onclick="confirmarRejeicao()" style="flex:1;padding:.6rem;border-radius:.625rem;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.35);color:#f87171;font-size:.8rem;font-weight:700;cursor:pointer">Rejeitar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RESOLVER MANUALMENTE -->
+<div class="modal-bg" id="modalResolverManual">
+  <div class="modal-sheet">
+    <div class="modal-title">⚠️ Resolver Manualmente</div>
+    <p style="font-size:.78rem;color:#94a3b8;margin-bottom:.5rem">
+      Use quando já corrigiu o estoque à mão e quer finalizar esta venda.<br>
+      <span style="color:#fbbf24;font-weight:600">O sistema NÃO vai tentar baixar o estoque novamente.</span>
+    </p>
+    <p style="font-size:.72rem;color:#64748b;margin-bottom:.5rem">Justificativa obrigatória:</p>
+    <textarea class="modal-input" id="justificativaInput" rows="3" placeholder="Ex: Estoque ajustado manualmente. Produto havia saído por outra via."></textarea>
+    <div style="display:flex;gap:.75rem;margin-top:.875rem">
+      <button onclick="fecharModalResolverManual()" style="flex:1;padding:.6rem;border-radius:.625rem;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#94a3b8;font-size:.8rem;font-weight:600;cursor:pointer">Cancelar</button>
+      <button onclick="confirmarResolucaoManual()" style="flex:1;padding:.6rem;border-radius:.625rem;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.35);color:#34d399;font-size:.8rem;font-weight:700;cursor:pointer">Confirmar</button>
     </div>
   </div>
 </div>
@@ -277,6 +297,7 @@ function renderizar() {
   if (_tabAtual === 'aprovadas')  vendas = Ap.getAprovadas();
   if (_tabAtual === 'validadas')  vendas = Ap.getValidadas();
   if (_tabAtual === 'rejeitadas') vendas = Ap.getRejeitadas();
+  if (_tabAtual === 'erros')      vendas = Ap.getErrosValidacao();
 
   if (!vendas.length) {
     const msgs = {
@@ -284,6 +305,7 @@ function renderizar() {
       aprovadas:  'Nenhuma venda aguardando validação.',
       validadas:  'Nenhuma venda validada ainda.',
       rejeitadas: 'Nenhuma venda rejeitada.',
+      erros:      'Nenhuma venda com erro de validação. 🎉',
     };
     lista.innerHTML = `<div class="empty"><i class="fas fa-check-circle"></i><p>${msgs[_tabAtual]}</p></div>`;
     return;
@@ -300,11 +322,13 @@ function _cardHTML(v) {
   const statusClass = {
     pendente: 's-pendente', aprovada: 's-aprovada',
     validada: 's-validada', rejeitada: 's-rejeitada', concluida: 's-concluida',
+    erro_validacao: 's-rejeitada',
   }[v.status] || 's-pendente';
 
   const statusLabel = {
     pendente: '⏳ Pendente', aprovada: '✅ Aprovada',
     validada: '💚 Validada', rejeitada: '❌ Rejeitada',
+    erro_validacao: '⚠️ Erro na validação',
   }[v.status] || v.status;
 
   let botoesHTML = '';
@@ -325,12 +349,23 @@ function _cardHTML(v) {
       </div>`;
   }
 
+  if (_tabAtual === 'erros' && _temValidacao) {
+    botoesHTML = `
+      <div class="btn-row">
+        <button class="btn-act btn-validar"  onclick="tentarNovamente('${v.id}')"><i class="fas fa-rotate-right"></i> Tentar novamente</button>
+        <button class="btn-act btn-aprovar"  onclick="abrirResolverManual('${v.id}')"><i class="fas fa-hand"></i> Resolver manual</button>
+        <button class="btn-act btn-rejeitar" onclick="abrirRejeitar('${v.id}')"><i class="fas fa-times"></i> Rejeitar</button>
+      </div>`;
+  }
+
   const infoExtra = v.status === 'aprovada'
     ? `<div style="font-size:.65rem;color:#64748b;margin-top:.4rem">Aprovada por <b style="color:#60a5fa">${v.aprovadaPor||''}</b></div>`
     : v.status === 'validada'
-    ? `<div style="font-size:.65rem;color:#64748b;margin-top:.4rem">Validada por <b style="color:#34d399">${v.validadaPor||''}</b></div>`
+    ? `<div style="font-size:.65rem;color:#64748b;margin-top:.4rem">Validada por <b style="color:#34d399">${v.validadaPor||''}</b>${v._resolvidaManualmente ? ' <span style="color:#fbbf24">(resolução manual)</span>' : ''}</div>`
     : v.status === 'rejeitada' && v.motivoRejeicao
     ? `<div style="font-size:.65rem;color:#f87171;margin-top:.4rem">Motivo: ${v.motivoRejeicao}</div>`
+    : v.status === 'erro_validacao'
+    ? `<div style="font-size:.65rem;color:#fbbf24;margin-top:.4rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:.4rem .6rem">⚠️ ${v.erroValidacaoMotivo || 'Erro desconhecido na validação'}</div>`
     : '';
 
   return `
@@ -360,6 +395,7 @@ function _atualizarResumo() {
   const pendentes  = hj.filter(v => v.status === 'pendente').length;
   const aprovadas  = hj.filter(v => v.status === 'aprovada').length;
   const validadas  = hj.filter(v => v.status === 'validada').length;
+  const erros      = Store.getVendas().filter(v => v.status === 'erro_validacao').length;
   const totalVal   = hj.filter(v => ['validada','concluida'].includes(v.status))
                        .reduce((s, v) => s + (v.total||0), 0);
 
@@ -379,18 +415,27 @@ function _atualizarResumo() {
     <div class="resumo-item">
       <div class="resumo-label">💰 Total validado</div>
       <div class="resumo-val" style="color:#f1f5f9;font-size:.9rem">${_fmt(totalVal)}</div>
-    </div>`;
+    </div>
+    ${erros > 0 ? `
+    <div class="resumo-item" style="border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05)">
+      <div class="resumo-label" style="color:#f87171">⚠️ Erros validação</div>
+      <div class="resumo-val" style="color:#f87171">${erros}</div>
+    </div>` : ''}
+  `;
 }
 
 function _atualizarBadges() {
   const Ap = window.CH.AprovacaoService;
   const pendentes = Ap.contarPendentes();
   const aprovadas = Ap.contarAprovadas();
+  const erros     = Ap.contarErrosValidacao ? Ap.contarErrosValidacao() : 0;
 
   const bP = document.getElementById('badgePendentes');
   const bA = document.getElementById('badgeAprovadas');
+  const bE = document.getElementById('badgeErros');
   if (bP) { bP.textContent = pendentes; bP.style.display = pendentes ? 'inline-flex' : 'none'; }
   if (bA) { bA.textContent = aprovadas; bA.style.display = aprovadas ? 'inline-flex' : 'none'; }
+  if (bE) { bE.textContent = erros;     bE.style.display = erros     ? 'inline-flex' : 'none'; }
 }
 
 function _atualizarLotebar() {
@@ -457,6 +502,49 @@ async function confirmarRejeicao() {
   } catch(e) { toast(e.message, 'err'); }
 }
 
+// ── AÇÕES DA ABA ERROS ────────────────────────────────────────────
+async function tentarNovamente(id) {
+  const btn = event?.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = 'Processando…'; }
+  try {
+    await window.CH.AprovacaoService.tentarNovamenteValidacao(id);
+    toast('Venda validada com sucesso! Estoque e financeiro atualizados.', 'ok');
+    renderizar();
+  } catch(e) {
+    toast(`Falhou: ${e.message}`, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right"></i> Tentar novamente'; }
+    renderizar(); // re-renderiza pra mostrar o motivo atualizado do erro
+  }
+}
+
+let _vendaResolverManual = null;
+
+function abrirResolverManual(id) {
+  _vendaResolverManual = id;
+  document.getElementById('justificativaInput').value = '';
+  document.getElementById('modalResolverManual').classList.add('open');
+}
+
+function fecharModalResolverManual() {
+  _vendaResolverManual = null;
+  document.getElementById('modalResolverManual').classList.remove('open');
+}
+
+async function confirmarResolucaoManual() {
+  if (!_vendaResolverManual) return;
+  const justificativa = document.getElementById('justificativaInput').value.trim();
+  if (!justificativa) {
+    toast('Justificativa obrigatória.', 'err');
+    return;
+  }
+  try {
+    await window.CH.AprovacaoService.resolverManualmenteValidacao(_vendaResolverManual, justificativa);
+    fecharModalResolverManual();
+    toast('Venda resolvida manualmente e finalizada.', 'ok');
+    renderizar();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
 // ── AÇÃO EM LOTE ──────────────────────────────────────────────────
 async function acaoLote() {
   const Ap  = window.CH.AprovacaoService;
@@ -467,10 +555,18 @@ async function acaoLote() {
   try {
     if (_tabAtual === 'pendentes') {
       const r = await Ap.aprovarTodas();
-      toast(r.total ? `${r.total} venda(s) aprovada(s)!` : 'Nenhuma pendente', 'ok');
+      toast(r.total ? `${r.sucesso} venda(s) aprovada(s)!` : 'Nenhuma pendente', 'ok');
     } else if (_tabAtual === 'aprovadas') {
       const r = await Ap.validarTodas();
-      toast(r.total ? `${r.total} venda(s) validada(s)!` : 'Nenhuma aprovada', 'ok');
+      if (!r.total) {
+        toast('Nenhuma aprovada para validar.', 'ok');
+      } else if (r.erros.length === 0) {
+        toast(`${r.sucesso} venda(s) validada(s) com sucesso!`, 'ok');
+      } else if (r.sucesso === 0) {
+        toast(`Todas as ${r.erros.length} venda(s) falharam. Veja a aba ⚠️ Erros.`, 'err');
+      } else {
+        toast(`${r.sucesso} validada(s) / ${r.erros.length} com erro — veja aba ⚠️ Erros.`, 'err');
+      }
     }
   } catch(e) {
     toast(e.message, 'err');
@@ -624,6 +720,9 @@ function renderRastreio() {
 // Fecha modal ao clicar fora
 document.getElementById('modalRejeitar').addEventListener('click', e => {
   if (e.target === e.currentTarget) fecharModal();
+});
+document.getElementById('modalResolverManual').addEventListener('click', e => {
+  if (e.target === e.currentTarget) fecharModalResolverManual();
 });
 </script>
 </body>
