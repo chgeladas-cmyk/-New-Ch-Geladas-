@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#04060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CH Geladas">
+<title>Validade — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+*{box-sizing:border-box;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-image:radial-gradient(ellipse at 70% 10%,rgba(239,68,68,.05) 0%,transparent 60%);color:#f1f5f9;min-height:100vh;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+
+/* ── LOCK ── */
+#lock{position:fixed;inset:0;z-index:9999;background:radial-gradient(ellipse at 50% 40%,#110a0a 0%,#060810 70%);display:flex;align-items:center;justify-content:center;}
+#lock.hidden{display:none;}
+
+/* ── MODAL ── */
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.8);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;}
+.modal.open{opacity:1;visibility:visible;pointer-events:auto;}
+.modal.center{align-items:center;}
+.modal.open>.modal-box{animation:mIn .22s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes mIn{from{opacity:0;transform:translateY(20px) scale(.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+.modal-box{background:rgba(13,17,23,.99);border:1px solid rgba(255,255,255,.09);border-radius:2rem 2rem 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:1.5rem;}
+.modal.center>.modal-box{border-radius:2rem;max-height:85vh;}
+
+/* ── INPUTS ── */
+.inp{font-size:16px!important;padding:12px 14px;color:#fff;background:#1e293b;border:2px solid #334155;border-radius:.75rem;width:100%;outline:none;transition:all .2s;font-family:inherit;}
+.inp:focus{border-color:#ef4444!important;box-shadow:0 0 0 4px rgba(239,68,68,.15)!important;background:#0f172a;}
+.inp::placeholder{color:#64748b;}
+.inp[type="date"]{color-scheme:dark;}
+.label{color:#f87171;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;border-radius:9999px;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:.2rem .55rem;}
+.b-red{background:rgba(239,68,68,.15);color:#f87171;}
+.b-amber{background:rgba(245,158,11,.15);color:#fbbf24;}
+.b-green{background:rgba(16,185,129,.15);color:#34d399;}
+.b-blue{background:rgba(59,130,246,.15);color:#60a5fa;}
+.b-slate{background:rgba(100,116,139,.15);color:#94a3b8;}
+
+/* ── CARDS ── */
+.val-card{background:rgba(13,17,23,.85);border:1px solid rgba(255,255,255,.06);border-radius:1.25rem;padding:1rem;transition:all .2s;position:relative;overflow:hidden;}
+.val-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;}
+.val-card.vencido::before{background:#ef4444;}
+.val-card.critico::before{background:#f59e0b;}
+.val-card.atencao::before{background:#eab308;}
+.val-card.ok::before{background:#10b981;}
+.val-card.vencido{background:rgba(239,68,68,.04);}
+.val-card.critico{background:rgba(245,158,11,.04);}
+
+/* ── KPIs ── */
+.kpi{background:rgba(13,17,23,.85);border:1px solid rgba(255,255,255,.06);border-radius:1.25rem;padding:1rem;text-align:center;}
+
+/* ── TABS ── */
+.tab-btn{padding:.5rem .875rem;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border-radius:.625rem;color:#475569;transition:all .15s;cursor:pointer;white-space:nowrap;}
+.tab-btn.active{background:rgba(239,68,68,.12);color:#f87171;}
+
+/* ── TOAST ── */
+#toast{min-width:220px;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(4rem);opacity:0;pointer-events:none;z-index:200;transition:opacity .25s,transform .25s;background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:1.25rem;padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 24px 48px rgba(0,0,0,.5);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.scroll::-webkit-scrollbar{width:3px;}.scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:10px;}
+.adm-only{display:none!important;}body.is-admin .adm-only{display:flex!important;}
+</style>
+</head>
+<body>
+
+<!-- ── LOCK ─────────────────────────────────────────────────── -->
+<div id="lock">
+  <div style="background:rgba(13,17,23,.95);border:1px solid rgba(255,255,255,.08);border-radius:2.5rem;padding:2.5rem;width:100%;max-width:360px;margin:0 1rem;text-align:center;">
+    <div class="text-5xl mb-4">📅</div>
+    <h1 class="text-2xl font-black mb-1 uppercase">CH <span style="color:#ef4444">GELADAS</span></h1>
+    <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Módulo de Validade</p>
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-red-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-red-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
+    <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
+    <button onclick="doLogin()" class="w-full py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all" style="background:#ef4444">
+      <i class="fas fa-unlock-alt mr-2"></i>Entrar
+    </button>
+  </div>
+</div>
+
+<!-- ── APP ──────────────────────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <!-- Header -->
+  <div style="position:sticky;top:0;z-index:50;background:rgba(6,8,16,.92);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.05);padding:.75rem 1rem;">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <a href="index.html" class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(255,255,255,.05)">
+          <i class="fas fa-arrow-left text-slate-400 text-sm"></i>
+        </a>
+        <div>
+          <p class="text-sm font-black text-white leading-none">📅 Validade</p>
+          <p id="headerSub" class="text-[9px] text-slate-600 font-bold mt-0.5">carregando...</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="verificarAlertas(true)" class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(239,68,68,.1)" title="Enviar alertas Telegram">
+          <i class="fab fa-telegram text-red-400 text-sm"></i>
+        </button>
+        <button onclick="abrirModalNovo()" class="adm-only w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(239,68,68,.15)">
+          <i class="fas fa-plus text-red-400 text-sm"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-4 gap-2 p-4 pb-0">
+    <div class="kpi">
+      <p class="text-[8px] text-slate-600 font-bold uppercase mb-1">Vencidos</p>
+      <p id="kpiVencido" class="text-lg font-black text-red-400">0</p>
+    </div>
+    <div class="kpi">
+      <p class="text-[8px] text-slate-600 font-bold uppercase mb-1">Crítico</p>
+      <p id="kpiCritico" class="text-lg font-black text-amber-400">0</p>
+    </div>
+    <div class="kpi">
+      <p class="text-[8px] text-slate-600 font-bold uppercase mb-1">Atenção</p>
+      <p id="kpiAtencao" class="text-lg font-black text-yellow-400">0</p>
+    </div>
+    <div class="kpi">
+      <p class="text-[8px] text-slate-600 font-bold uppercase mb-1">OK</p>
+      <p id="kpiOk" class="text-lg font-black text-emerald-400">0</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex gap-1 px-4 pt-3 pb-1 overflow-x-auto no-scrollbar">
+    <button class="tab-btn active" onclick="setTab('todos')"    id="tab-todos">Todos</button>
+    <button class="tab-btn"        onclick="setTab('vencido')"  id="tab-vencido">Vencidos</button>
+    <button class="tab-btn"        onclick="setTab('critico')"  id="tab-critico">Crítico ≤7d</button>
+    <button class="tab-btn"        onclick="setTab('atencao')"  id="tab-atencao">Atenção ≤30d</button>
+    <button class="tab-btn"        onclick="setTab('ok')"       id="tab-ok">OK</button>
+  </div>
+
+  <!-- Busca -->
+  <div class="px-4 pb-3">
+    <input type="text" id="busca" class="inp" placeholder="🔍 Buscar produto ou lote..." oninput="render()" style="border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.03);">
+  </div>
+
+  <!-- Lista -->
+  <div id="lista" class="px-4 pb-32 flex flex-col gap-3"></div>
+
+</div>
+
+<!-- ── MODAL NOVO/EDITAR ─────────────────────────────────────── -->
+<div class="modal" id="modalNovo">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-base font-black text-white" id="modalTitulo">Novo Lote</h2>
+      <button onclick="fecharModal('modalNovo')" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-white" style="background:rgba(255,255,255,.05)">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <input type="hidden" id="editId">
+
+    <div class="mb-4">
+      <label class="label">Produto</label>
+      <select id="fProduto" class="inp" onchange="onProdutoChange()">
+        <option value="">— Selecionar produto —</option>
+      </select>
+    </div>
+
+    <div class="mb-4">
+      <label class="label">Ou nome avulso (sem estoque)</label>
+      <input type="text" id="fNomeAvulso" class="inp" placeholder="Ex: Sorvete especial...">
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div>
+        <label class="label">Lote / Referência</label>
+        <input type="text" id="fLote" class="inp" placeholder="Ex: L2024-01">
+      </div>
+      <div>
+        <label class="label">Quantidade</label>
+        <input type="number" id="fQtd" class="inp" placeholder="0" min="0" step="1" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div>
+        <label class="label">Data de Entrada</label>
+        <input type="date" id="fEntrada" class="inp">
+      </div>
+      <div>
+        <label class="label">Data de Validade</label>
+        <input type="date" id="fValidade" class="inp">
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <label class="label">Observação (opcional)</label>
+      <input type="text" id="fObs" class="inp" placeholder="Ex: Fornecedor X, NF 1234...">
+    </div>
+
+    <button onclick="salvarLote()" class="w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all" style="background:#ef4444">
+      <i class="fas fa-save mr-2"></i>Salvar Lote
+    </button>
+  </div>
+</div>
+
+<!-- ── MODAL DETALHE ─────────────────────────────────────────── -->
+<div class="modal center" id="modalDetalhe">
+  <div class="modal-box" style="border-radius:2rem">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-black text-white">Detalhe do Lote</h2>
+      <button onclick="fecharModal('modalDetalhe')" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500" style="background:rgba(255,255,255,.05)">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div id="detalheContent"></div>
+    <div class="flex gap-2 mt-4 adm-only">
+      <button id="btnEditarDetalhe" onclick="" class="flex-1 py-3 rounded-xl font-black text-xs uppercase" style="background:rgba(59,130,246,.15);color:#60a5fa">
+        <i class="fas fa-edit mr-1"></i>Editar
+      </button>
+      <button id="btnDescartarDetalhe" onclick="" class="flex-1 py-3 rounded-xl font-black text-xs uppercase" style="background:rgba(239,68,68,.1);color:#f87171">
+        <i class="fas fa-trash mr-1"></i>Descartar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast">
+  <span id="toastIcon" style="font-size:1.1rem"></span>
+  <div><p id="toastTitle" class="text-[11px] font-black text-white"></p><p id="toastSub" class="text-[9px] text-slate-500 font-bold mt-0.5"></p></div>
+</div>
+
+<script src="core.js"></script>
+<script>
+'use strict';
+
+/* ═══════════════ HELPERS ═══════════════ */
+const { AuthService, UIService, Store, Utils, TelegramService, EventBus } = window.CH;
+
+const STORAGE_KEY = 'CH_VALIDADE';
+
+function getLotes() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveLotes(arr) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+function mutateLotes(fn) {
+  const arr = getLotes();
+  fn(arr);
+  saveLotes(arr);
+}
+
+function hoje() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function diasAteVencer(dataValidade) {
+  if (!dataValidade) return null;
+  const hoje_ = new Date(); hoje_.setHours(0,0,0,0);
+  const val   = new Date(dataValidade + 'T00:00:00');
+  return Math.round((val - hoje_) / 86400000);
+}
+
+function statusLote(dias) {
+  if (dias === null) return 'sem-data';
+  if (dias < 0)  return 'vencido';
+  if (dias <= 7) return 'critico';
+  if (dias <= 30) return 'atencao';
+  return 'ok';
+}
+
+function badgeStatus(dias) {
+  const s = statusLote(dias);
+  if (s === 'vencido')  return `<span class="badge b-red">Vencido há ${Math.abs(dias)}d</span>`;
+  if (s === 'critico')  return `<span class="badge b-amber">Vence em ${dias}d ⚠️</span>`;
+  if (s === 'atencao')  return `<span class="badge" style="background:rgba(234,179,8,.12);color:#eab308;">Vence em ${dias}d</span>`;
+  if (s === 'ok')       return `<span class="badge b-green">OK — ${dias}d</span>`;
+  return `<span class="badge b-slate">Sem validade</span>`;
+}
+
+function fmtData(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/* ═══════════════ LOGIN ═══════════════ */
+async function doLogin() {
+  const nome  = document.getElementById('loginNome').value.trim();
+  const senha = document.getElementById('loginSenha').value.trim();
+  const err   = document.getElementById('lockError');
+  err.classList.add('hidden');
+  try {
+    const ok = await AuthService.login(nome, senha);
+    if (!ok) throw new Error('Usuário ou senha incorretos');
+    document.getElementById('lock').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+    init();
+  } catch(e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+}
+document.getElementById('loginSenha').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+/* ═══════════════ INIT ═══════════════ */
+function init() {
+  popularSelectProdutos();
+  atualizarKpis();
+  render();
+  verificarAlertas(false); // silencioso no boot
+  // escuta mudanças no estoque
+  EventBus.on('store:updated', () => { popularSelectProdutos(); atualizarKpis(); render(); });
+}
+
+function popularSelectProdutos() {
+  const sel = document.getElementById('fProduto');
+  if (!sel) return;
+  const prods = Store.getEstoque();
+  sel.innerHTML = '<option value="">— Selecionar produto —</option>' +
+    prods.map(p => `<option value="${p.id}" data-nome="${p.nome}">${p.nome}</option>`).join('');
+}
+
+function onProdutoChange() {
+  const sel  = document.getElementById('fProduto');
+  const nome = sel.options[sel.selectedIndex]?.dataset.nome || '';
+  if (nome) document.getElementById('fNomeAvulso').value = '';
+}
+
+/* ═══════════════ KPIs ═══════════════ */
+function atualizarKpis() {
+  const lotes = getLotes().filter(l => !l.descartado);
+  let v=0, c=0, a=0, o=0;
+  lotes.forEach(l => {
+    const dias = diasAteVencer(l.validade);
+    const s    = statusLote(dias);
+    if (s === 'vencido')  v++;
+    else if (s === 'critico')  c++;
+    else if (s === 'atencao')  a++;
+    else if (s === 'ok')       o++;
+  });
+  document.getElementById('kpiVencido').textContent = v;
+  document.getElementById('kpiCritico').textContent = c;
+  document.getElementById('kpiAtencao').textContent = a;
+  document.getElementById('kpiOk').textContent      = o;
+  const total = lotes.length;
+  document.getElementById('headerSub').textContent  = `${total} lote${total !== 1 ? 's' : ''} cadastrado${total !== 1 ? 's' : ''}`;
+}
+
+/* ═══════════════ TABS ═══════════════ */
+let _tab = 'todos';
+function setTab(tab) {
+  _tab = tab;
+  ['todos','vencido','critico','atencao','ok'].forEach(t => {
+    document.getElementById('tab-' + t)?.classList.toggle('active', t === tab);
+  });
+  render();
+}
+
+/* ═══════════════ RENDER ═══════════════ */
+function render() {
+  const busca  = (document.getElementById('busca')?.value || '').toLowerCase();
+  let lotes    = getLotes().filter(l => !l.descartado);
+
+  // filtro tab
+  if (_tab !== 'todos') {
+    lotes = lotes.filter(l => {
+      const s = statusLote(diasAteVencer(l.validade));
+      return s === _tab;
+    });
+  }
+
+  // filtro busca
+  if (busca) {
+    lotes = lotes.filter(l =>
+      (l.nome||'').toLowerCase().includes(busca) ||
+      (l.lote||'').toLowerCase().includes(busca) ||
+      (l.obs||'').toLowerCase().includes(busca)
+    );
+  }
+
+  // ordena: vencidos primeiro, depois por dias asc
+  lotes.sort((a, b) => {
+    const da = diasAteVencer(a.validade) ?? 9999;
+    const db = diasAteVencer(b.validade) ?? 9999;
+    return da - db;
+  });
+
+  const el = document.getElementById('lista');
+  if (!el) return;
+
+  if (!lotes.length) {
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-24 opacity-30">
+      <i class="fas fa-calendar-check text-5xl text-slate-600 mb-4"></i>
+      <p class="text-[10px] font-black uppercase tracking-widest text-slate-600">Nenhum lote encontrado</p>
+    </div>`;
+    return;
+  }
+
+  const isAdm = AuthService.isAdmin();
+  el.innerHTML = lotes.map(l => {
+    const dias = diasAteVencer(l.validade);
+    const s    = statusLote(dias);
+    return `<div class="val-card ${s}" onclick="abrirDetalhe('${l.id}')">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-[12px] font-black text-white truncate">${l.nome || '—'}</p>
+          ${l.lote ? `<p class="text-[9px] text-slate-500 font-bold mt-0.5">Lote: ${l.lote}</p>` : ''}
+        </div>
+        <div class="flex-shrink-0">${badgeStatus(dias)}</div>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        ${l.qtd ? `<span class="text-[9px] text-slate-400 font-bold"><i class="fas fa-box mr-1 opacity-50"></i>${l.qtd} un</span>` : ''}
+        <span class="text-[9px] text-slate-400 font-bold"><i class="fas fa-calendar-plus mr-1 opacity-50"></i>Entrada: ${fmtData(l.entrada)}</span>
+        <span class="text-[9px] font-bold ${s === 'vencido' ? 'text-red-400' : s === 'critico' ? 'text-amber-400' : 'text-slate-400'}">
+          <i class="fas fa-calendar-times mr-1 opacity-50"></i>Validade: ${fmtData(l.validade)}
+        </span>
+      </div>
+      ${l.obs ? `<p class="text-[9px] text-slate-600 font-bold mt-2 italic">${l.obs}</p>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════ MODAL NOVO ═══════════════ */
+let _modoEdicao = false;
+
+function abrirModalNovo() {
+  _modoEdicao = false;
+  document.getElementById('editId').value         = '';
+  document.getElementById('fProduto').value       = '';
+  document.getElementById('fNomeAvulso').value    = '';
+  document.getElementById('fLote').value          = '';
+  document.getElementById('fQtd').value           = '';
+  document.getElementById('fEntrada').value       = hoje();
+  document.getElementById('fValidade').value      = '';
+  document.getElementById('fObs').value           = '';
+  document.getElementById('modalTitulo').textContent = 'Novo Lote';
+  abrirModal('modalNovo');
+}
+
+function abrirEdicao(id) {
+  const l = getLotes().find(x => x.id === id);
+  if (!l) return;
+  _modoEdicao = true;
+  document.getElementById('editId').value         = l.id;
+  document.getElementById('fProduto').value       = l.prodId || '';
+  document.getElementById('fNomeAvulso').value    = l.prodId ? '' : (l.nome || '');
+  document.getElementById('fLote').value          = l.lote || '';
+  document.getElementById('fQtd').value           = l.qtd || '';
+  document.getElementById('fEntrada').value       = l.entrada || hoje();
+  document.getElementById('fValidade').value      = l.validade || '';
+  document.getElementById('fObs').value           = l.obs || '';
+  document.getElementById('modalTitulo').textContent = 'Editar Lote';
+  fecharModal('modalDetalhe');
+  abrirModal('modalNovo');
+}
+
+function salvarLote() {
+  const prodId  = document.getElementById('fProduto').value;
+  const nomeAvulso = document.getElementById('fNomeAvulso').value.trim();
+  const lote    = document.getElementById('fLote').value.trim();
+  const qtd     = parseFloat(document.getElementById('fQtd').value) || 0;
+  const entrada = document.getElementById('fEntrada').value;
+  const validade = document.getElementById('fValidade').value;
+  const obs     = document.getElementById('fObs').value.trim();
+
+  // resolve nome
+  let nome = nomeAvulso;
+  if (prodId && !nomeAvulso) {
+    const prod = Store.getEstoque().find(p => p.id === prodId);
+    nome = prod?.nome || '';
+  }
+  if (!nome) { showToast('Selecione um produto ou informe o nome', '', 'error'); return; }
+  if (!validade) { showToast('Informe a data de validade', '', 'error'); return; }
+
+  const eid = document.getElementById('editId').value;
+  mutateLotes(arr => {
+    if (eid) {
+      const idx = arr.findIndex(x => x.id === eid);
+      if (idx >= 0) arr[idx] = { ...arr[idx], prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, atualizadoEm: Utils.nowISO() };
+    } else {
+      arr.unshift({ id: Utils.generateId(), prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, criadoEm: Utils.nowISO(), descartado: false });
+    }
+  });
+
+  fecharModal('modalNovo');
+  atualizarKpis();
+  render();
+  showToast(_modoEdicao ? 'Lote atualizado!' : 'Lote cadastrado!', nome, 'success');
+
+  // sincroniza com Firebase
+  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'validade', getLotes());
+}
+
+/* ═══════════════ DETALHE ═══════════════ */
+function abrirDetalhe(id) {
+  const l = getLotes().find(x => x.id === id);
+  if (!l) return;
+  const dias = diasAteVencer(l.validade);
+  const s    = statusLote(dias);
+
+  const colorMap = { vencido:'#f87171', critico:'#fbbf24', atencao:'#eab308', ok:'#34d399', 'sem-data':'#94a3b8' };
+  const cor = colorMap[s] || '#94a3b8';
+
+  document.getElementById('detalheContent').innerHTML = `
+    <div style="text-align:center;padding:1rem 0">
+      <p style="font-size:2rem;margin-bottom:.5rem">${s === 'vencido' ? '❌' : s === 'critico' ? '⚠️' : s === 'atencao' ? '🕐' : '✅'}</p>
+      <p style="font-size:1rem;font-weight:900;color:#fff;margin-bottom:.5rem">${l.nome}</p>
+      ${badgeStatus(dias)}
+    </div>
+    <div style="display:grid;gap:.625rem;margin-top:1.25rem">
+      ${row('Lote',        l.lote || '—')}
+      ${row('Quantidade',  l.qtd ? l.qtd + ' un' : '—')}
+      ${row('Entrada',     fmtData(l.entrada))}
+      ${row('Validade',    fmtData(l.validade), cor)}
+      ${row('Dias restantes', dias === null ? '—' : dias < 0 ? `Vencido há ${Math.abs(dias)} dias` : `${dias} dias`, cor)}
+      ${l.obs ? row('Obs', l.obs) : ''}
+      ${row('Cadastrado', new Date(l.criadoEm||'').toLocaleDateString('pt-BR'))}
+    </div>`;
+
+  document.getElementById('btnEditarDetalhe').onclick    = () => abrirEdicao(id);
+  document.getElementById('btnDescartarDetalhe').onclick = () => descartarLote(id, l.nome);
+  abrirModal('modalDetalhe');
+}
+
+function row(label, valor, cor) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:.75rem;padding:.6rem .875rem">
+    <span style="font-size:.62rem;color:#64748b;font-weight:800;text-transform:uppercase;letter-spacing:.06em">${label}</span>
+    <span style="font-size:.75rem;font-weight:700;color:${cor||'#cbd5e1'}">${valor}</span>
+  </div>`;
+}
+
+function descartarLote(id, nome) {
+  if (!confirm(`Descartar lote de "${nome}"?\nEle sairá da lista ativa.`)) return;
+  mutateLotes(arr => {
+    const l = arr.find(x => x.id === id);
+    if (l) { l.descartado = true; l.descartadoEm = Utils.nowISO(); }
+  });
+  fecharModal('modalDetalhe');
+  atualizarKpis();
+  render();
+  showToast('Lote descartado', nome, 'warning');
+  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'validade', getLotes());
+}
+
+/* ═══════════════ ALERTAS TELEGRAM ═══════════════ */
+async function verificarAlertas(forcar) {
+  const lotes = getLotes().filter(l => !l.descartado);
+  const vencidos  = lotes.filter(l => statusLote(diasAteVencer(l.validade)) === 'vencido');
+  const criticos  = lotes.filter(l => statusLote(diasAteVencer(l.validade)) === 'critico');
+
+  // Badge visual no header
+  const total = vencidos.length + criticos.length;
+  document.getElementById('headerSub').textContent =
+    total > 0
+      ? `⚠️ ${vencidos.length} vencido(s) · ${criticos.length} crítico(s)`
+      : `${lotes.length} lote${lotes.length !== 1 ? 's' : ''} cadastrado${lotes.length !== 1 ? 's' : ''}`;
+
+  // Telegram — apenas se forçado manualmente OU se há vencidos/críticos e ainda não alertou hoje
+  const hoje_ = hoje();
+  const ultimoAlerta = localStorage.getItem('CH_VAL_ALERTA_DT');
+  if (!forcar && ultimoAlerta === hoje_) return;
+  if (!forcar && vencidos.length === 0 && criticos.length === 0) return;
+
+  try {
+    let msg = `📅 <b>Alertas de Validade — CH Geladas</b>\n━━━━━━━━━━━━━━━━━━\n`;
+
+    if (vencidos.length) {
+      msg += `\n❌ <b>VENCIDOS (${vencidos.length}):</b>\n`;
+      vencidos.forEach(l => {
+        const dias = diasAteVencer(l.validade);
+        msg += `  • ${l.nome}${l.lote ? ` [${l.lote}]` : ''} — venceu há ${Math.abs(dias)}d (${fmtData(l.validade)})\n`;
+      });
+    }
+    if (criticos.length) {
+      msg += `\n⚠️ <b>VENCE EM ATÉ 7 DIAS (${criticos.length}):</b>\n`;
+      criticos.forEach(l => {
+        const dias = diasAteVencer(l.validade);
+        msg += `  • ${l.nome}${l.lote ? ` [${l.lote}]` : ''} — ${dias}d (${fmtData(l.validade)})\n`;
+      });
+    }
+
+    if (!forcar && vencidos.length === 0 && criticos.length === 0) return;
+
+    msg += `\n🕐 <b>Verificado:</b> ${Utils.nowFull()}`;
+    await TelegramService.enviar(msg);
+    localStorage.setItem('CH_VAL_ALERTA_DT', hoje_);
+    if (forcar) showToast('Alerta enviado!', 'Verificar Telegram', 'success');
+  } catch(e) {
+    if (forcar) showToast('Telegram não configurado', '', 'warning');
+  }
+}
+
+/* ═══════════════ MODAL HELPERS ═══════════════ */
+function abrirModal(id)  { document.getElementById(id)?.classList.add('open'); }
+function fecharModal(id) { document.getElementById(id)?.classList.remove('open'); }
+
+/* ═══════════════ TOAST ═══════════════ */
+let _toastTimer;
+function showToast(title, sub, type) {
+  const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+  document.getElementById('toastIcon').textContent  = icons[type] || '📢';
+  document.getElementById('toastTitle').textContent = title;
+  document.getElementById('toastSub').textContent   = sub || '';
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
