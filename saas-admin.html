@@ -273,7 +273,7 @@ function renderLista() {
           <button class="btn-sm btn-info" onclick="gerarConviteAdmin('${e.id}','admin')">
             <i class="fas fa-user-shield mr-1"></i>Convite Admin
           </button>
-          <button class="btn-sm btn-danger" onclick="excluirEmpresa('${e.id}','${e.nome.replace(/'/g,'\\'')}')" style="opacity:.7">
+          <button class="btn-sm btn-danger" onclick="excluirEmpresa('${e.id}','${e.nome.replace(/'/g,"\\'")}')" style="opacity:.7">
             <i class="fas fa-trash mr-1"></i>Excluir
           </button>
         </div>
