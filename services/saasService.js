@@ -171,27 +171,15 @@
     return sess;
   }
 
-  // Login super-admin (dono do SaaS)
-  // Bug 2 fix: hash não fica hardcoded no JS — lido do Firestore em saas_meta/superAdmin
-  // Para definir a senha: salve o SHA-256 dela em saas_meta/superAdmin.adminHash via console Firebase
-  // Fallback seguro: se documento não existe, login bloqueado (força configuração explícita)
-  async function loginSuperAdmin(senha) {
-    await _ensureDB();
-    const hash = await CryptoService.sha256(senha.trim());
+  // Login super-admin — usa o mesmo PIN admin do sistema (pinHashAdmin do CH_CONFIG)
+  // Assim não há senha separada para memorizar: quem acessa o PDV como admin acessa o SaaS Admin
+  async function loginSuperAdmin(pin) {
+    if (!pin) throw new Error('Informe o PIN');
 
-    // Lê hash configurado no Firestore (não exposto no código)
-    try {
-      const metaSnap = await _fb.getDoc(_fb.doc(_db, 'saas_meta', 'superAdmin'));
-      if (!metaSnap.exists()) throw new Error('Painel não configurado. Defina adminHash em saas_meta/superAdmin no Firebase Console.');
-      const adminHash = metaSnap.data()?.adminHash;
-      if (!adminHash || typeof adminHash !== 'string' || adminHash.length !== 64)
-        throw new Error('Configuração inválida. adminHash deve ser SHA-256 (64 chars).');
-      if (hash !== adminHash) throw new Error('Senha incorreta');
-    } catch(e) {
-      if (e.message.includes('Senha') || e.message.includes('Painel') || e.message.includes('Configuração'))
-        throw e;
-      throw new Error('Erro ao verificar credenciais: ' + e.message);
-    }
+    // Usa o mesmo CryptoService.validatePin do core.js
+    // Compara com cfg.pinHashAdmin (configurado pelo usuário) ou fallback SHA256('001')
+    const role = await CryptoService.validatePin(pin);
+    if (role !== 'admin' && role !== 'adm') throw new Error('PIN incorreto');
 
     const sess = { superAdmin: true, nome: 'Super Admin', loginAt: Date.now() };
     _saveSession(sess);
