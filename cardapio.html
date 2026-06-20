@@ -234,22 +234,47 @@ let _pgto   = 'Dinheiro';
 
 /* ══ INIT ══ */
 window.addEventListener('DOMContentLoaded', () => {
-  // Tenta carregar dados do Firebase silenciosamente
-  FirebaseService.init().then(ok => {
-    if (ok) {
-      document.getElementById('syncDot')?.classList.remove('hidden');
-      FirebaseService.subscribeRealtime && FirebaseService.subscribeRealtime();
-      setTimeout(() => SyncService.pull && SyncService.pull(['estoque','config']), 500);
-    }
-  });
-  // Aguarda um pouco e renderiza
-  setTimeout(renderTudo, 600);
-  // Verifica params de geolocalização
-  verificarGeoParams();
-  // Ouve atualizações
-  EventBus.on('store:updated', renderTudo);
   // Seleciona Dinheiro por padrão
   document.querySelector('[data-pgto="Dinheiro"]')?.classList.add('ring-2','ring-orange-400');
+
+  // Verifica params de geolocalização
+  verificarGeoParams();
+
+  // Renderiza imediatamente com o que está no localStorage
+  renderTudo();
+
+  // Listener de atualização (registrado uma única vez)
+  // Bug 3 fix: usa variável de flag para não duplicar
+  if (!window._cardapioListenerOk) {
+    window._cardapioListenerOk = true;
+    EventBus.on('store:updated', renderTudo);
+  }
+
+  // Bug 1+2 fix: pull público de estoque e config sem exigir role
+  // O cardápio é público — busca diretamente via FirebaseService.ler()
+  FirebaseService.init().then(ok => {
+    if (!ok) return;
+    document.getElementById('syncDot')?.classList.remove('hidden');
+
+    // Pega estoque e config direto, sem passar por SyncService (que exige role)
+    Promise.all([
+      FirebaseService.ler('estoque'),
+      FirebaseService.ler('config'),
+    ]).then(([estoque, config]) => {
+      let atualizado = false;
+      if (Array.isArray(estoque) && estoque.length) {
+        try { localStorage.setItem('CH_ESTOQUE', JSON.stringify(estoque)); } catch(_) {}
+        Store.invalidate('estoque');
+        atualizado = true;
+      }
+      if (config && typeof config === 'object') {
+        try { localStorage.setItem('CH_CONFIG', JSON.stringify(config)); } catch(_) {}
+        Store.invalidate('config');
+        atualizado = true;
+      }
+      if (atualizado) renderTudo();
+    }).catch(() => {});
+  }).catch(() => {});
 });
 
 function renderTudo() {
@@ -276,10 +301,11 @@ function renderCardapio() {
   const el    = document.getElementById('catalogo');
   if (!el) return;
   const est = Store.getEstoque();
+  // Bug 4 fix: inclui esgotados com badge, não some silenciosamente
   let prods = est.filter(p => {
     const mb = !busca || (p.nome||'').toLowerCase().includes(busca);
     const mc = _cat==='TODOS' || (p.categoria||'')===_cat;
-    return mb && mc && (p.qtdUn||0) > 0; // só mostra disponíveis
+    return mb && mc;
   });
   if (prods.length === 0) {
     el.innerHTML = `<div class="col-span-2 flex flex-col items-center justify-center py-24 opacity-30">
@@ -288,22 +314,26 @@ function renderCardapio() {
     </div>`; return;
   }
   el.innerHTML = prods.map(p => {
+    const esgotado    = (p.qtdUn||0) <= 0;
     const qtdCarrinho = _cart.filter(i=>i.prodId===p.id).reduce((s,i)=>s+i.qtd,0);
-    return `<div class="prod-card">
+    return `<div class="prod-card${esgotado?' esgotado':''}">
+      ${esgotado ? `<span style="position:absolute;top:.6rem;right:.6rem;background:rgba(239,68,68,.18);color:#f87171;font-size:.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:.15rem .45rem;border-radius:9999px;">Esgotado</span>` : ''}
       <div class="mb-2">
         <p class="text-[12px] font-black text-white leading-tight mb-1">${p.nome}</p>
         ${p.categoria?`<span class="text-[8px] text-slate-600 font-bold uppercase">${p.categoria}</span>`:''}
       </div>
       <p class="text-base font-black text-orange-400 mb-3">${Utils.formatCurrency(p.precoUn||0)}</p>
-      ${qtdCarrinho>0
-        ? `<div class="flex items-center gap-2 justify-between">
-            <button onclick="removerDoCarrinho('${p.id}')" class="w-9 h-9 rounded-xl bg-red-500/15 text-red-400 font-black text-lg flex items-center justify-center active:scale-90 transition-all">−</button>
-            <span class="font-black text-white text-sm">${qtdCarrinho}</span>
-            <button onclick="addCarrinho('${p.id}')" class="w-9 h-9 rounded-xl bg-orange-600/20 text-orange-300 font-black text-lg flex items-center justify-center active:scale-90 transition-all">+</button>
-          </div>`
-        : `<button onclick="addCarrinho('${p.id}')" class="w-full py-2.5 rounded-xl bg-orange-600/20 border border-orange-500/25 text-orange-300 font-black text-[10px] uppercase transition-all active:scale-95 hover:bg-orange-600/35">
-            <i class="fas fa-plus mr-1"></i>Adicionar
-          </button>`
+      ${esgotado
+        ? `<div class="w-full py-2.5 rounded-xl bg-slate-800/60 border border-white/5 text-slate-600 font-black text-[10px] uppercase text-center">Indisponível</div>`
+        : qtdCarrinho>0
+          ? `<div class="flex items-center gap-2 justify-between">
+              <button onclick="removerDoCarrinho('${p.id}')" class="w-9 h-9 rounded-xl bg-red-500/15 text-red-400 font-black text-lg flex items-center justify-center active:scale-90 transition-all">−</button>
+              <span class="font-black text-white text-sm">${qtdCarrinho}</span>
+              <button onclick="addCarrinho('${p.id}')" class="w-9 h-9 rounded-xl bg-orange-600/20 text-orange-300 font-black text-lg flex items-center justify-center active:scale-90 transition-all">+</button>
+            </div>`
+          : `<button onclick="addCarrinho('${p.id}')" class="w-full py-2.5 rounded-xl bg-orange-600/20 border border-orange-500/25 text-orange-300 font-black text-[10px] uppercase transition-all active:scale-95 hover:bg-orange-600/35">
+              <i class="fas fa-plus mr-1"></i>Adicionar
+            </button>`
       }
     </div>`;
   }).join('');
@@ -392,7 +422,8 @@ function enviarPedido() {
   const tel = document.getElementById('cliTel')?.value.trim();
   const obs = document.getElementById('cliObs')?.value.trim();
   const total   = getTotal();
-  const numPedido = '#' + Date.now().toString().slice(-5);
+  // Bug 6 fix: número único — base36 dos últimos 5 chars do timestamp + 2 chars aleatórios
+  const numPedido = '#' + Date.now().toString(36).slice(-4).toUpperCase() + Math.random().toString(36).slice(-2).toUpperCase();
 
   const pedido = {
     id:        Utils.generateId(),
@@ -415,23 +446,25 @@ function enviarPedido() {
   // Salvar no Store
   Store.mutatePedidos(pedidos => { pedidos.unshift(pedido); });
 
-  // Notificação Telegram
-  const itensStr = _cart.map(i=>`  · ${i.nome} x${i.qtd}  ${Utils.formatCurrency(i.preco*i.qtd)}`).join('\n');
-  TelegramService.enviar(
-    `🛵 <b>NOVO PEDIDO — CH Geladas</b>\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `🔖 <b>Pedido:</b> ${numPedido}\n` +
-    `👤 <b>Cliente:</b> ${nome}\n` +
-    `📍 <b>Endereço:</b> ${endereco}\n` +
-    `${tel?`📞 <b>Tel:</b> ${tel}\n`:''}` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `${itensStr}\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `💰 <b>Total:</b> ${Utils.formatCurrency(total)}\n` +
-    `💳 <b>Pgto:</b> ${_pgto}\n` +
-    `${obs?`📝 <b>Obs:</b> ${obs}\n`:''}` +
-    `🕐 <b>Hora:</b> ${Utils.nowTime()}`
-  );
+  // Bug 5 fix: Telegram dentro de try/catch — erro não trava o fluxo do cliente
+  try {
+    const itensStr = _cart.map(i=>`  · ${i.nome} x${i.qtd}  ${Utils.formatCurrency(i.preco*i.qtd)}`).join('\n');
+    TelegramService.enviar(
+      `🛵 <b>NOVO PEDIDO — CH Geladas</b>\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `🔖 <b>Pedido:</b> ${numPedido}\n` +
+      `👤 <b>Cliente:</b> ${nome}\n` +
+      `📍 <b>Endereço:</b> ${endereco}\n` +
+      `${tel?`📞 <b>Tel:</b> ${tel}\n`:''}` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `${itensStr}\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `💰 <b>Total:</b> ${Utils.formatCurrency(total)}\n` +
+      `💳 <b>Pgto:</b> ${_pgto}\n` +
+      `${obs?`📝 <b>Obs:</b> ${obs}\n`:''}` +
+      `🕐 <b>Hora:</b> ${Utils.nowTime()}`
+    );
+  } catch(e) { console.warn('[Cardapio] Telegram falhou:', e.message); }
 
   UIService.closeModal('modalCarrinho');
   _setText('sucessoMsg', `${nome}, seu pedido foi recebido!`);

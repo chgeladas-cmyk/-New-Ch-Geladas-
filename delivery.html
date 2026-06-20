@@ -310,7 +310,7 @@ async function doLogin() {
     const user = await window.CH.UserService.login(nome, senha);
     ok = !!user;
   } else {
-    ok = await AuthService.login(senha);
+    ok = await AuthService.login(nome, senha);
   }
   if (ok) {
     document.getElementById('lock').classList.add('hidden');
@@ -340,20 +340,28 @@ let _filtroStatus = 'TODOS';
 let _itensPedidoForm = []; // [{prodId, nome, preco, qtd}]
 
 /* ═══════════ INIT ═══════════ */
+// Bug 1 fix: listener registrado uma única vez, fora de init()
+// init() pode ser chamado múltiplas vezes (DOMContentLoaded + pós-login)
+// sem acumular listeners duplicados
+let _storeListenerOk = false;
 function init() {
   UIService.startClock('clock');
   popularSelectProdutos();
   preencherEntregadores();
   atualizarKpis();
   renderPedidos();
-  EventBus.on('store:updated', () => { atualizarKpis(); renderPedidos(); popularSelectProdutos(); preencherEntregadores(); });
+  if (!_storeListenerOk) {
+    _storeListenerOk = true;
+    EventBus.on('store:updated', () => { atualizarKpis(); renderPedidos(); popularSelectProdutos(); preencherEntregadores(); });
+  }
 }
 
 /* ═══════════ POPULAR SELECTS ═══════════ */
 function popularSelectProdutos() {
   const sel = document.getElementById('fItemProd');
   if (!sel) return;
-  const prods = Store.getEstoque();
+  // Bug 6 fix: só mostra produtos com estoque disponível (ou sem controle)
+  const prods = Store.getEstoque().filter(p => p.controlaEstoque === false || (p.qtdUn||0) > 0);
   sel.innerHTML = '<option value="">Selecione produto...</option>' +
     prods.map(p => `<option value="${p.id}" data-preco="${p.precoUn||0}">${p.nome} — ${Utils.formatCurrency(p.precoUn||0)}</option>`).join('');
 }
@@ -524,6 +532,7 @@ function salvarPedido() {
   const isEdicao   = !!document.getElementById('fPedidoId').value;
   const sub        = _itensPedidoForm.reduce((s,i)=>s+(i.preco*i.qtd),0);
   const taxa       = parseFloat(document.getElementById('fTaxa')?.value)||0;
+  const _pedExistente = isEdicao ? Store.getPedidos().find(p=>p.id===id) : null;
   const pedido = {
     id,
     cliente,
@@ -534,10 +543,13 @@ function salvarPedido() {
     formaPgto:  document.getElementById('fFormaPgto')?.value||'Dinheiro',
     itens:      [..._itensPedidoForm],
     taxa, subtotal: sub, total: sub+taxa,
-    status:     isEdicao ? (Store.getPedidos().find(p=>p.id===id)?.status||'Novo') : 'Novo',
-    dataCurta:  Utils.todayISO(),
-    criadoEm:   isEdicao ? (Store.getPedidos().find(p=>p.id===id)?.criadoEm||new Date().toISOString()) : new Date().toISOString(),
-    atualizadoEm: new Date().toISOString(),
+    // Bug 3 fix: hora e origem preservados/definidos corretamente
+    origem:     'DELIVERY',
+    hora:       isEdicao ? (_pedExistente?.hora || Utils.nowTime()) : Utils.nowTime(),
+    status:     isEdicao ? (_pedExistente?.status||'Novo') : 'Novo',
+    dataCurta:  isEdicao ? (_pedExistente?.dataCurta || Utils.todayISO()) : Utils.todayISO(),
+    criadoEm:   isEdicao ? (_pedExistente?.criadoEm  || Utils.nowISO())  : Utils.nowISO(),
+    atualizadoEm: Utils.nowISO(),
   };
 
   Store.mutatePedidos(pedidos => {
@@ -610,10 +622,14 @@ async function avancarStatus(id, novoStatus) {
         origem: 'DELIVERY', nomeCliente: p.cliente,
       };
       Store.mutateVendas(vendas => { vendas.unshift(venda); });
+      // Bug 4 fix: respeita controlaEstoque === false
       Store.mutateEstoque(est => {
         itens.forEach(item => {
           const prod = est.find(x=>x.id===item.prodId);
-          if (prod) prod.qtdUn = Math.max(0,(prod.qtdUn||0)-item.qtd);
+          if (prod && prod.controlaEstoque !== false) {
+            prod.qtdUn = Math.max(0,(prod.qtdUn||0)-item.qtd);
+            prod.estoqueAtual = prod.qtdUn;
+          }
         });
       });
       EventBus.emit('venda:finalizada', venda);
@@ -625,32 +641,36 @@ async function avancarStatus(id, novoStatus) {
       if (ped) { ped.vendaId = venda?.id || null; ped.entregueEm = new Date().toISOString(); }
     });
 
-    // Notificação Telegram na entrega
-    const itensDesc = itens.map(i=>`  · ${i.nome} x${i.qtd}`).join('\n');
-    TelegramService.enviar(
-      `✅ <b>Pedido Entregue — CH Geladas</b>\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `👤 <b>Cliente:</b> ${p.cliente||'—'}\n` +
-      `📍 <b>Endereço:</b> ${p.endereco||'—'}\n` +
-      `🛵 <b>Entregador:</b> ${p.entregador||'—'}\n` +
-      `${itensDesc}\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `💰 <b>Total:</b> ${Utils.formatCurrency(p.total||0)}\n` +
-      `💳 <b>Pgto:</b> ${p.formaPgto||'—'}\n` +
-      `🕐 <b>Hora:</b> ${Utils.nowTime()}`
-    );
+    // Bug 5 fix: Telegram dentro de try/catch — falha não trava o fluxo
+    try {
+      const itensDesc = itens.map(i=>`  · ${i.nome} x${i.qtd}`).join('\n');
+      TelegramService.enviar(
+        `✅ <b>Pedido Entregue — CH Geladas</b>\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `👤 <b>Cliente:</b> ${p.cliente||'—'}\n` +
+        `📍 <b>Endereço:</b> ${p.endereco||'—'}\n` +
+        `🛵 <b>Entregador:</b> ${p.entregador||'—'}\n` +
+        `${itensDesc}\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `💰 <b>Total:</b> ${Utils.formatCurrency(p.total||0)}\n` +
+        `💳 <b>Pgto:</b> ${p.formaPgto||'—'}\n` +
+        `🕐 <b>Hora:</b> ${Utils.nowTime()}`
+      );
+    } catch(e) { console.warn('[Delivery] Telegram entregue falhou:', e.message); }
   }
 
   if (novoStatus === 'A Caminho' && _pedidoAtual) {
     const p = _pedidoAtual;
-    TelegramService.enviar(
-      `🛵 <b>Pedido Saiu para Entrega — CH Geladas</b>\n` +
-      `👤 <b>Cliente:</b> ${p.cliente||'—'}\n` +
-      `📍 <b>Endereço:</b> ${p.endereco||'—'}\n` +
-      `🛵 <b>Entregador:</b> ${p.entregador||'—'}\n` +
-      `💰 <b>Total:</b> ${Utils.formatCurrency(p.total||0)}\n` +
-      `🕐 <b>Hora:</b> ${Utils.nowTime()}`
-    );
+    try {
+      TelegramService.enviar(
+        `🛵 <b>Pedido Saiu para Entrega — CH Geladas</b>\n` +
+        `👤 <b>Cliente:</b> ${p.cliente||'—'}\n` +
+        `📍 <b>Endereço:</b> ${p.endereco||'—'}\n` +
+        `🛵 <b>Entregador:</b> ${p.entregador||'—'}\n` +
+        `💰 <b>Total:</b> ${Utils.formatCurrency(p.total||0)}\n` +
+        `🕐 <b>Hora:</b> ${Utils.nowTime()}`
+      );
+    } catch(e) { console.warn('[Delivery] Telegram caminho falhou:', e.message); }
   }
 
   const labels = { Preparando:'Preparando ⏳', 'A Caminho':'A caminho 🛵', Entregue:'Entregue ✅' };
