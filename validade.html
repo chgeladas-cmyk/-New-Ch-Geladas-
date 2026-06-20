@@ -77,8 +77,9 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
     <div class="text-5xl mb-4">📅</div>
     <h1 class="text-2xl font-black mb-1 uppercase">CH <span style="color:#ef4444">GELADAS</span></h1>
     <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Módulo de Validade</p>
-    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-red-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
-    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-red-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
+    <input type="password" id="loginPin" autocomplete="current-password" inputmode="numeric"
+      class="w-full bg-slate-950 border-2 border-slate-800 focus:border-red-500 p-4 rounded-2xl text-center outline-none text-white transition-all font-sans mb-4 text-2xl tracking-[.5em]"
+      placeholder="• • • •" maxlength="8">
     <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
     <button onclick="doLogin()" class="w-full py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all" style="background:#ef4444">
       <i class="fas fa-unlock-alt mr-2"></i>Entrar
@@ -293,23 +294,24 @@ function fmtData(iso) {
 
 /* ═══════════════ LOGIN ═══════════════ */
 async function doLogin() {
-  const nome  = document.getElementById('loginNome').value.trim();
-  const senha = document.getElementById('loginSenha').value.trim();
-  const err   = document.getElementById('lockError');
+  const pin = document.getElementById('loginPin').value.trim();
+  const err = document.getElementById('lockError');
   err.classList.add('hidden');
-  try {
-    const ok = await AuthService.login(nome, senha);
-    if (!ok) throw new Error('Usuário ou senha incorretos');
+  if (!pin) return;
+  const ok = await AuthService.login(pin);
+  if (ok) {
     document.getElementById('lock').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     if (AuthService.isAdmin()) document.body.classList.add('is-admin');
     init();
-  } catch(e) {
-    err.textContent = e.message;
+  } else {
+    err.textContent = 'PIN incorreto.';
     err.classList.remove('hidden');
+    document.getElementById('loginPin').value = '';
+    document.getElementById('loginPin').focus();
   }
 }
-document.getElementById('loginSenha').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginPin').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 /* ═══════════════ INIT ═══════════════ */
 function init() {
