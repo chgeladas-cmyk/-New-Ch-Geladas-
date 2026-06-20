@@ -76,8 +76,9 @@ body { background:#04060d; color:#f1f5f9; font-family:'DM Sans',sans-serif; min-
   <div class="lock-card">
     <div style="font-size:2.5rem;margin-bottom:.75rem">🔐</div>
     <p class="lock-logo">SaaS Admin</p>
-    <p style="font-size:.65rem;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:.25rem 0 1.75rem">CH Geladas</p>
-    <input type="password" id="adminSenha" class="inp" placeholder="Senha master">
+    <p style="font-size:.65rem;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:.25rem 0 .5rem">CH Geladas</p>
+    <p style="font-size:.62rem;color:#1e3a5f;font-weight:600;margin-bottom:1.5rem">Use o mesmo PIN admin do PDV</p>
+    <input type="password" id="adminSenha" class="inp" placeholder="PIN admin do sistema" inputmode="numeric">
     <div id="adminErr" style="font-size:.7rem;color:#f87171;font-weight:700;min-height:1rem;margin-bottom:.75rem"></div>
     <button id="btnLoginAdmin" onclick="loginAdmin(this)" style="width:100%;padding:1rem;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;border-radius:1rem;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;cursor:pointer">
       Entrar
@@ -155,7 +156,7 @@ async function loginAdmin(btn) {
   btn = btn || document.getElementById('btnLoginAdmin');
   const SS  = _SS();
   const err = document.getElementById('adminErr');
-  if (!SS) { err.textContent = 'Serviço não carregado.'; return; }
+  if (!SS) { err.textContent = 'Serviço não carregado. Aguarde e tente novamente.'; btn.textContent = 'Entrar'; btn.disabled = false; return; }
   btn.textContent = 'Verificando…';
   btn.disabled = true;
   try {
@@ -178,15 +179,20 @@ function logoutAdmin() {
 
 document.getElementById('adminSenha').addEventListener('keydown', e => { if (e.key === 'Enter') loginAdmin(document.getElementById('btnLoginAdmin')); });
 
-// Restaura sessão super admin se já estava logado
-window.addEventListener('DOMContentLoaded', () => {
+// Restaura sessão — aguarda SaasService estar pronto (scripts externos podem demorar no PWA)
+function _tentarRestaurarSessao(tentativas) {
   const SS = _SS();
-  if (SS && SS.isSuperAdmin()) {
+  if (!SS) {
+    if (tentativas > 0) setTimeout(() => _tentarRestaurarSessao(tentativas - 1), 150);
+    return;
+  }
+  if (SS.isSuperAdmin()) {
     document.getElementById('lock').style.display = 'none';
     document.getElementById('app').style.display  = 'block';
     carregar();
   }
-});
+}
+window.addEventListener('DOMContentLoaded', () => _tentarRestaurarSessao(20));
 
 // ── CARREGAR EMPRESAS ─────────────────────────────────────────────
 async function carregar() {
