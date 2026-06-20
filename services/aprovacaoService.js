@@ -99,8 +99,9 @@
       throw new Error(`Venda está "${venda.status}", esperado "pendente"`);
 
     // Valida disponibilidade real (estoqueAtual − reservas de outras vendas)
+    // Câmbios não movimentam estoque — pula verificação
     const ES = window.CH.EstoqueService;
-    if (ES) {
+    if (ES && !venda._cambio) {
       const reservas = ES.getReservas();
       for (const item of venda.itens || []) {
         const prod = ES.getProduto(item.prodId);
@@ -184,8 +185,9 @@
       throw new Error(`Venda está "${venda.status}", esperado "aprovada"`);
 
     // ── PASSO 1: Verifica estoque disponível ──────────────────────
+    // Câmbios não movimentam estoque — pula verificação e baixa
     const ES = window.CH.EstoqueService;
-    if (ES) {
+    if (ES && !venda._cambio) {
       const errosEstoque = [];
       for (const item of venda.itens || []) {
         const prod = ES.getProduto(item.prodId);
@@ -201,38 +203,41 @@
     }
 
     // ── PASSO 2: Libera reserva ───────────────────────────────────
-    ES?.liberarReserva?.(venda.id);
+    if (!venda._cambio) ES?.liberarReserva?.(venda.id);
 
     // ── PASSO 3: BAIXA DE ESTOQUE — ANTES DE MUDAR STATUS ─────────
-    let baixaOk    = false;
+    let baixaOk    = true;   // câmbio sempre ok (sem estoque)
     let baixaErros = [];
 
-    if (ES?.baixarEstoqueVendaLote) {
-      try {
-        const resultado = await ES.baixarEstoqueVendaLote(venda);
-        baixaOk    = resultado.ok || resultado.localFallback || false;
-        baixaErros = resultado.erros || [];
-        if (!resultado.ok && !resultado.localFallback && resultado.itensProcessados === 0) {
-          throw new Error(`Baixa falhou: ${resultado.erros?.join('; ')}`);
+    if (!venda._cambio) {
+      baixaOk = false;
+      if (ES?.baixarEstoqueVendaLote) {
+        try {
+          const resultado = await ES.baixarEstoqueVendaLote(venda);
+          baixaOk    = resultado.ok || resultado.localFallback || false;
+          baixaErros = resultado.erros || [];
+          if (!resultado.ok && !resultado.localFallback && resultado.itensProcessados === 0) {
+            throw new Error(`Baixa falhou: ${resultado.erros?.join('; ')}`);
+          }
+        } catch (e) {
+          console.error('[AprovacaoService] baixarEstoqueVendaLote falhou:', e.message);
+          throw new Error(`Validação bloqueada: ${e.message}`);
         }
-      } catch (e) {
-        console.error('[AprovacaoService] baixarEstoqueVendaLote falhou:', e.message);
-        throw new Error(`Validação bloqueada: ${e.message}`);
-      }
-    } else {
-      // Fallback local direto
-      Store.mutateEstoque(estoque => {
-        (venda.itens || []).forEach(item => {
-          const prod = estoque.find(p => p.id === item.prodId);
-          if (!prod || prod.controlaEstoque === false) return;
-          const qtdDesc = item.label === 'UNID'
-            ? item.qtd
-            : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
-          prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
-          prod.estoqueAtual = prod.qtdUn;
+      } else {
+        // Fallback local direto
+        Store.mutateEstoque(estoque => {
+          (venda.itens || []).forEach(item => {
+            const prod = estoque.find(p => p.id === item.prodId);
+            if (!prod || prod.controlaEstoque === false) return;
+            const qtdDesc = item.label === 'UNID'
+              ? item.qtd
+              : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
+            prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
+            prod.estoqueAtual = prod.qtdUn;
+          });
         });
-      });
-      baixaOk = true;
+        baixaOk = true;
+      }
     }
 
     // ── PASSO 4: MUDA STATUS APÓS CONFIRMAÇÃO DA BAIXA ────────────
@@ -434,8 +439,8 @@
     try {
       for (const venda of aprovadas) {
         try {
-          // PASSO 1: Verifica estoque
-          if (ES) {
+          // PASSO 1: Verifica estoque (câmbios pulam — não movimentam estoque)
+          if (ES && !venda._cambio) {
             const errosEstoque = [];
             for (const item of venda.itens || []) {
               const prod = ES.getProduto(item.prodId);
@@ -454,40 +459,42 @@
             }
           }
 
-          // PASSO 2: Libera reserva
-          ES?.liberarReserva?.(venda.id);
+          // PASSO 2: Libera reserva (câmbios pulam)
+          if (!venda._cambio) ES?.liberarReserva?.(venda.id);
 
-          // PASSO 3: Baixa de estoque
-          let baixaOk    = false;
+          // PASSO 3: Baixa de estoque (câmbios pulam)
+          let baixaOk    = true;   // câmbio ok sem baixa
           let baixaErros = [];
 
-          if (ES?.baixarEstoqueVendaLote) {
-            const res = await ES.baixarEstoqueVendaLote(venda);
-            baixaOk    = res.ok && !res.erros?.length; // só considera OK se 100% dos itens baixaram, sem erro algum
-            baixaErros = res.erros || [];
+          if (!venda._cambio) {
+            baixaOk = false;
+            if (ES?.baixarEstoqueVendaLote) {
+              const res = await ES.baixarEstoqueVendaLote(venda);
+              baixaOk    = res.ok && !res.erros?.length;
+              baixaErros = res.erros || [];
 
-            // Qualquer falha (total, parcial, ou fallback local com erro) bloqueia a venda
-            if (!baixaOk) {
-              const motivo = res.localFallback
-                ? `Baixa aplicada apenas localmente (sem confirmação do Firebase): ${baixaErros.join('; ') || 'motivo desconhecido'}`
-                : `Baixa falhou ou parcial: ${baixaErros.join('; ') || 'erro desconhecido'}`;
-              erros.push({ id: venda.id, erro: motivo });
-              _marcarErroValidacao(venda.id, motivo, agora, operador);
-              continue;
-            }
-          } else {
-            Store.mutateEstoque(estoque => {
-              (venda.itens || []).forEach(item => {
-                const prod = estoque.find(p => p.id === item.prodId);
-                if (!prod || prod.controlaEstoque === false) return;
-                const qtdDesc = item.label === 'UNID'
-                  ? item.qtd
-                  : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
-                prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
-                prod.estoqueAtual = prod.qtdUn;
+              if (!baixaOk) {
+                const motivo = res.localFallback
+                  ? `Baixa aplicada apenas localmente (sem confirmação do Firebase): ${baixaErros.join('; ') || 'motivo desconhecido'}`
+                  : `Baixa falhou ou parcial: ${baixaErros.join('; ') || 'erro desconhecido'}`;
+                erros.push({ id: venda.id, erro: motivo });
+                _marcarErroValidacao(venda.id, motivo, agora, operador);
+                continue;
+              }
+            } else {
+              Store.mutateEstoque(estoque => {
+                (venda.itens || []).forEach(item => {
+                  const prod = estoque.find(p => p.id === item.prodId);
+                  if (!prod || prod.controlaEstoque === false) return;
+                  const qtdDesc = item.label === 'UNID'
+                    ? item.qtd
+                    : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
+                  prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
+                  prod.estoqueAtual = prod.qtdUn;
+                });
               });
-            });
-            baixaOk = true;
+              baixaOk = true;
+            }
           }
 
           // PASSO 4: Muda status

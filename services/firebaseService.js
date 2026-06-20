@@ -88,6 +88,10 @@
         _unsubscribers.push(unsub);
       } catch(e){console.warn('[RT] vendas subscribe falhou:',e.message);}
 
+      // Coleções append-only: o snapshot NAO sobrescreve o local.
+      // Faz merge por ID para não perder registros criados offline ou em outro dispositivo.
+      const _APPEND_ONLY_RT = new Set(['saidas','financeiro','ponto','movimentacoes','contagens']);
+
       colsRT.forEach(col=>{
         try {
           const unsub = _fb.onSnapshot(_fb.doc(_db,'ch_dados',col), snap=>{
@@ -103,7 +107,26 @@
             }
             const key=CONSTANTS.DB[col.toUpperCase()];
             if (!key) return;
-            try{localStorage.setItem(key,JSON.stringify(dados));}catch(_){}
+
+            if (_APPEND_ONLY_RT.has(col) && Array.isArray(dados)) {
+              // Merge: preserva registros locais que ainda não chegaram no Firestore
+              try {
+                const local = JSON.parse(localStorage.getItem(key)||'[]');
+                const fbIds = new Set(dados.map(d=>d.id).filter(Boolean));
+                // Registros locais sem ID no Firestore = ainda não sincronizados, mantém
+                const soPendentes = local.filter(d=>d.id && !fbIds.has(d.id));
+                const merged = [...soPendentes, ...dados];
+                // Ordena por criadoEm desc para manter consistência
+                merged.sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));
+                localStorage.setItem(key, JSON.stringify(merged));
+              } catch(_) {
+                // Fallback: substitui normalmente
+                try{localStorage.setItem(key,JSON.stringify(dados));}catch(__) {}
+              }
+            } else {
+              try{localStorage.setItem(key,JSON.stringify(dados));}catch(_){}
+            }
+
             Store?.invalidate(col);
             EventBus.emit('store:updated',col);
             EventBus.emit(`store:${col}`);
