@@ -172,12 +172,27 @@
   }
 
   // Login super-admin (dono do SaaS)
-  // Hash fixo cacheado — calculado 1 vez, não a cada login
-  let _superHash = null;
+  // Bug 2 fix: hash não fica hardcoded no JS — lido do Firestore em saas_meta/superAdmin
+  // Para definir a senha: salve o SHA-256 dela em saas_meta/superAdmin.adminHash via console Firebase
+  // Fallback seguro: se documento não existe, login bloqueado (força configuração explícita)
   async function loginSuperAdmin(senha) {
-    if (!_superHash) _superHash = await CryptoService.sha256('chgeladas_saas_master_2025');
+    await _ensureDB();
     const hash = await CryptoService.sha256(senha.trim());
-    if (hash !== _superHash) throw new Error('Senha incorreta');
+
+    // Lê hash configurado no Firestore (não exposto no código)
+    try {
+      const metaSnap = await _fb.getDoc(_fb.doc(_db, 'saas_meta', 'superAdmin'));
+      if (!metaSnap.exists()) throw new Error('Painel não configurado. Defina adminHash em saas_meta/superAdmin no Firebase Console.');
+      const adminHash = metaSnap.data()?.adminHash;
+      if (!adminHash || typeof adminHash !== 'string' || adminHash.length !== 64)
+        throw new Error('Configuração inválida. adminHash deve ser SHA-256 (64 chars).');
+      if (hash !== adminHash) throw new Error('Senha incorreta');
+    } catch(e) {
+      if (e.message.includes('Senha') || e.message.includes('Painel') || e.message.includes('Configuração'))
+        throw e;
+      throw new Error('Erro ao verificar credenciais: ' + e.message);
+    }
+
     const sess = { superAdmin: true, nome: 'Super Admin', loginAt: Date.now() };
     _saveSession(sess);
     return sess;
@@ -225,16 +240,16 @@
     if (conv.usado) throw new Error('Código já utilizado');
     if (new Date(conv.expiraEm) < new Date()) throw new Error('Código expirado');
 
-    // Verifica nome duplicado na empresa
+    // Bug 6 fix: query com 2 where (sem índice composto) + filtro ativo em memória
     const nomeN = nome.trim().toLowerCase();
     const dupQ = _fb.query(
       _fb.collection(_db, 'saas_usuarios'),
       _fb.where('empresaId', '==', conv.empresaId),
       _fb.where('nomeNorm',  '==', nomeN),
-      _fb.where('ativo',     '==', true),
     );
     const dupSnap = await _fb.getDocs(dupQ);
-    if (!dupSnap.empty) throw new Error('Já existe um usuário com este nome nesta empresa. Escolha outro nome.');
+    const dupAtivo = dupSnap.docs.map(d => d.data()).find(u => u.ativo !== false);
+    if (dupAtivo) throw new Error('Já existe um usuário com este nome nesta empresa. Escolha outro nome.');
 
     const uid      = Utils.generateId();
     const senhaHash = await CryptoService.sha256(senha.trim());
@@ -327,6 +342,26 @@
     await _fb.updateDoc(_fb.doc(_db, 'saas_empresas', empresaId), { ativo });
   }
 
+  // ─── Excluir empresa (super admin) ───────────────────────────────
+  async function excluirEmpresa(empresaId) {
+    if (!isSuperAdmin()) throw new Error('Acesso negado');
+    await _ensureDB();
+    // Apaga empresa, usuários e convites da empresa em batch
+    const batch = _fb.writeBatch(_db);
+    batch.delete(_fb.doc(_db, 'saas_empresas', empresaId));
+    // Apaga usuários da empresa
+    const usersSnap = await _fb.getDocs(
+      _fb.query(_fb.collection(_db, 'saas_usuarios'), _fb.where('empresaId', '==', empresaId))
+    );
+    usersSnap.docs.forEach(d => batch.delete(d.ref));
+    // Apaga convites da empresa
+    const convSnap = await _fb.getDocs(
+      _fb.query(_fb.collection(_db, 'saas_convites'), _fb.where('empresaId', '==', empresaId))
+    );
+    convSnap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
   // ─── Expor ────────────────────────────────────────────────────────
   window.CH.SaasService = {
     // Sessão
@@ -339,7 +374,7 @@
     // Usuários
     getUsuariosEmpresa, desativarUsuario,
     // Super admin
-    listarEmpresas, atualizarPlano, toggleEmpresa, gerarConviteAdmin,
+    listarEmpresas, atualizarPlano, toggleEmpresa, excluirEmpresa, gerarConviteAdmin,
     // Planos
     getPlanos, getPlano,
   };
