@@ -55,10 +55,11 @@ body { background:#04060d; color:#f1f5f9; font-family:'DM Sans',sans-serif; min-
   <p class="sub">Gerencie seu negócio</p>
 
   <!-- ABAS -->
-  <div class="tabs">
+  <div class="tabs" id="tabsContainer">
     <div class="tab on" onclick="setAba('registro')"  id="tab-registro">Nova Empresa</div>
     <div class="tab"    onclick="setAba('login')"     id="tab-login">Entrar</div>
     <div class="tab"    onclick="setAba('convite')"   id="tab-convite">Convite</div>
+    <div class="tab"    onclick="setAba('minha')"     id="tab-minha" style="display:none">Minha Empresa</div>
   </div>
 
   <!-- ABA REGISTRO -->
@@ -71,6 +72,9 @@ body { background:#04060d; color:#f1f5f9; font-family:'DM Sans',sans-serif; min-
 
     <label class="label">Senha</label>
     <input type="password" id="regSenha" class="inp" placeholder="Mínimo 4 caracteres">
+
+    <label class="label">Confirmar Senha</label>
+    <input type="password" id="regSenhaConf" class="inp" placeholder="Repita a senha">
 
     <label class="label">Plano</label>
     <div class="planos-grid">
@@ -131,6 +135,38 @@ body { background:#04060d; color:#f1f5f9; font-family:'DM Sans',sans-serif; min-
     </button>
   </div>
 
+  <!-- ABA MINHA EMPRESA (visível quando logado como dono) -->
+  <div id="aba-minha" style="display:none">
+    <div style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.2);border-radius:.875rem;padding:.875rem 1rem;margin-bottom:1rem">
+      <p style="font-size:.65rem;color:#a78bfa;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.25rem">Empresa ativa</p>
+      <p id="minhaEmpresaNome" style="font-size:.9rem;font-weight:700;color:#f1f5f9"></p>
+      <p id="minhaEmpresaId"   style="font-size:.6rem;color:#64748b;font-family:monospace;margin-top:.2rem;word-break:break-all"></p>
+    </div>
+
+    <p style="font-size:.65rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.625rem">Gerar Convite</p>
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <select id="conviteRole" style="flex:1;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:.75rem;color:#f1f5f9;font-size:.9rem;padding:.6rem .875rem;outline:none">
+        <option value="colaborador">Colaborador</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button onclick="gerarConviteDono()" style="padding:.6rem 1.25rem;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.25);border-radius:.75rem;color:#a78bfa;font-weight:800;font-size:.8rem;cursor:pointer;white-space:nowrap">
+        <i class="fas fa-ticket-alt mr-1"></i>Gerar
+      </button>
+    </div>
+
+    <div id="conviteGerado" style="display:none;text-align:center;margin-bottom:1rem">
+      <p style="font-size:.6rem;color:#64748b;margin-bottom:.5rem">Código gerado — válido 24h:</p>
+      <div class="convite-badge" id="conviteCodigo"></div>
+      <p style="font-size:.62rem;color:#64748b">Role: <span id="conviteRoleLabel"></span></p>
+    </div>
+
+    <div id="conviteErr" class="msg-err"></div>
+
+    <button onclick="sairSaas()" style="width:100%;padding:.75rem;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:.875rem;color:#f87171;font-weight:700;font-size:.8rem;cursor:pointer;margin-top:.5rem">
+      <i class="fas fa-sign-out-alt mr-1"></i>Sair
+    </button>
+  </div>
+
   <p class="link-small">
     <a href="index.html">← Voltar ao sistema</a>
   </p>
@@ -147,21 +183,25 @@ function _SS() { return window.CH && window.CH.SaasService; }
 
 let _plano = 'free';
 
-// Redireciona se já logado
+// Init: verifica sessão SaaS
 window.addEventListener('DOMContentLoaded', () => {
-  // Só redireciona se tem sessão SaaS ativa (SAAS_SESSION), não CH normal
   const SS = _SS();
-  if (SS && SS.isLogged() && SS.getEmpresaId()) location.href = 'index.html';
-  else document.getElementById('regEmpresa')?.focus();
+  if (SS && SS.isLogged() && SS.getEmpresaId()) {
+    // Logado como dono: mostra aba "Minha Empresa" em vez de redirecionar
+    const sess = SS.getSession();
+    document.getElementById('tab-minha').style.display = '';
+    // Esconde abas de registro/login
+    ['registro','login'].forEach(a => {
+      document.getElementById('tab-'  + a).style.display = 'none';
+      document.getElementById('aba-'  + a).style.display = 'none';
+    });
+    setAba('minha');
+    document.getElementById('minhaEmpresaNome').textContent = sess.nome + ' — ' + (sess.empresaId || '');
+    document.getElementById('minhaEmpresaId').textContent   = sess.empresaId || '';
+  } else {
+    document.getElementById('regEmpresa')?.focus();
+  }
 });
-
-// ── ABAS ──────────────────────────────────────────────────────────
-function setAba(aba) {
-  ['registro','login','convite'].forEach(a => {
-    document.getElementById('aba-' + a).style.display = a === aba ? 'block' : 'none';
-    document.getElementById('tab-' + a).classList.toggle('on', a === aba);
-  });
-}
 
 // ── PLANO ─────────────────────────────────────────────────────────
 function selPlano(btn, plano) {
@@ -182,8 +222,11 @@ async function registrar() {
   const nomeEmpresa   = document.getElementById('regEmpresa').value.trim();
   const nomeUsuario   = document.getElementById('regNome').value.trim();
   const senha         = document.getElementById('regSenha').value.trim();
+  const senhaConf     = document.getElementById('regSenhaConf').value.trim();
 
   if (!SS) { err.textContent = 'Serviço não carregado. Recarregue a página.'; return; }
+  // Bug 4 fix: confirmar senha
+  if (senha !== senhaConf) { err.textContent = 'As senhas não coincidem.'; return; }
 
   btn.disabled = true;
   btn.textContent = 'Criando…';
@@ -245,8 +288,41 @@ async function usarConvite() {
   }
 }
 
+// ── MINHA EMPRESA ─────────────────────────────────────────────────
+async function gerarConviteDono() {
+  const SS  = _SS();
+  const err = document.getElementById('conviteErr');
+  const box = document.getElementById('conviteGerado');
+  err.textContent = '';
+  box.style.display = 'none';
+  const role = document.getElementById('conviteRole').value;
+  try {
+    const conv = await SS.gerarConvite(role);
+    document.getElementById('conviteCodigo').textContent   = conv.codigo;
+    document.getElementById('conviteRoleLabel').textContent = role;
+    box.style.display = 'block';
+  } catch(e) { err.textContent = e.message; }
+}
+
+function sairSaas() {
+  if (!confirm('Encerrar sessão?')) return;
+  _SS()?.logout();
+  location.reload();
+}
+
+// ── ABAS ──────────────────────────────────────────────────────────
+function setAba(aba) {
+  ['registro','login','convite','minha'].forEach(a => {
+    const abEl = document.getElementById('aba-' + a);
+    const tbEl = document.getElementById('tab-' + a);
+    if (abEl) abEl.style.display = a === aba ? 'block' : 'none';
+    if (tbEl) tbEl.classList.toggle('on', a === aba);
+  });
+}
+
 // Enter em cada campo da aba correta
-document.getElementById('regSenha').addEventListener('keydown',   e => { if (e.key==='Enter') registrar(); });
+document.getElementById('regSenha').addEventListener('keydown',   e => { if (e.key==='Enter') document.getElementById('regSenhaConf').focus(); });
+document.getElementById('regSenhaConf').addEventListener('keydown', e => { if (e.key==='Enter') registrar(); });
 document.getElementById('logSenha').addEventListener('keydown',   e => { if (e.key==='Enter') entrar(); });
 document.getElementById('convSenha').addEventListener('keydown',  e => { if (e.key==='Enter') usarConvite(); });
 document.getElementById('regNome').addEventListener('keydown',    e => { if (e.key==='Enter') document.getElementById('regSenha').focus(); });

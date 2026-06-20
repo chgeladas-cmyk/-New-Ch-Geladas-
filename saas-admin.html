@@ -139,6 +139,8 @@ body { background:#04060d; color:#f1f5f9; font-family:'DM Sans',sans-serif; min-
 <div id="toast"></div>
 
 <script src="core.js"></script>
+<script src="./services/permissoesService.js"></script>
+<script src="./services/userService.js"></script>
 <script src="./services/saasService.js"></script>
 <script>
 'use strict';
@@ -260,7 +262,13 @@ function renderLista() {
             : `<button class="btn-sm btn-success" onclick="toggleEmpresa('${e.id}',true)"><i class="fas fa-check mr-1"></i>Ativar</button>`
           }
           <button class="btn-sm btn-info" onclick="gerarConviteAdmin('${e.id}','colaborador')">
-            <i class="fas fa-ticket-alt mr-1"></i>Gerar Convite
+            <i class="fas fa-ticket-alt mr-1"></i>Convite Colab
+          </button>
+          <button class="btn-sm btn-info" onclick="gerarConviteAdmin('${e.id}','admin')">
+            <i class="fas fa-user-shield mr-1"></i>Convite Admin
+          </button>
+          <button class="btn-sm btn-danger" onclick="excluirEmpresa('${e.id}','${e.nome.replace(/'/g,'\\'')}')" style="opacity:.7">
+            <i class="fas fa-trash mr-1"></i>Excluir
           </button>
         </div>
       </div>
@@ -291,6 +299,20 @@ async function toggleEmpresa(empresaId, ativo) {
   try {
     await _SS().toggleEmpresa(empresaId, ativo);
     toast(`Empresa ${ativo ? 'ativada' : 'desativada'}!`, 'ok');
+    await carregar();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function excluirEmpresa(empresaId, nomeEmpresa) {
+  if (!confirm(`⚠️ EXCLUIR permanentemente "${nomeEmpresa}"?
+
+Todos os dados serão perdidos. Esta ação não pode ser desfeita.`)) return;
+  const conf2 = prompt(`Digite o ID da empresa para confirmar:
+${empresaId}`);
+  if (conf2?.trim() !== empresaId) { toast('ID incorreto — exclusão cancelada', 'err'); return; }
+  try {
+    await _SS().excluirEmpresa(empresaId);
+    toast(`Empresa "${nomeEmpresa}" excluída`, 'ok');
     await carregar();
   } catch(e) { toast(e.message, 'err'); }
 }

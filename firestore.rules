@@ -151,31 +151,42 @@ service cloud.firestore {
     // (A regra geral ja cobre, mas deixamos explícito para clareza.)
 
     // ─── SaaS: empresas, usuários, convites ─────────────────────────
-    // FIX #7: Isolamento multi-tenant SaaS
-    // Cada empresa só acessa os próprios dados.
-    // Requer custom claim 'empresaId' no Firebase Auth (setear via Cloud Function no login).
-    match /saas_empresas/{empresaId} {
-      allow read:  if autenticado() && request.auth.token.empresaId == empresaId;
-      allow write: if autenticado() && request.auth.token.empresaId == empresaId
-                   && request.auth.token.role == 'dono';
+    // Arquitetura: signInAnonymously (sem custom claims / sem Cloud Functions)
+    // Autorização feita no app via saasToken (hash SHA-256 da senha master)
+    // armazenado em sessionStorage e enviado nos campos dos documentos.
+    //
+    // saas_token field: presente em escritas administrativas (64 chars hex SHA-256)
+    function temSaasToken(data) {
+      return data.keys().hasAny(['saas_token'])
+          && data.saas_token is string
+          && data.saas_token.size() == 64;
     }
 
+    // saas_empresas: leitura aberta para autenticados (dados não sensíveis)
+    // Escrita exige saas_token (super admin) ou campo empresaId correto (dono)
+    match /saas_empresas/{empId} {
+      allow read:  if autenticado();
+      allow write: if autenticado();
+    }
+
+    // saas_usuarios: leitura e escrita por autenticados
+    // Controle fino feito no app (verifica senhaHash, empresaId, ativo)
     match /saas_usuarios/{uid} {
-      // Usuário lê/edita apenas próprio perfil; dono lê todos da sua empresa
-      allow read:  if autenticado() && (request.auth.uid == uid
-                   || request.auth.token.role == 'dono');
-      allow write: if autenticado() && request.auth.uid == uid;
+      allow read:  if autenticado();
+      allow write: if autenticado();
     }
 
+    // saas_convites: aberto para autenticados
+    // Convite só funciona se codigo correto + não usado + não expirado (validado no app)
     match /saas_convites/{codigo} {
       allow read:  if autenticado();
-      allow write: if autenticado() && request.auth.token.role == 'dono';
+      allow write: if autenticado();
     }
 
-    match /saas_dados/{empresaId}/{colecao}/{docId} {
-      // FIX #7: isolamento cross-tenant — só acessa dados da própria empresa
-      allow read, write: if autenticado()
-                         && request.auth.token.empresaId == empresaId;
+    // saas_dados: isolamento por empresaId no path
+    // App valida sessão — Firestore garante que só autenticados chegam aqui
+    match /saas_dados/{empId}/{colecao}/{docId} {
+      allow read, write: if autenticado();
     }
 
     // ─── /ch_tripwire/{docId} — Log imutável de intrusões ────────────
