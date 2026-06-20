@@ -169,6 +169,20 @@ body.is-admin .adm-only{display:flex!important;}
       </div>
     </div>
 
+    <!-- Taxa editável -->
+    <div class="mb-3" id="blocoTaxaEditavel" style="display:none">
+      <div class="flex items-center justify-between mb-1">
+        <label class="label" style="margin-bottom:0">Taxa da operação (%)</label>
+        <span class="text-[8px] text-slate-500 font-bold">padrão por forma · editável</span>
+      </div>
+      <div class="relative">
+        <input id="novoTaxaPct" type="number" class="inp text-lg font-black text-amber-400"
+          placeholder="0" step="0.1" min="0" max="100" inputmode="decimal"
+          oninput="onTaxaInput()">
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">%</span>
+      </div>
+    </div>
+
     <!-- Valor entregue em espécie -->
     <div class="mb-3">
       <div class="flex items-center justify-between mb-1">
@@ -447,6 +461,8 @@ function abrirNovoRegistro() {
   document.getElementById('novoValorEntrada').value = '';
   document.getElementById('novoValorSaida').value = '';
   document.getElementById('novoObs').value = '';
+  document.getElementById('novoTaxaPct').value = '';
+  document.getElementById('blocoTaxaEditavel').style.display = 'none';
   document.getElementById('previewLucro').classList.add('hidden');
   document.getElementById('taxaLabel').classList.add('hidden');
   document.querySelectorAll('#gridFormaEntrada .forma-btn').forEach(b => {
@@ -469,36 +485,52 @@ function selFormaEntrada(forma) {
     b.style.boxShadow = isThis ? '0 0 0 2px #f59e0b' : '';
   });
 
-  // Mostra taxa ativa
-  const taxa = TAXAS[forma] || 0;
+  // Preenche campo taxa editavel com padrao da forma
+  const taxaPadrao = TAXAS[forma] || 0;
+  const taxaInput = document.getElementById('novoTaxaPct');
+  const blocoTaxa = document.getElementById('blocoTaxaEditavel');
+  if (taxaInput) taxaInput.value = (taxaPadrao * 100).toFixed(1);
+  if (blocoTaxa) blocoTaxa.style.display = '';
+
+  // Label resumo
   const taxaLabel = document.getElementById('taxaLabel');
   if (taxaLabel) {
-    taxaLabel.textContent = `Taxa: ${(taxa * 100).toFixed(0)}%`;
+    taxaLabel.textContent = `Taxa: ${(taxaPadrao * 100).toFixed(0)}%`;
     taxaLabel.classList.remove('hidden');
   }
 
-  // Auto-calcula valor espécie com base no que já foi digitado
-  const entrada = parseFloat(document.getElementById('novoValorEntrada')?.value) || 0;
-  if (entrada > 0) {
-    const saida = +(entrada / (1 + taxa)).toFixed(2);
-    document.getElementById('novoValorSaida').value = saida.toFixed(2);
-  }
+  // Recalcula
   calcLucro();
+}
+
+// Chamado quando operador edita taxa manualmente
+function onTaxaInput() {
+  document.getElementById('novoValorSaida').value = '';
+  calcLucro();
+}
+
+function getTaxaAtual() {
+  // Lê do campo editavel se visivel, senao usa padrao da forma
+  const taxaInput = document.getElementById('novoTaxaPct');
+  if (taxaInput && taxaInput.value !== '') {
+    const v = parseFloat(taxaInput.value);
+    if (!isNaN(v) && v >= 0) return v / 100;
+  }
+  return TAXAS[_formaEntradaSel] || 0;
 }
 
 function calcLucro() {
   const entrada = parseFloat(document.getElementById('novoValorEntrada')?.value) || 0;
-  const taxa    = TAXAS[_formaEntradaSel] || 0;
+  const taxa    = getTaxaAtual();
 
-  // Auto-preenche espécie se forma já selecionada e saida ainda não foi editada manualmente
-  // (só auto-fill se o campo estiver vazio ou se veio de selFormaEntrada — controlado por _autoFill)
+  // Auto-preenche especie se campo saida estiver vazio
   if (_formaEntradaSel && entrada > 0) {
     const saidaInput = document.getElementById('novoValorSaida');
     const saidaAtual = parseFloat(saidaInput?.value) || 0;
-    const saidaEsperada = +(entrada / (1 + taxa)).toFixed(2);
-    // Auto-atualiza se o campo estiver vazio
     if (!saidaAtual) {
-      saidaInput.value = saidaEsperada.toFixed(2);
+      // Desconto simples: entrego = entrada * (1 - taxa)
+      // Ex: 10 * (1 - 0.10) = 9.00 → lucro = 1.00
+      saidaInput.value = (entrada * (1 - taxa)).toFixed(2);
     }
   }
 
@@ -512,9 +544,10 @@ function calcLucro() {
     box.classList.remove('hidden');
     val.textContent = fmt(lucro);
     val.className = `text-base font-black ${lucro > 0 ? 'text-blue-400' : lucro < 0 ? 'text-red-400' : 'text-slate-400'}`;
-    if (prev && _formaEntradaSel) {
-      const pct = ((lucro / entrada) * 100).toFixed(1);
-      prev.textContent = `${(taxa*100).toFixed(0)}% sobre ${fmt(entrada)} = ${fmt(lucro)} (${pct}% real)`;
+    if (prev) {
+      // Lucro = taxa aplicada sobre o valor recebido
+      const lucroEsperado = +(entrada * taxa).toFixed(2);
+      prev.textContent = `Taxa ${(taxa * 100).toFixed(1)}% de ${fmt(entrada)} = ${fmt(lucroEsperado)} · entrega ${fmt(saida)}`;
     }
   } else if (box) {
     box.classList.add('hidden');
@@ -531,7 +564,8 @@ function salvarRegistro() {
   if (!_formaEntradaSel)     { showToast('Selecione a forma recebida', 'Pix, Débito ou Crédito', 'error'); return; }
   if (valorSaida < 0)        { showToast('Valor entregue inválido', '', 'error'); return; }
 
-  const taxa = TAXAS[_formaEntradaSel] || 0;
+  // Taxa vem do campo editavel (pode diferir do padrao da forma)
+  const taxa = getTaxaAtual();
   const registro = {
     id: _utils().generateId(),
     criadoEm: nowISO(),
@@ -541,7 +575,7 @@ function salvarRegistro() {
     cliente: cliente || '',
     formaEntrada: _formaEntradaSel,
     taxa,
-    taxaPct: Math.round(taxa * 100),
+    taxaPct: +(taxa * 100).toFixed(1),
     valorEntrada,
     valorSaida,
     lucro: +(valorEntrada - valorSaida).toFixed(2),
@@ -551,7 +585,7 @@ function salvarRegistro() {
 
   mutateCambio(list => list.unshift(registro));
 
-  // Registra no financeiro (CH_VENDAS) para aparecer nos relatórios
+  // Envia para aprovacao (status 'pendente') em vez de direto ao financeiro
   if (window.CH?.Store?.mutateVendas) {
     const vendaCambio = {
       id:         registro.id,
@@ -567,13 +601,16 @@ function salvarRegistro() {
       subtotal:  registro.valorEntrada,
       desconto:  0,
       lucro:     registro.lucro,
-      status:    'concluida',
+      // STATUS PENDENTE — precisa passar por aprovacao antes de ir ao financeiro
+      status:    'pendente',
       itens:     [{
-        nome:       `Câmbio ${registro.formaEntrada} → Espécie`,
+        nome:       `Câmbio ${registro.formaEntrada} → Espécie (taxa ${registro.taxaPct}%)`,
         quantidade: 1,
         preco:      registro.valorEntrada,
         lucro:      registro.lucro,
+        controlaEstoque: false,
       }],
+      _cambio:    true,         // flag para aprovacao.html identificar e nao exigir estoque
       _fbSynced: false,
     };
     window.CH.Store.mutateVendas(v => v.unshift(vendaCambio));
@@ -582,14 +619,14 @@ function salvarRegistro() {
     }
   }
 
-  // Sync Firestore câmbio
+  // Sync Firestore cambio
   if (window.CH?.SyncQueue) {
     window.CH.SyncQueue.enqueue('salvar', 'cambio', getCambios());
   }
 
   closeModal('modalNovo');
   render();
-  showToast('Câmbio registrado!', `${_formaEntradaSel} ${fmt(valorEntrada)} → Espécie ${fmt(valorSaida)}`, 'success');
+  showToast('Câmbio enviado para aprovação!', `${_formaEntradaSel} ${fmt(valorEntrada)} → aguardando controlador`, 'info');
 }
 
 /* ── Detalhe ─────────────────────────────── */
