@@ -44,7 +44,7 @@
   // FIX #2: coleções que NUNCA colapsam — cada registro é único e acumulativo.
   // Colapsar saidas/financeiro/ponto apagava registros anteriores quando um novo
   // era enfileirado antes do Firebase processar o anterior.
-  const _NUNCA_COLAPSAR = new Set(['vendas', 'saidas', 'financeiro', 'movimentacoes', 'ponto']);
+  const _NUNCA_COLAPSAR = new Set(['vendas', 'saidas', 'financeiro', 'movimentacoes', 'ponto', 'validade']);
 
   function _colapsar(q, acao, colecao, dados) {
     if (_NUNCA_COLAPSAR.has(colecao)) return false; // FIX #2: proteção ampliada

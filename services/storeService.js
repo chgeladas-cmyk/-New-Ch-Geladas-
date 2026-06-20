@@ -24,7 +24,7 @@
       config:'CH_CONFIG', auditoria:'CH_AUDITORIA',
       movimentacoes:'CH_MOVIMENTACOES', categorias:'CH_CATEGORIAS',
       fornecedores:'CH_FORNECEDORES', financeiro:'CH_FINANCEIRO',
-      saidas:'CH_SAIDAS',
+      saidas:'CH_SAIDAS', validade:'CH_VALIDADE',
     };
 
     const _empty = {
