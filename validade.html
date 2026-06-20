@@ -241,7 +241,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
 'use strict';
 
 /* ═══════════════ HELPERS ═══════════════ */
-const { AuthService, UIService, Store, Utils, TelegramService, EventBus } = window.CH;
+// NUNCA redeclarar globals do core.js como const no topo
+// Padrão do projeto: acessar via window.CH.X dentro das funções
+function _Auth()     { return window.CH.AuthService; }
+function _Store()    { return window.CH.Store; }
+function _Utils()    { return window.CH.Utils; }
+function _Telegram() { return window.CH.TelegramService; }
+function _Bus()      { return window.CH.EventBus; }
 
 const STORAGE_KEY = 'CH_VALIDADE';
 
@@ -298,11 +304,11 @@ async function doLogin() {
   const err = document.getElementById('lockError');
   err.classList.add('hidden');
   if (!pin) return;
-  const ok = await AuthService.login(pin);
+  const ok = await _Auth().login(pin);
   if (ok) {
     document.getElementById('lock').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
-    if (AuthService.isAdmin()) document.body.classList.add('is-admin');
+    if (_Auth().isAdmin()) document.body.classList.add('is-admin');
     init();
   } else {
     err.textContent = 'PIN incorreto.';
@@ -320,13 +326,13 @@ function init() {
   render();
   verificarAlertas(false); // silencioso no boot
   // escuta mudanças no estoque
-  EventBus.on('store:updated', () => { popularSelectProdutos(); atualizarKpis(); render(); });
+  _Bus().on('store:updated', () => { popularSelectProdutos(); atualizarKpis(); render(); });
 }
 
 function popularSelectProdutos() {
   const sel = document.getElementById('fProduto');
   if (!sel) return;
-  const prods = Store.getEstoque();
+  const prods = _Store().getEstoque();
   sel.innerHTML = '<option value="">— Selecionar produto —</option>' +
     prods.map(p => `<option value="${p.id}" data-nome="${p.nome}">${p.nome}</option>`).join('');
 }
@@ -407,7 +413,7 @@ function render() {
     return;
   }
 
-  const isAdm = AuthService.isAdmin();
+  const isAdm = _Auth().isAdmin();
   el.innerHTML = lotes.map(l => {
     const dias = diasAteVencer(l.validade);
     const s    = statusLote(dias);
@@ -477,7 +483,7 @@ function salvarLote() {
   // resolve nome
   let nome = nomeAvulso;
   if (prodId && !nomeAvulso) {
-    const prod = Store.getEstoque().find(p => p.id === prodId);
+    const prod = _Store().getEstoque().find(p => p.id === prodId);
     nome = prod?.nome || '';
   }
   if (!nome) { showToast('Selecione um produto ou informe o nome', '', 'error'); return; }
@@ -487,9 +493,9 @@ function salvarLote() {
   mutateLotes(arr => {
     if (eid) {
       const idx = arr.findIndex(x => x.id === eid);
-      if (idx >= 0) arr[idx] = { ...arr[idx], prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, atualizadoEm: Utils.nowISO() };
+      if (idx >= 0) arr[idx] = { ...arr[idx], prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, atualizadoEm: _Utils().nowISO() };
     } else {
-      arr.unshift({ id: Utils.generateId(), prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, criadoEm: Utils.nowISO(), descartado: false });
+      arr.unshift({ id: _Utils().generateId(), prodId: prodId || null, nome, lote, qtd, entrada, validade, obs, criadoEm: _Utils().nowISO(), descartado: false });
     }
   });
 
@@ -544,7 +550,7 @@ function descartarLote(id, nome) {
   if (!confirm(`Descartar lote de "${nome}"?\nEle sairá da lista ativa.`)) return;
   mutateLotes(arr => {
     const l = arr.find(x => x.id === id);
-    if (l) { l.descartado = true; l.descartadoEm = Utils.nowISO(); }
+    if (l) { l.descartado = true; l.descartadoEm = _Utils().nowISO(); }
   });
   fecharModal('modalDetalhe');
   atualizarKpis();
@@ -592,8 +598,8 @@ async function verificarAlertas(forcar) {
 
     if (!forcar && vencidos.length === 0 && criticos.length === 0) return;
 
-    msg += `\n🕐 <b>Verificado:</b> ${Utils.nowFull()}`;
-    await TelegramService.enviar(msg);
+    msg += `\n🕐 <b>Verificado:</b> ${_Utils().nowFull()}`;
+    await _Telegram().enviar(msg);
     localStorage.setItem('CH_VAL_ALERTA_DT', hoje_);
     if (forcar) showToast('Alerta enviado!', 'Verificar Telegram', 'success');
   } catch(e) {
