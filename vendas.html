@@ -525,7 +525,7 @@ function renderCatalogo() {
         <button class="btn-un text-[9px] font-black text-blue-300" onclick="addItem('${p.id}','UNID',${p.precoUn},event.currentTarget)" ${esg?'disabled':''}>
           <i class="fas fa-plus text-[9px] mr-1"></i>1 un
         </button>
-        ${(p.packs||[]).map(pk=>`<button class="btn-pk text-[9px] font-black text-amber-300" onclick="addItem('${p.id}','${pk.qtd}x',${pk.preco},event.currentTarget)" ${esg?'disabled':''}><i class="fas fa-boxes text-[9px] mr-1"></i>${pk.qtd}x</button>`).join('')}
+        ${(p.packs||[]).map(pk=>`<button class="btn-pk text-[9px] font-black text-amber-300" onclick="addItem('${p.id}','${pk.label||pk.qtd+'x'}',${pk.preco},event.currentTarget)" ${esg?'disabled':''}><i class="fas fa-boxes text-[9px] mr-1"></i>${pk.label||pk.qtd+'x'}</button>`).join('')}
       </div>
     </div>`;
   }).join('');
@@ -534,11 +534,30 @@ function renderCatalogo() {
 /* ══ CART ══ */
 function addItem(prodId, label, preco, btn) {
   const prod = Store.getEstoque().find(p => p.id === prodId);
-  if (!prod || prod.qtdUn <= 0) { UIService.showToast('Esgotado', prod?.nome||'', 'error'); return; }
+  if (!prod) { UIService.showToast('Produto não encontrado', '', 'error'); return; }
+
+  // Calcula quantas unidades esse label consome
+  const pack   = (prod.packs||[]).find(pk => pk.label === label || (pk.qtd+'x') === label);
+  const qtdUn  = label === 'UNID' ? 1 : (pack?.qtd || 1);
+  const estDisp = prod.qtdUn || 0;
+
+  if (estDisp <= 0) {
+    UIService.showToast('Esgotado', prod.nome, 'error'); return;
+  }
+  if (estDisp < qtdUn) {
+    UIService.showToast(
+      'Estoque insuficiente',
+      `${prod.nome}: ${estDisp} un disponível (fardo requer ${qtdUn})`,
+      'error'
+    );
+    return;
+  }
+
   CartService.add(prod, 1, label, preco);
   btn?.classList.add(label==='UNID'?'flash-blue':'flash-amber');
   setTimeout(()=>btn?.classList.remove('flash-blue','flash-amber'),400);
-  UIService.showToast(prod.nome, `+1 ${label} — ${Utils.formatCurrency(preco)}`, 'success');
+  const labelExib = label === 'UNID' ? '1 un' : label;
+  UIService.showToast(prod.nome, `+1 ${labelExib} — ${Utils.formatCurrency(preco)}`, 'success');
 }
 
 function renderCart() {
