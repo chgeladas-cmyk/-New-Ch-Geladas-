@@ -6,17 +6,11 @@
  *   finalizarVenda() é SÍNCRONA — retorna o objeto venda imediatamente.
  *   CartService.finalize() (core.js) depende disso para funcionar.
  *
- * FIX CRÍTICO v3 — Integridade Transacional:
- *   Para vendas "concluídas" (fluxo direto sem aprovação):
- *   A baixa de estoque NÃO é mais fire-and-forget.
- *   _processarEfeitosAsync() agora:
- *     1. Executa a baixa com confirmarBaixaComRollback()
- *     2. Se falhar → registra divergência crítica e alerta
- *     3. Registra rastreabilidade completa
- *
- *   Embora o retorno seja síncrono (necessário para CartService),
- *   a baixa falha de forma detectável e rastreável, não silenciosa.
- *   Divergências são detectadas pela reconciliação automática.
+ * FIX v4 — Baixa de Estoque por Unidade e Fardo:
+ *   IntegrityService é um stub vazio (removido). O código anterior caía
+ *   em IS?.confirmarBaixaComRollback que nunca existia → baixa nunca executava.
+ *   Agora _processarEfeitosAsync vai direto para EstoqueService.baixarEstoqueVendaLote,
+ *   que já sabe resolver UNID (1 unidade) e qualquer Pack/Fardo (qtd × pack.qtd).
  *
  * FLUXO DE APROVAÇÃO:
  *   Se perfil tem flag "vendas_requer_aprovacao" → status "pendente"
@@ -27,63 +21,65 @@
 (function () {
   const { Store, AuthService, Utils, EventBus } = window.CH;
 
-  // ── Processa estoque + financeiro em background ────────────────────
-  // FIX v3: Não é mais silent fire-and-forget. Falhas são registradas
-  // como divergências críticas e disparam reconciliação automática.
-  async function _processarEfeitosAsync(venda) {
-    const itens = venda.itens || [];
-    const IS    = window.CH.IntegrityService;
-    const ES    = window.CH.EstoqueService;
+  // ── Fallback local de emergência — resolve UNID e Fardo corretamente ──
+  function _baixarEstoqueLocal(itens) {
+    Store.mutateEstoque(estoque => {
+      itens.forEach(item => {
+        const prod = estoque.find(p => p.id === item.prodId);
+        if (!prod || prod.controlaEstoque === false) return;
+        const pack    = (prod.packs || []).find(pk =>
+          pk.label === item.label || (pk.qtd + 'x') === item.label
+        );
+        const qtdDesc = item.label === 'UNID'
+          ? item.qtd
+          : item.qtd * (pack?.qtd || 1);
+        prod.qtdUn        = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
+        prod.estoqueAtual = prod.qtdUn;
+      });
+    });
+  }
 
-    // ── Estoque ──────────────────────────────────────────────────
-    if (ES) {
-      if (IS?.confirmarBaixaComRollback) {
-        // Caminho preferencial: com rastreabilidade e detecção de falha
-        const resultado = await IS.confirmarBaixaComRollback(venda, null);
-        if (!resultado.ok && resultado.rollbackExecutado) {
-          // Baixa falhou — registra para reconciliação
-          console.error(`[VendasService] Baixa falhou para venda concluída ${venda.id}:`, resultado.erros);
+  // ── Processa estoque em background ────────────────────────────────────
+  // FIX v4: IntegrityService é stub vazio — não usar confirmarBaixaComRollback.
+  // Vai direto para EstoqueService.baixarEstoqueVendaLote que suporta UNID e Fardo.
+  async function _processarEfeitosAsync(venda) {
+    const ES = window.CH.EstoqueService;
+
+    if (!ES) {
+      // Sem EstoqueService: fallback local
+      _baixarEstoqueLocal(venda.itens || []);
+      return;
+    }
+
+    if (ES.baixarEstoqueVendaLote) {
+      try {
+        const resultado = await ES.baixarEstoqueVendaLote(venda);
+        if (!resultado.ok && resultado.itensProcessados === 0 && !resultado.localFallback) {
+          console.error(`[VendasService] baixarEstoqueVendaLote falhou: venda ${venda.id}`, resultado.erros);
           EventBus.emit('integrity:venda_sem_baixa', {
             vendaId: venda.id,
             status:  'concluida',
-            motivo:  resultado.erros?.join('; '),
+            motivo:  (resultado.erros || []).join('; '),
           });
         }
-      } else if (ES.baixarEstoqueVendaLote) {
-        // Caminho alternativo: baixa em lote sem IntegrityService
-        try {
-          const resultado = await ES.baixarEstoqueVendaLote(venda);
-          if (!resultado.ok && resultado.itensProcessados === 0) {
-            console.error(`[VendasService] baixarEstoqueVendaLote falhou: venda ${venda.id}`);
-          }
-        } catch (e) {
-          console.error(`[VendasService] Exceção na baixa: venda ${venda.id}:`, e.message);
-          EventBus.emit('integrity:venda_sem_baixa', {
-            vendaId: venda.id,
-            status:  'concluida',
-            motivo:  e.message,
-          });
-        }
-      } else {
-        // Fallback local (sem Firebase)
-        Store.mutateEstoque(estoque => {
-          itens.forEach(item => {
-            const prod = estoque.find(p => p.id === item.prodId);
-            if (!prod || prod.controlaEstoque === false) return;
-            const qtdDesc = item.label === 'UNID'
-              ? item.qtd
-              : item.qtd * (prod.packs?.find(pk => pk.label === item.label)?.qtd || 1);
-            prod.qtdUn = Math.max(0, (prod.qtdUn || 0) - qtdDesc);
-            prod.estoqueAtual = prod.qtdUn;
-          });
+      } catch (e) {
+        console.error(`[VendasService] Exceção na baixa: venda ${venda.id}:`, e.message);
+        // Garante baixa mesmo com exceção
+        _baixarEstoqueLocal(venda.itens || []);
+        EventBus.emit('integrity:venda_sem_baixa', {
+          vendaId: venda.id,
+          status:  'concluida',
+          motivo:  e.message,
         });
       }
+    } else {
+      // EstoqueService existe mas sem baixarEstoqueVendaLote
+      _baixarEstoqueLocal(venda.itens || []);
     }
 
     // ── Financeiro ───────────────────────────────────────────────
-    // NOTA: não chama registrarReceita diretamente aqui pois
-    // EventBus.on('venda:finalizada') já disparou registrarReceita
-    // via financeiroService hook. Chamar aqui seria duplo registro.
+    // financeiroService registra receita via EventBus.on('venda:finalizada')
+    // Não registrar aqui para evitar duplicação.
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -152,8 +148,7 @@
       return venda;
     }
 
-    // ── FLUXO DIRETO: dispara efeitos em background ───────────────
-    // Erros são rastreados — não são silenciosos
+    // ── FLUXO DIRETO: dispara baixa de estoque em background ─────
     _processarEfeitosAsync(venda).catch(e =>
       console.error('[VendasService] Erro em _processarEfeitosAsync:', e)
     );
@@ -237,7 +232,8 @@
   function getResumoSemana() {
     const hoje = new Date(), dom = new Date(hoje);
     dom.setDate(hoje.getDate() - hoje.getDay());
-    const vendas = getVendasPeriodo(_localDateISO(dom), Utils.todayISO()) // FIX #5b
+    const ini = dom.toISOString().slice(0, 10);
+    const vendas = getVendasPeriodo(ini, Utils.todayISO())
       .filter(v => ['concluida', 'validada'].includes(v.status));
     return {
       quantidade: vendas.length,
@@ -249,7 +245,8 @@
   function getProdutosMaisVendidos(limite = 10, periodo = 30) {
     const dm = new Date();
     dm.setDate(dm.getDate() - periodo);
-    const vendas = getVendasPeriodo(_localDateISO(dm), Utils.todayISO()) // FIX #5b
+    const ini = dm.toISOString().slice(0, 10);
+    const vendas = getVendasPeriodo(ini, Utils.todayISO())
       .filter(v => ['concluida', 'validada'].includes(v.status));
     const mapa = {};
     vendas.forEach(venda => {
@@ -274,5 +271,5 @@
     getProdutosMaisVendidos,
   };
 
-  console.info('%c VendasService ✓  (v3: baixa rastreável | sem fire-and-forget silencioso)', 'color:#10b981;font-weight:bold');
+  console.info('%c VendasService ✓  (v4: baixa direta via EstoqueService | UNID + Fardo/Pack)', 'color:#10b981;font-weight:bold');
 })();
