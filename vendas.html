@@ -1056,7 +1056,13 @@ function mostrarRecibo(venda) {
   if (venda._troco > 0 && trocoRow && trocoEl) { trocoRow.classList.remove('hidden'); trocoEl.textContent=Utils.formatCurrency(venda._troco); }
   else trocoRow?.classList.add('hidden');
   _setText('recTotal', Utils.formatCurrency(venda.total));
-  _setText('recPgto', venda.formaPgto);
+  // Misto: exibe cada parcela no recibo
+  if (venda._parcelaDinheiro > 0 && venda._parcelaRestante > 0) {
+    const f2 = (venda._formaRestante || venda.formaPgto.replace('Dinheiro+',''));
+    _setText('recPgto', `Dinheiro: ${Utils.formatCurrency(venda._parcelaDinheiro)}  +  ${f2}: ${Utils.formatCurrency(venda._parcelaRestante)}`);
+  } else {
+    _setText('recPgto', venda.formaPgto);
+  }
   _setText('recHora', `${venda.data} ${venda.hora}`);
   UIService.openModal('modalVenda');
 }
@@ -1069,7 +1075,13 @@ function _gerarTextoRecibo(venda) {
   venda.itens.forEach(i => { txt += `${i.nome} (${i.label}) x${i.qtd}\n  ${Utils.formatCurrency(i.preco*i.qtd)}\n`; });
   txt += `${sep}\n`;
   if (venda.desconto>0) txt += `Desconto: -${Utils.formatCurrency(venda.desconto)}\n`;
-  txt += `TOTAL: ${Utils.formatCurrency(venda.total)}\nPgto: ${venda.formaPgto}\n`;
+  txt += `TOTAL: ${Utils.formatCurrency(venda.total)}\n`;
+  if (venda._parcelaDinheiro > 0 && venda._parcelaRestante > 0) {
+    const f2 = venda._formaRestante || venda.formaPgto.replace('Dinheiro+','');
+    txt += `Pgto: Dinheiro ${Utils.formatCurrency(venda._parcelaDinheiro)} + ${f2} ${Utils.formatCurrency(venda._parcelaRestante)}\n`;
+  } else {
+    txt += `Pgto: ${venda.formaPgto}\n`;
+  }
   if (venda._troco > 0) txt += `Troco: ${Utils.formatCurrency(venda._troco)}\n`;
   txt += `${sep}\nObrigado!`;
   return txt;
@@ -1095,10 +1107,34 @@ function abrirRelatorio() {
   _setText('relQtd',         vendas.length);
   _setText('relTicket',      Utils.formatCurrency(ticket));
   _setText('relData',        `Hoje — ${Utils.today()}`);
+  // Formas de pagamento — separa parcelas de vendas mistas
   const pgtos = {};
-  vendas.forEach(v => { pgtos[v.formaPgto] = (pgtos[v.formaPgto]||0)+v.total; });
-  document.getElementById('relPorPgto').innerHTML = Object.entries(pgtos).sort((a,b)=>b[1]-a[1])
-    .map(([f,t])=>`<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2"><span class="text-[10px] font-black text-slate-300">${f}</span><span class="text-[10px] font-black text-blue-400">${Utils.formatCurrency(t)}</span></div>`).join('')
+  vendas.forEach(v => {
+    const f = v.formaPgto || 'Outros';
+    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
+      // Misto: contabiliza cada parte separada
+      const f2 = f.replace('Dinheiro+', '');
+      if (!pgtos['Dinheiro']) pgtos['Dinheiro'] = { total: 0, qtd: 0 };
+      if (!pgtos[f2])         pgtos[f2]         = { total: 0, qtd: 0 };
+      pgtos['Dinheiro'].total += v._parcelaDinheiro;
+      pgtos['Dinheiro'].qtd++;
+      pgtos[f2].total += v._parcelaRestante || 0;
+      pgtos[f2].qtd++;
+    } else {
+      if (!pgtos[f]) pgtos[f] = { total: 0, qtd: 0 };
+      pgtos[f].total += v.total || 0;
+      pgtos[f].qtd++;
+    }
+  });
+  const COR_PGTO = { Dinheiro:'text-emerald-400', Pix:'text-blue-400', Crédito:'text-amber-400', Débito:'text-purple-400', Fiado:'text-red-400' };
+  document.getElementById('relPorPgto').innerHTML = Object.entries(pgtos).sort((a,b)=>b[1].total-a[1].total)
+    .map(([f,d])=>`<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+      <span class="text-[10px] font-black ${COR_PGTO[f]||'text-slate-300'}">${f}</span>
+      <div class="flex items-center gap-3">
+        <span class="text-[9px] text-slate-500 font-bold">${d.qtd} venda${d.qtd!==1?'s':''}</span>
+        <span class="text-[10px] font-black text-white">${Utils.formatCurrency(d.total)}</span>
+      </div>
+    </div>`).join('')
     ||'<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem vendas</p>';
   const prods = {};
   vendas.forEach(v=>v.itens.forEach(i=>{ prods[i.nome]=(prods[i.nome]||0)+i.qtd; }));
@@ -1162,11 +1198,35 @@ function _gerarTextoRelatorio() {
   txt += `Lucro:        ${Utils.formatCurrency(lucro)}\n`;
   txt += `Nº Vendas:    ${vendas.length}\n`;
   txt += `Ticket Médio: ${Utils.formatCurrency(vendas.length?fatur/vendas.length:0)}\n\n`;
+
+  // ── Fechamento por forma de pagamento (misto = separado) ──
+  const pgtosCx = {};
+  vendas.forEach(v => {
+    const f = v.formaPgto || 'Outros';
+    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
+      const f2 = v._formaRestante || f.replace('Dinheiro+','');
+      pgtosCx['Dinheiro'] = (pgtosCx['Dinheiro'] || 0) + v._parcelaDinheiro;
+      pgtosCx[f2]         = (pgtosCx[f2]         || 0) + (v._parcelaRestante || 0);
+    } else {
+      pgtosCx[f] = (pgtosCx[f] || 0) + (v.total || 0);
+    }
+  });
+  txt += `${sep2}\nFECHAMENTO DE CAIXA\n${sep2}\n`;
+  Object.entries(pgtosCx).sort((a,b)=>b[1]-a[1]).forEach(([f,t]) => {
+    txt += `  ${f.padEnd(14)} ${Utils.formatCurrency(t)}\n`;
+  });
+  txt += `${'─'.repeat(28)}\n  ${'TOTAL'.padEnd(12)} ${Utils.formatCurrency(fatur)}\n\n`;
+
   txt += `${sep2}\nVENDAS INDIVIDUAIS\n${sep2}\n`;
   vendas.forEach((v,i) => {
-    txt += `\n#${i+1} | ${v.hora} | ${v.formaPgto}\n`;
-    v.itens.forEach(it=>txt+=`  · ${it.nome} x${it.qtd}  ${Utils.formatCurrency(it.preco*it.qtd)}\n`);
+    const misto = v._parcelaDinheiro > 0 && v._parcelaRestante > 0;
+    const pgtoTxt = misto
+      ? `Dinheiro ${Utils.formatCurrency(v._parcelaDinheiro)} + ${v._formaRestante||''} ${Utils.formatCurrency(v._parcelaRestante)}`
+      : v.formaPgto;
+    txt += `\n#${i+1} | ${v.hora} | ${pgtoTxt}\n`;
+    v.itens.forEach(it=>txt+=`  · ${it.nome} (${it.label}) x${it.qtd}  ${Utils.formatCurrency(it.preco*it.qtd)}\n`);
     txt += `  TOTAL: ${Utils.formatCurrency(v.total)}\n`;
+    if (v._troco > 0) txt += `  Troco: ${Utils.formatCurrency(v._troco)}\n`;
   });
   txt += `\n${sep}\nGerado por ${nome} PDV\n${sep}\n`;
   return txt;
