@@ -26,21 +26,41 @@
 
   // ── Helpers internos ──────────────────────────────────────────────
 
-  function _vendasPeriodo(de, ate) {
+  function _vendasPeriodo(de, ate, { incluirCambio = false } = {}) {
     const vendas = Store.getVendas() || [];
-    // 'aprovada' também conta — é concluída aguardando validação
     const STATUS_VALIDOS = ['concluida', 'validada', 'aprovada'];
     return vendas.filter(v =>
       STATUS_VALIDOS.includes(v.status || 'concluida') &&
+      (!de  || v.dataCurta >= de) &&
+      (!ate || v.dataCurta <= ate) &&
+      // Câmbios NÃO são vendas de produto — excluir dos KPIs de receita/CMV/ABC
+      // a menos que explicitamente solicitado
+      (incluirCambio || !v._cambio)
+    );
+  }
+
+  // Retorna apenas os câmbios do período (para o gráfico de formas de pagamento)
+  function _cambiosPeriodo(de, ate) {
+    const vendas = Store.getVendas() || [];
+    return vendas.filter(v =>
+      v._cambio &&
+      ['concluida','validada'].includes(v.status || 'concluida') &&
       (!de  || v.dataCurta >= de) &&
       (!ate || v.dataCurta <= ate)
     );
   }
 
+  function _localDateISO(date) {
+    // Replica a função homônima do core.js (não acessível fora do IIFE de lá)
+    const offset = date.getTimezoneOffset();
+    const local  = new Date(date.getTime() - offset * 60000);
+    return local.toISOString().slice(0, 10);
+  }
+
   function _diasAtras(n) {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return _localDateISO(d); // FIX #5c
+    return _localDateISO(d);
   }
 
   function _mesAtual() {
@@ -162,15 +182,25 @@
     }));
     dist.forEach(f => { f.percentual = (f.qtd / vendas.length) * 100; });
 
-    // Por forma de pagamento
+    // Por forma de pagamento — separa misto nas parcelas reais
     const porForma = {};
     vendas.forEach(v => {
       const f = v.formaPgto || 'Outros';
-      if (!porForma[f]) porForma[f] = { qtd: 0, total: 0 };
-      porForma[f].qtd++;
-      porForma[f].total += v.total || 0;
+      if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
+        const f2 = v._formaRestante || f.replace('Dinheiro+', '');
+        if (!porForma['Dinheiro']) porForma['Dinheiro'] = { qtd: 0, total: 0 };
+        if (!porForma[f2])         porForma[f2]         = { qtd: 0, total: 0 };
+        porForma['Dinheiro'].total += v._parcelaDinheiro;
+        porForma[f2].total         += v._parcelaRestante || 0;
+        porForma['Dinheiro'].qtd++;
+        porForma[f2].qtd++;
+      } else {
+        if (!porForma[f]) porForma[f] = { qtd: 0, total: 0 };
+        porForma[f].qtd++;
+        porForma[f].total += v.total || 0;
+      }
     });
-    Object.values(porForma).forEach(f => { f.ticket = f.total / f.qtd; });
+    Object.values(porForma).forEach(f => { f.ticket = f.qtd > 0 ? f.total / f.qtd : 0; });
 
     return { ticketMedio: ticket, total, qtdVendas: vendas.length, distribuicao: dist, porForma };
   }
