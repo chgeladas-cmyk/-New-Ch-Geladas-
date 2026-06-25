@@ -123,7 +123,7 @@ body.is-admin .adm-only{display:flex!important;}
     <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-base font-black">Novo Câmbio</h2>
-        <p class="text-slate-500 text-[9px] font-bold">Cliente paga digital · recebe espécie</p>
+        <p class="text-slate-500 text-[9px] font-bold">Cliente paga Pix/Cartão · recebe espécie</p>
       </div>
       <button onclick="fecharModal()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
     </div>
@@ -588,30 +588,34 @@ function salvarRegistro() {
   // Envia para aprovacao (status 'pendente') em vez de direto ao financeiro
   if (window.CH?.Store?.mutateVendas) {
     const vendaCambio = {
-      id:         registro.id,
-      criadoEm:  registro.criadoEm,
-      dataCurta: registro.dataCurta,
-      data:      registro.dataCurta,
-      hora:      registro.hora,
-      operador:  registro.operador,
-      cliente:   registro.cliente || '',
-      origem:    'cambio',
-      formaPgto: registro.formaEntrada,
-      total:     registro.valorEntrada,
-      subtotal:  registro.valorEntrada,
-      desconto:  0,
-      lucro:     registro.lucro,
-      // STATUS PENDENTE — precisa passar por aprovacao antes de ir ao financeiro
-      status:    'pendente',
-      itens:     [{
-        nome:       `Câmbio ${registro.formaEntrada} → Espécie (taxa ${registro.taxaPct}%)`,
-        quantidade: 1,
-        preco:      registro.valorEntrada,
-        lucro:      registro.lucro,
+      id:            registro.id,
+      criadoEm:     registro.criadoEm,
+      dataCurta:    registro.dataCurta,
+      data:         registro.dataCurta,
+      hora:         registro.hora,
+      operador:     registro.operador,
+      cliente:      registro.cliente || '',
+      origem:       'cambio',
+      // formaPgto = forma como RECEBEU (Pix/Débito/Crédito) — vai para o relatório de entradas
+      formaPgto:    registro.formaEntrada,
+      total:        registro.valorEntrada,
+      subtotal:     registro.valorEntrada,
+      desconto:     0,
+      lucro:        registro.lucro,
+      // CÂMBIO é imediato — operador já entregou o dinheiro na hora.
+      // status 'concluida' para aparecer nos relatórios financeiros.
+      status:       'concluida',
+      itens: [{
+        nome:            `Câmbio ${registro.formaEntrada} → Espécie (taxa ${registro.taxaPct}%)`,
+        qtd:             1,
+        preco:           registro.valorEntrada,
+        lucro:           registro.lucro,
         controlaEstoque: false,
       }],
-      _cambio:    true,         // flag para aprovacao.html identificar e nao exigir estoque
-      _fbSynced: false,
+      _cambio:      true,         // flag: não movimenta estoque nem precisa de aprovação
+      // valorSaida = dinheiro em espécie que SAIU do caixa — essencial para fechamento
+      _cambioSaida: registro.valorSaida,
+      _fbSynced:    false,
     };
     window.CH.Store.mutateVendas(v => v.unshift(vendaCambio));
     if (window.CH.SyncQueue) {
@@ -626,7 +630,7 @@ function salvarRegistro() {
 
   closeModal('modalNovo');
   render();
-  showToast('Câmbio enviado para aprovação!', `${_formaEntradaSel} ${fmt(valorEntrada)} → aguardando controlador`, 'info');
+  showToast('Câmbio registrado!', `${_formaEntradaSel} ${fmt(valorEntrada)} → espécie ${fmt(valorSaida)} · lucro ${fmt(valorEntrada - valorSaida)}`, 'success');
 }
 
 /* ── Detalhe ─────────────────────────────── */
