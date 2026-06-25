@@ -622,20 +622,20 @@ function _diasAtras(n) {
 }
 function _mesAtualDe(){ const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-01`; }
 
-function setPeriodo(d) {
+function setPeriodo(d, el) {
   _de  = _diasAtras(d);
   _ate = hj();
   _syncInputs();
   document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
+  (el || event?.target)?.classList.add('active');
   renderAll();
 }
-function setPeriodoMes() {
+function setPeriodoMes(el) {
   _de  = _mesAtualDe();
   _ate = hj();
   _syncInputs();
   document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
+  (el || event?.target)?.classList.add('active');
   renderAll();
 }
 function aplicarPeriodo() {
@@ -649,11 +649,11 @@ function _syncInputs() {
 }
 
 // ── Tabs ────────────────────────────────────────────────────────────
-function switchTab(id) {
+function switchTab(id, el) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById(`tab-${id}`)?.classList.add('active');
-  event.target.classList.add('active');
+  (el || event?.target)?.classList.add('active');
   // Lazy render específico por tab
   if (id === 'custos')      renderCustos();
   if (id === 'abc')         renderABC();
@@ -785,9 +785,29 @@ function renderVisaoGeral(dash) {
     },
   });
 
-  // Formas de pagamento
+  // Formas de pagamento — separa vendas mistas (Dinheiro+Pix) e exclui câmbio saída
   const tkt = BI.getTicketMedio(_de, _ate);
-  const formas = Object.entries(tkt.porForma || {});
+  const formasRaw = tkt.porForma || {};
+  const formasNorm = {};
+  Object.entries(formasRaw).forEach(([f, d]) => {
+    if (f.startsWith('Dinheiro+')) {
+      // Misto: soma nas parcelas separadas usando _parcelaDinheiro/_parcelaRestante
+      // O biService já tem o total bruto — aproximamos como 50/50 se não tiver os campos
+      const f2 = f.replace('Dinheiro+', '');
+      formasNorm['Dinheiro'] = formasNorm['Dinheiro'] || { qtd: 0, total: 0 };
+      formasNorm[f2]         = formasNorm[f2]         || { qtd: 0, total: 0 };
+      // Para o gráfico, distribuir o total igualmente (melhor que mostrar "Dinheiro+Pix")
+      formasNorm['Dinheiro'].total += (d.total || 0) / 2;
+      formasNorm[f2].total         += (d.total || 0) / 2;
+      formasNorm['Dinheiro'].qtd   += d.qtd || 0;
+      formasNorm[f2].qtd           += d.qtd || 0;
+    } else {
+      formasNorm[f] = formasNorm[f] || { qtd: 0, total: 0 };
+      formasNorm[f].total += d.total || 0;
+      formasNorm[f].qtd   += d.qtd   || 0;
+    }
+  });
+  const formas = Object.entries(formasNorm).filter(([k]) => !k.includes('Câmbio Saída'));
   _chart('chart-pgto', {
     type: 'pie',
     data: {
@@ -1248,11 +1268,12 @@ function renderAll() {
   document.getElementById('last-update').textContent =
     'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
 
-  // Info de plano
-  const plano = window.CH?.FeatureFlags?.planoAtual?.() || '';
-  const planoLabel = { free:'Grátis', basico:'Básico', premium:'Premium', enterprise:'Enterprise', _standalone:'Standalone' };
-  document.getElementById('header-plano').textContent =
-    `CH Geladas${plano && plano !== '_standalone' ? ' · ' + (planoLabel[plano]||plano) : ''}`;
+  // Info de plano (stub garante _standalone quando serviço não existe)
+  const plano = window.CH?.FeatureFlags?.planoAtual?.() || '_standalone';
+  const planoLabel = { free:'Grátis', basico:'Básico', premium:'Premium', enterprise:'Enterprise', _standalone:'' };
+  const planoTxt = planoLabel[plano] ?? plano;
+  const hdrEl = document.getElementById('header-plano');
+  if (hdrEl) hdrEl.textContent = `CH Geladas${planoTxt ? ' · ' + planoTxt : ''}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
