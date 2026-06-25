@@ -71,8 +71,8 @@
       const Store = window.CH.Store;
 
       const colsRT = (['admin','adm'].includes(role))
-        ? ['estoque','config','fiado','comandas','pedidos','saidas','financeiro','usuarios']
-        : ['estoque','config','usuarios'];
+        ? ['estoque','config','fiado','comandas','pedidos','saidas','financeiro','validade','usuarios']
+        : ['estoque','config','saidas','validade','usuarios'];  // saidas e validade para todos os roles
 
       // Listener vendas em tempo real
       try {
@@ -90,7 +90,7 @@
 
       // Coleções append-only: o snapshot NAO sobrescreve o local.
       // Faz merge por ID para não perder registros criados offline ou em outro dispositivo.
-      const _APPEND_ONLY_RT = new Set(['saidas','financeiro','ponto','movimentacoes','contagens']);
+      const _APPEND_ONLY_RT = new Set(['saidas','financeiro','ponto','movimentacoes','contagens','validade']);
 
       colsRT.forEach(col=>{
         try {
