@@ -28,6 +28,7 @@ const CONSTANTS = Object.freeze({
   FORNECEDORES:   'CH_FORNECEDORES',
   FINANCEIRO:     'CH_FINANCEIRO',
   SAIDAS:         'CH_SAIDAS',
+  VALIDADE:       'CH_VALIDADE',
   CAMBIO:         'CH_CAMBIO',
   PERFIS:         'CH_PERFIS',
   SYNC_QUEUE:     'CH_SYNC_QUEUE',
@@ -208,12 +209,13 @@ const Store = (() => {
   fornecedores:  CONSTANTS.DB.FORNECEDORES,
   financeiro:    CONSTANTS.DB.FINANCEIRO,
   saidas:        CONSTANTS.DB.SAIDAS,
+  validade:      CONSTANTS.DB.VALIDADE,
   };
 
   const _empty = {
   estoque:[], vendas:[], comandas:[], fiado:[],
   ponto:[], pedidos:[], auditoria:[], config:{},
-  movimentacoes:[], categorias:[], fornecedores:[], financeiro:[], saidas:[],
+  movimentacoes:[], categorias:[], fornecedores:[], financeiro:[], saidas:[], validade:[],
   };
 
   const _limits = {
@@ -222,6 +224,7 @@ const Store = (() => {
   comandas: CONSTANTS.MAX_COMANDAS, movimentacoes: CONSTANTS.MAX_MOVIMENTACOES,
   financeiro: CONSTANTS.MAX_FINANCEIRO,
   saidas:     CONSTANTS.MAX_SAIDAS,
+  validade:   5_000,
   };
 
   function _read(col) {
@@ -348,6 +351,7 @@ const Store = (() => {
   getFornecedores()  { return _read('fornecedores'); },
   getFinanceiro()    { return _read('financeiro'); },
   getSaidas()        { return _read('saidas'); },
+  getValidade()      { return _read('validade'); },
 
   getVendasHoje() {
     const hoje = Utils.todayISO();
@@ -386,6 +390,7 @@ const Store = (() => {
   mutateFornecedores(fn)  { _mutate('fornecedores',  fn); },
   mutateFinanceiro(fn)    { _mutate('financeiro',    fn); },
   mutateSaidas(fn)        { _mutate('saidas',        fn); },
+  mutateValidade(fn)     { _mutate('validade',     fn); },
 
   invalidate(col) {
     if (col) delete _cache[col];
@@ -667,7 +672,7 @@ const FirebaseService = (() => {
   }
   function _rtColForKey(key) {
     if (_rtKeyToCol[key]) return _rtKeyToCol[key];
-    for (const col of ['estoque','config','fiado','comandas','pedidos','saidas','financeiro','ponto']) {
+    for (const col of ['estoque','config','fiado','comandas','pedidos','saidas','financeiro','ponto','validade']) {
       if (CONSTANTS.DB[col.toUpperCase()] === key) { _rtKeyToCol[key] = col; return col; }
     }
     return null;

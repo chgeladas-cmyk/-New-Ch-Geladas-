@@ -249,19 +249,11 @@ function _Utils()    { return window.CH.Utils; }
 function _Telegram() { return window.CH.TelegramService; }
 function _Bus()      { return window.CH.EventBus; }
 
-const STORAGE_KEY = 'CH_VALIDADE';
-
-function getLotes() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-}
-function saveLotes(arr) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-}
-function mutateLotes(fn) {
-  const arr = getLotes();
-  fn(arr);
-  saveLotes(arr);
-}
+// FIX: usar Store (core.js) em vez de localStorage direto
+// Isso garante sincronização com Firebase e persistência correta entre dispositivos.
+function getLotes()      { return _Store().getValidade?.() ?? []; }
+function saveLotes(arr)  { _Store().mutateValidade?.(list => { list.length = 0; list.push(...arr); }); }
+function mutateLotes(fn) { _Store().mutateValidade?.(fn); }
 
 function hoje() {
   const d = new Date();
@@ -325,8 +317,15 @@ function init() {
   atualizarKpis();
   render();
   verificarAlertas(false); // silencioso no boot
-  // escuta mudanças no estoque
-  _Bus().on('store:updated', () => { popularSelectProdutos(); atualizarKpis(); render(); });
+  // Escuta mudanças de estoque E de validade (Firebase sync)
+  _Bus().on('store:updated', col => {
+    if (!col || col === 'estoque' || col === 'validade') {
+      popularSelectProdutos();
+      atualizarKpis();
+      render();
+    }
+  });
+  _Bus().on('store:validade', () => { atualizarKpis(); render(); });
 }
 
 function popularSelectProdutos() {
@@ -504,7 +503,8 @@ function salvarLote() {
   render();
   showToast(_modoEdicao ? 'Lote atualizado!' : 'Lote cadastrado!', nome, 'success');
 
-  // sincroniza com Firebase
+  // Sync automático via mutateValidade (SyncQueue chamado no _mutate do Store)
+  // Forçar enqueue redundante apenas como garantia offline
   if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'validade', getLotes());
 }
 

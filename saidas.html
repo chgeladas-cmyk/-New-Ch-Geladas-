@@ -579,6 +579,24 @@ function init() {
   renderDashboard();
   renderHistorico();
   gerarRelatorio();
+
+  // FIX: escuta sync do Firebase para re-renderizar quando dados chegam de outro dispositivo
+  // Sem isso, os dados aparecem no localStorage mas a tela não atualiza.
+  const _bus = window.CH?.EventBus;
+  if (_bus) {
+    _bus.on('store:saidas', () => {
+      renderDashboard();
+      renderHistorico();
+      gerarRelatorio();
+    });
+    _bus.on('store:updated', col => {
+      if (col === 'saidas') {
+        renderDashboard();
+        renderHistorico();
+        gerarRelatorio();
+      }
+    });
+  }
 }
 
 /* ═══ ABAS ═══ */
