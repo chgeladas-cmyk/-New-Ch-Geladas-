@@ -69,6 +69,14 @@
 
   /** Registra receita de uma venda */
   function registrarReceita(venda) {
+    // Venda fiado: a dívida foi enviada ao módulo Fiado na validação, mas o
+    // dinheiro só entra quando o cliente paga. A receita é reconhecida lá
+    // (fiado.html chama registrarReceita novamente, proporcional ao valor
+    // pago) — nunca aqui, senão o caixa contaria a venda antes de receber.
+    if (venda._fiado) {
+      console.info(`[Financeiro] Receita da venda ${venda.id} adiada — fiado só reconhece receita no pagamento`);
+      return null;
+    }
     return _lancar({
       tipo:       'receita',
       categoria:  'venda',
