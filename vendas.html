@@ -846,71 +846,44 @@ function confirmarFiado(clienteId) {
   }
   UIService.closeModal('modalFiadoCliente');
 
-  // ── Precisa de aprovação? ─────────────────────────────────────────
-  if (_verificarAprovacao()) {
-    // Cria venda pendente SEM baixar estoque ainda
-    const itensDesc = itens.map(i=>`${i.nome} x${i.qtd}`).join(', ');
-    const venda = {
-      id:           Utils.generateId(),
-      dataCurta:    Utils.todayISO(),
-      data:         Utils.today(),
-      hora:         Utils.nowTime(),
-      criadoEm:     Utils.nowISO(),
-      itens,
-      total,
-      subtotal:     CartService.getSubtotal ? CartService.getSubtotal() : total,
-      desconto:     CartService.getDesconto ? CartService.getDesconto() : 0,
-      lucro:        itens.reduce((s,i) => s + (i.preco-(i.custo||0))*i.qtd, 0),
-      formaPgto:    `Fiado — ${cliente.nome}`,
-      origem:       'PDV',
-      operador:     AuthService.getNome(),
-      role:         AuthService.getRole(),
-      status:       'pendente',
-      _fbSynced:    false,
-      _fiado:       true,
-      _fiadoClienteId:   clienteId,
-      _fiadoClienteNome: cliente.nome,
-      _baixouEstoque:    false, // estoque SÓ baixa após aprovação
-    };
-    Store.mutateVendas(v => { v.unshift(venda); });
-    if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
-    CartService.clear();
-    EventBus.emit('venda:pendente', venda);
-    renderCatalogo();
-    atualizarAlerta();
-    UIService.showToast(`Fiado ${cliente.nome}`, 'Aguardando aprovação', 'warning');
-    return;
-  }
+  // ── FIADO SEMPRE requer aprovação, independente do cargo ──────────
+  // Regra de negócio: venda fiado é dívida — nunca pode pular o fluxo
+  // pendente → aprovação → validação. Só na validação o estoque é
+  // baixado e a dívida é enviada para o módulo Fiado (ver aprovacaoService.js).
+  const venda = {
+    id:           Utils.generateId(),
+    dataCurta:    Utils.todayISO(),
+    data:         Utils.today(),
+    hora:         Utils.nowTime(),
+    criadoEm:     Utils.nowISO(),
+    itens,
+    total,
+    subtotal:     CartService.getSubtotal ? CartService.getSubtotal() : total,
+    desconto:     CartService.getDesconto ? CartService.getDesconto() : 0,
+    lucro:        itens.reduce((s,i) => s + (i.preco-(i.custo||0))*i.qtd, 0),
+    formaPgto:    `Fiado — ${cliente.nome}`,
+    origem:       'PDV',
+    operador:     AuthService.getNome(),
+    role:         AuthService.getRole(),
+    status:       'pendente',
+    _fbSynced:    false,
+    _fiado:       true,
+    _fiadoClienteId:   clienteId,
+    _fiadoClienteNome: cliente.nome,
+    _baixouEstoque:    false, // estoque SÓ baixa após validação
+  };
+  Store.mutateVendas(v => { v.unshift(venda); });
 
-  // ── Sem aprovação: lança na conta (tab aberta) ────────────────────
-  // Registra na aba do cliente MAS não finaliza a venda (conta permanece aberta)
-  const itensDesc = itens.map(i=>`${i.nome} x${i.qtd}`).join(', ');
-  Store.mutateFiado(fiado => {
-    const c = fiado.find(x=>x.id===clienteId);
-    if (!c) return;
-    c.saldo = (c.saldo||0) + total;
-    if (!Array.isArray(c.movimentacoes)) c.movimentacoes = [];
-    c.movimentacoes.unshift({
-      id: Utils.generateId(), tipo: 'fiado',
-      descricao: itensDesc || 'Compra PDV',
-      valor: total,
-      itens: itens.map(i => ({
-        prodId: i.prodId, nome: i.nome,
-        preco: i.preco, qtd: i.qtd, label: i.label || 'UNID',
-      })),
-      criadoEm: new Date().toISOString(),
-    });
-    if (c.limite>0 && c.saldo >= c.limite) c.bloqueado = true;
-  });
-  // Sincroniza fiado com Firestore
-  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
-  EventBus.emit('fiado:lancado', { cliente: cliente.nome, valor: total, obs: 'Venda PDV' });
-  // Limpa o carrinho para o próximo cliente, mas NÃO cria venda finalizada
-  // A conta fica aberta em Fiado.html até o cliente pagar
+  // Reserva o estoque para não deixar dois colaboradores venderem a mesma
+  // unidade enquanto essa venda aguarda aprovação/validação.
+  window.CH.EstoqueService?.reservarEstoque?.(venda.id, itens);
+
+  if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
   CartService.clear();
+  EventBus.emit('venda:pendente', venda);
   renderCatalogo();
   atualizarAlerta();
-  UIService.showToast(`Fiado lançado — ${cliente.nome}`, Utils.formatCurrency(total), 'warning');
+  UIService.showToast(`Fiado ${cliente.nome}`, 'Aguardando aprovação', 'warning');
 }
 
 /* ══ FINALIZAR VENDA ══ */
