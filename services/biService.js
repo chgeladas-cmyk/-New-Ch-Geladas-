@@ -90,9 +90,14 @@
   //    B → próximos 20%                 (importância intermediária)
   //    C → últimos 10%                  (baixa representatividade)
   // ══════════════════════════════════════════════════════════════════
-  function getCurvaABC(dias = 90) {
-    const de = _diasAtras(dias);
-    const ate = Utils.todayISO();
+  function getCurvaABC(de, ate) {
+    // Compat retroativa: se vier um número, trata como "dias atrás" (comportamento antigo).
+    let dias;
+    if (typeof de === 'number' || de === undefined) {
+      dias = de || 90;
+      de  = _diasAtras(dias);
+      ate = Utils.todayISO();
+    }
     const vendas = _vendasPeriodo(de, ate);
 
     // Agrupa por produto
@@ -113,9 +118,13 @@
             lucro:     0,
           };
         }
-        const custo = (item.custo || item.custoUn || 0) * item.qtd;
-        const receita = (item.preco || item.precoUn || 0) * item.qtd;
-        mapa[id].qtd     += item.qtd;
+        // BLINDAGEM: item sem qtd/preço válido (ex: "Taxa de entrega" sem preço,
+        // item corrompido) não pode virar NaN e contaminar o totalGeral —
+        // um único NaN aqui zera o percentual de TODOS os produtos da curva.
+        const qtd    = Number(item.qtd) || 0;
+        const custo  = (Number(item.custo) || Number(item.custoUn) || 0) * qtd;
+        const receita = (Number(item.preco) || Number(item.precoUn) || 0) * qtd;
+        mapa[id].qtd     += qtd;
         mapa[id].receita += receita;
         mapa[id].custo   += custo;
         mapa[id].lucro   += receita - custo;
@@ -463,9 +472,23 @@
   // ══════════════════════════════════════════════════════════════════
   //  COMPARATIVO PERÍODO ATUAL × ANTERIOR
   // ══════════════════════════════════════════════════════════════════
-  function getComparativoPeriodos() {
-    const atual    = _mesAtual();
-    const anterior = _mesAnterior();
+  // Dado um período [de, ate], devolve o período imediatamente anterior
+  // com a mesma quantidade de dias — usado para comparar "período vs anterior"
+  // quando o usuário escolhe um intervalo customizado no filtro do dashboard.
+  function _periodoAnteriorEquivalente(de, ate) {
+    const dIni = new Date(de + 'T00:00:00');
+    const dFim = new Date(ate + 'T00:00:00');
+    const qtdDias = Math.max(1, Math.round((dFim - dIni) / 86400000) + 1);
+    const antFim = new Date(dIni);
+    antFim.setDate(antFim.getDate() - 1);
+    const antIni = new Date(antFim);
+    antIni.setDate(antIni.getDate() - (qtdDias - 1));
+    return { de: _localDateISO(antIni), ate: _localDateISO(antFim) };
+  }
+
+  function getComparativoPeriodos(de, ate) {
+    const atual    = (de && ate) ? { de, ate } : _mesAtual();
+    const anterior = (de && ate) ? _periodoAnteriorEquivalente(de, ate) : _mesAnterior();
 
     const vAtual    = _vendasPeriodo(atual.de, atual.ate);
     const vAnterior = _vendasPeriodo(anterior.de, anterior.ate);
@@ -505,43 +528,46 @@
   // ══════════════════════════════════════════════════════════════════
   //  DASHBOARD EXECUTIVO — KPIs CONSOLIDADOS
   // ══════════════════════════════════════════════════════════════════
-  function getDashboardExecutivo() {
-    const hoje   = Utils.todayISO();
-    const { de: mes_de, ate: mes_ate } = _mesAtual();
-    const de30   = _diasAtras(30);
-    const de90   = _diasAtras(90);
+  function getDashboardExecutivo(de, ate) {
+    const hoje = Utils.todayISO();
+    // Sem período informado: cai no comportamento antigo (mês calendário).
+    if (!de || !ate) { const m = _mesAtual(); de = m.de; ate = m.ate; }
+    const periodo_de = de, periodo_ate = ate;
 
     // Vendas hoje
     const vendasHoje = _vendasPeriodo(hoje, hoje);
     const totalHoje  = vendasHoje.reduce((s, v) => s + (v.total || 0), 0);
     const lucroHoje  = vendasHoje.reduce((s, v) => s + (v.lucro  || 0), 0);
 
-    // Mês atual
-    const vendasMes  = _vendasPeriodo(mes_de, mes_ate);
+    // Período selecionado no filtro do dashboard (antes era sempre "mês calendário")
+    const vendasMes  = _vendasPeriodo(periodo_de, periodo_ate);
     const totalMes   = vendasMes.reduce((s, v) => s + (v.total || 0), 0);
     const lucroMes   = vendasMes.reduce((s, v) => s + (v.lucro  || 0), 0);
 
-    // CMV e margem (30 dias)
-    const cmv30 = getCMV(de30, hoje);
+    // CMV e margem — MESMO período selecionado (antes eram sempre os últimos
+    // 30 dias fixos, o que gerava % absurdas ao comparar com a receita do
+    // período escolhido, ex: CMV de 30 dias ÷ receita de 2 dias = 3800%).
+    const cmv30 = getCMV(periodo_de, periodo_ate);
 
     // ── Qualidade dos dados de custo ──────────────────────────────
-    const todasVendas30 = _vendasPeriodo(de30, hoje);
+    const todasVendas30 = vendasMes;
     const vendasSemCusto = todasVendas30.filter(v => v._custoIncompleto).length;
     const pctSemCusto = todasVendas30.length > 0
       ? (vendasSemCusto / todasVendas30.length) * 100 : 0;
     const custoDadosConfiavel = pctSemCusto < 10; // < 10% das vendas sem custo = ok
 
-    // Curva ABC (90 dias)
-    const abc = getCurvaABC(90);
+    // Curva ABC — MESMO período selecionado (antes eram sempre 90 dias fixos,
+    // por isso o filtro do dashboard não tinha efeito nenhum na aba Curva ABC).
+    const abc = getCurvaABC(periodo_de, periodo_ate);
 
-    // Produtos parados (30 dias)
+    // Produtos parados — alerta independente do filtro (sempre últimos 30 dias)
     const parados = getProdutosParados(30);
 
-    // Ticket médio (mês)
-    const ticket = getTicketMedio(mes_de, mes_ate);
+    // Ticket médio — mesmo período selecionado
+    const ticket = getTicketMedio(periodo_de, periodo_ate);
 
-    // Comparativo
-    const comparativo = getComparativoPeriodos();
+    // Comparativo — período selecionado vs período anterior equivalente
+    const comparativo = getComparativoPeriodos(periodo_de, periodo_ate);
 
     // Estoque
     const estoque = Store.getEstoque() || [];
