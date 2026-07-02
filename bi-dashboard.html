@@ -715,7 +715,7 @@ function renderKPIs(dash) {
       sub: `Margem: ${fmtPct(hoje.margem)}`, delta: null, classe: 'green',
     },
     {
-      label: 'Receita Mês', value: fmt(mes.receita),
+      label: 'Receita no Período', value: fmt(mes.receita),
       sub: `${fmtN(mes.vendas)} vendas`,
       delta: comp.variacao.receita, classe: 'blue',
     },
@@ -730,7 +730,7 @@ function renderKPIs(dash) {
     },
     {
       label: 'CMV',  value: fmt(mes.cmv),
-      sub: `${fmtPct(mes.receita > 0 ? (mes.cmv/mes.receita)*100 : 0)} da receita`,
+      sub: `${fmtPct(mes.receita > 0 ? (mes.cmv/mes.receita)*100 : 0)} da receita do período`,
       delta: null, classe: 'purple',
     },
     {
@@ -749,7 +749,7 @@ function renderKPIs(dash) {
       <div class="kpi-label">${k.label}</div>
       <div class="kpi-value">${k.value}</div>
       <div class="kpi-sub">${k.sub}</div>
-      ${k.delta !== null ? `<div class="kpi-delta">${deltaHtml(k.delta)} vs mês ant.</div>` : ''}
+      ${k.delta !== null ? `<div class="kpi-delta">${deltaHtml(k.delta)} vs período anterior</div>` : ''}
     </div>
   `).join('');
 }
@@ -1053,7 +1053,7 @@ function renderCustos() {
 
 function renderABC() {
   const BI  = window.CH.BIService;
-  const abc = BI.getCurvaABC(90);
+  const abc = BI.getCurvaABC(_de, _ate);
 
   // Pie
   _chart('chart-abc-pie', {
@@ -1251,7 +1251,7 @@ function renderAll() {
   const BI = window.CH?.BIService;
   if (!BI) { console.warn('[BI] BIService não disponível'); return; }
 
-  const dash = BI.getDashboardExecutivo();
+  const dash = BI.getDashboardExecutivo(_de, _ate);
   renderKPIs(dash);
   renderAlertas(dash.alertas);
   renderVisaoGeral(dash);
