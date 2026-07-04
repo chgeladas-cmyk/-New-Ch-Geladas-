@@ -98,7 +98,6 @@ body.is-admin .adm-only{display:flex!important;}
 .chip-quit-fiado { background:rgba(16,185,129,.12); color:#34d399; }
 .parcela-item { display:flex; align-items:center; justify-content:space-between; padding:.45rem 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:.75rem; }
 .parcela-item:last-child { border-bottom:none; }
-.baixa-tag { font-size:.58rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; background:rgba(59,130,246,.12); color:#60a5fa; }
 .modal-parcela .modal-box { max-width:26rem; }
 
 /* ── CANCELAMENTO DE ITENS ── */
@@ -747,8 +746,6 @@ function _renderCompras(c) {
     return '<div class="compra-vazio">Nenhuma compra registrada</div>';
   }
 
-  const totalGeral = tudo.reduce((s, v) => s + (v.status==='cancelada'?0:(v.total || 0)), 0);
-
   const blocos = tudo.map((v, idx) => {
     const dt       = v.criadoEm ? new Date(v.criadoEm) : null;
     const dataStr  = dt ? dt.toLocaleDateString('pt-BR') : '—';
@@ -769,7 +766,7 @@ function _renderCompras(c) {
           const cancelado = i.status === 'cancelado';
           // Use i.id se existir; senão cria índice pelo prodId para lookup
           const itemKey   = i.id || (i.prodId + '_' + (i.nome||'').replace(/\W/g,''));
-          const cancelBtn = (!cancelado && isAdmin && !v._manual && (v.status === 'concluida' || v.status === 'aprovada'))
+          const cancelBtn = (!cancelado && isAdmin && v.status === 'validada')
             ? `<button onclick="abrirCancelarItem('${v.id}','${itemKey}')"
                  title="Cancelar este item"
                  class="btn-cancel-item ml-1">
@@ -948,6 +945,10 @@ async function _confirmarCancelItem() {
 
   const venda = (Store.getVendas() || []).find(v => v.id === _cancelItemVendaId);
   if (!venda) { UIService.showToast('Venda não encontrada', '', 'error'); return; }
+  if (venda.status !== 'validada') {
+    UIService.showToast('Só é possível cancelar item de venda já validada', 'Estoque/dívida ainda não foram lançados nessa venda', 'error');
+    return;
+  }
 
   const itemIdx = venda.itens.findIndex(i =>
     i.id === _cancelItemKey ||
@@ -1203,7 +1204,7 @@ function abrirParcela() {
         </div>`).join('')
     : '<p class="text-[10px] text-slate-600 text-center py-2">Nenhuma parcela registrada</p>';
 
-  // Itens da venda para baixa proporcional
+  // Itens da venda original — só referência visual, estoque já foi baixado na validação
   const itensWrap = document.getElementById('parcelaItensWrap');
   if (venda && venda.itens && venda.itens.length) {
     itensWrap.style.display = 'block';

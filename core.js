@@ -590,6 +590,33 @@ const FirebaseService = (() => {
   let _db = null, _auth = null, _fb = null;
   let _ready = false, _adminToken = null;
   let _unsubscribers = [];
+  const _appLoadedAt = Date.now(); // referência pra ignorar sinais de update antigos, de antes desta aba abrir
+
+  // Limpa Service Worker + caches e recarrega — usado quando um admin dispara
+  // "forçar atualização em todos os aparelhos" (ver monitor.html).
+  let _atualizandoAgora = false;
+  async function _forcarAtualizacaoAgora(dados) {
+    if (_atualizandoAgora) return; // evita disparo duplo se vier mais de um snapshot
+    _atualizandoAgora = true;
+    try {
+      window.CH?.UIService?.showToast?.(
+        '🔄 Atualização do sistema', `Recarregando em instantes${dados?.por ? ' — enviado por ' + dados.por : ''}...`, 'warning'
+      );
+    } catch(_) {}
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch(e) {
+      console.warn('[CH] Falha ao limpar cache/SW antes de recarregar:', e.message);
+    }
+    setTimeout(() => location.reload(), 1200); // dá tempo do toast aparecer
+  }
 
   // ───────────────────────────────────────────────────────────────────
   // LEADER-ELECTION ENTRE ABAS (mesma origem/dispositivo).
@@ -754,8 +781,8 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios', 'ponto']
-    : ['estoque', 'config', 'usuarios'];
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios', 'ponto', 'sistemaUpdate']
+    : ['estoque', 'config', 'fiado', 'usuarios', 'sistemaUpdate'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
@@ -788,6 +815,14 @@ const FirebaseService = (() => {
        if (snap.metadata.hasPendingWrites) return;
        const dados = snap.data()?.dados;
        if (!dados) return;
+       // Atualização forçada: não é "dado" pra guardar — é um sinal pra recarregar.
+       // Ignora timestamps antigos (de antes desta aba abrir) pra não entrar
+       // em loop de reload assim que a página carrega.
+       if (col === 'sistemaUpdate') {
+         const ts = Number(dados.timestamp) || 0;
+         if (ts > _appLoadedAt) _forcarAtualizacaoAgora(dados);
+         return;
+       }
        // Usuarios: salva direto no localStorage de usuários, não via Store genérico
        if (col === 'usuarios') {
          if (Array.isArray(dados)) {
@@ -1023,6 +1058,14 @@ const FirebaseService = (() => {
   return _fb.serverTimestamp();
   }
 
+  async function forcarAtualizacaoGlobal(porNome) {
+    _requireReady();
+    if (!_adminToken) throw new Error('Só admin autenticado pode forçar atualização em todos os aparelhos.');
+    const ok = await salvar('sistemaUpdate', { timestamp: Date.now(), por: porNome || 'Admin' });
+    if (!ok) throw new Error('Falha ao gravar o sinal de atualização no Firestore.');
+    return true;
+  }
+
   return {
   init, salvar, ler, deletar, atualizar,
   isReady: () => _ready,
@@ -1033,6 +1076,7 @@ const FirebaseService = (() => {
   getAdminToken:     () => _adminToken,
   clearAdminToken:   () => { _adminToken = null; sessionStorage.removeItem('CH_ADMIN_TOKEN'); },
   subscribeRealtime: _subscribeRealtime,
+  forcarAtualizacaoGlobal,
 
   runTransaction,
   docRef,
