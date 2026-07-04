@@ -609,6 +609,9 @@ function salvarRegistro() {
         nome:            `Câmbio ${registro.formaEntrada} → Espécie (taxa ${registro.taxaPct}%)`,
         qtd:             1,
         preco:           registro.valorEntrada,
+        // custo = dinheiro em espécie que saiu do caixa para o cliente (registro.valorSaida).
+        // Sem isso, biService.js lê item.custo=0 e o CMV/margem do câmbio ficam incorretos.
+        custo:           registro.valorSaida,
         lucro:           registro.lucro,
         controlaEstoque: false,
       }],
