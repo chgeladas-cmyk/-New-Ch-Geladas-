@@ -223,10 +223,10 @@ body.is-admin .adm-only.block-only{display:block!important;}
         <span id="histTotal" class="badge b-blue text-[8px]">0</span>
       </div>
       <div class="flex gap-2 mb-3">
-        <input type="text" id="histBusca" oninput="renderHistorico()"
-          onkeydown="if(event.key==='Enter'){renderHistorico(); this.blur();}"
+        <input type="text" id="histBusca" oninput="renderTudo()"
+          onkeydown="if(event.key==='Enter'){renderTudo(); this.blur();}"
           class="inp !py-2 !text-xs flex-1" placeholder="Ex: 01.06.26 = relatório dia | 06.26 = mês | ou produto, pgto...">
-        <button onclick="renderHistorico(); document.getElementById('histBusca').blur();"
+        <button onclick="renderTudo(); document.getElementById('histBusca').blur();"
           class="btn-busca" title="Buscar">
           <i class="fas fa-search"></i>
         </button>
