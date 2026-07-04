@@ -438,7 +438,6 @@ function setPeriodo(per, btn) {
 function filtrarVendas() {
   const todas  = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const agora  = new Date();
-  const hoje   = Utils.todayISO();
 
   // ── Range personalizado (início → fim, 00:00 a 23:59) ──────────────────
   if (_periodo === 'range' && _rangeIni) {
@@ -450,7 +449,14 @@ function filtrarVendas() {
     });
   }
 
-  if (_periodo === 'hoje')   return todas.filter(v => v.dataCurta === hoje);
+  if (_periodo === 'hoje') {
+    const ini = new Date(agora); ini.setHours(0,0,0,0);
+    const fim = new Date(agora); fim.setHours(23,59,59,999);
+    return todas.filter(v => {
+      const ts = new Date(v.criadoEm || v.dataCurta);
+      return ts >= ini && ts <= fim;
+    });
+  }
   if (_periodo === 'semana') {
     const ini = new Date(agora); ini.setDate(ini.getDate() - 6); ini.setHours(0,0,0,0);
     return todas.filter(v => new Date(v.criadoEm || v.dataCurta) >= ini);
