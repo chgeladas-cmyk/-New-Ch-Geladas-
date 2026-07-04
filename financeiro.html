@@ -48,6 +48,9 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .range-sc{font-size:.6rem;font-weight:800;padding:.3rem .65rem;border-radius:.6rem;border:1px solid rgba(139,92,246,.2);color:#6b7280;cursor:pointer;transition:all .15s;}
 .range-sc:hover,.range-sc.act{background:rgba(139,92,246,.15);border-color:rgba(139,92,246,.4);color:#a78bfa;}
 #rangeBadge{display:none;}
+/* Botão de busca do histórico */
+.btn-busca{flex-shrink:0;width:44px;background:#8b5cf6;border:2px solid #8b5cf6;border-radius:.75rem;color:#fff;font-size:.85rem;display:flex;align-items:center;justify-content:center;transition:all .15s;cursor:pointer;}
+.btn-busca:hover,.btn-busca:active{background:#7c3aed;border-color:#7c3aed;}
 
 /* STAT CARD */
 .stat{background:rgba(13,17,23,.85);border:1px solid var(--border);border-radius:1.5rem;padding:1.25rem;transition:all .2s;}
@@ -219,7 +222,15 @@ body.is-admin .adm-only.block-only{display:block!important;}
         <p class="text-[9px] font-black uppercase tracking-wider text-slate-400">Histórico de Vendas</p>
         <span id="histTotal" class="badge b-blue text-[8px]">0</span>
       </div>
-      <input type="text" id="histBusca" oninput="renderHistorico()" class="inp !py-2 !text-xs mb-3" placeholder="Ex: 01.06.26 = relatório dia | 06.26 = mês | ou produto, pgto...">
+      <div class="flex gap-2 mb-3">
+        <input type="text" id="histBusca" oninput="renderHistorico()"
+          onkeydown="if(event.key==='Enter'){renderHistorico(); this.blur();}"
+          class="inp !py-2 !text-xs flex-1" placeholder="Ex: 01.06.26 = relatório dia | 06.26 = mês | ou produto, pgto...">
+        <button onclick="renderHistorico(); document.getElementById('histBusca').blur();"
+          class="btn-busca" title="Buscar">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
       <div id="historico" class="space-y-2 max-h-80 overflow-y-auto scroll"></div>
     </div>
 
