@@ -734,25 +734,13 @@ function _renderDetalheConteudo(c) {
 }
 
 function _renderCompras(c) {
-  // Busca vendas fiado do cliente no Store de vendas (com itens completos)
-  const vendasFiado = (Store.getVendas() || [])
+  // Fonte única de verdade: a venda em si (Store.getVendas(), _fiado=true).
+  // O aprovacaoService também grava um registro em c.movimentacoes (tipo:'fiado')
+  // ao validar — mas isso é só o log de auditoria da dívida (tem vendaId apontando
+  // pra essa mesma venda), não uma segunda compra. Somar os dois duplicava tudo
+  // na tela ("aparecia como PDV e como manual" para a mesma venda).
+  const tudo = (Store.getVendas() || [])
     .filter(v => v._fiado && v._fiadoClienteId === c.id)
-    .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
-
-  // Também pega lançamentos manuais do fiado (sem venda associada)
-  const lancamentosManual = (c.movimentacoes || [])
-    .filter(m => m.tipo === 'fiado')
-    .map(m => ({
-      _manual: true,
-      id:       m.id,
-      criadoEm: m.criadoEm,
-      total:    m.valor,
-      status:   'concluida',
-      itens:    m.itens || [],
-      descricao: m.descricao,
-    }));
-
-  const tudo = [...vendasFiado, ...lancamentosManual]
     .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 
   if (!tudo.length) {
@@ -815,7 +803,7 @@ function _renderCompras(c) {
         <div class="compra-header" onclick="document.getElementById('${bodyId}').classList.toggle('hidden')">
           <div>
             <div class="compra-data">${dataStr}</div>
-            <div class="compra-hora">${horaStr}${v._manual ? ' · Lançamento manual' : ' · PDV'}</div>
+            <div class="compra-hora">${horaStr}${v.origem === 'FIADO-LANCAMENTO' ? ' · Lançamento manual' : ' · PDV'}</div>
           </div>
           <div style="text-align:right">
             <div class="compra-total">${Utils.formatCurrency(v.total || 0)}</div>
@@ -1176,7 +1164,7 @@ function _getVendaFiadoCliente(clienteId) {
   return (Store.getVendas() || []).find(v =>
     v._fiado &&
     v._fiadoClienteId === clienteId &&
-    ['pendente','aprovada','concluida'].includes(v.status)
+    ['pendente','aprovada','validada','concluida'].includes(v.status)
   ) || null;
 }
 
