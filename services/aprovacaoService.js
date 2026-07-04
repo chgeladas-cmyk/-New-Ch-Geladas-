@@ -183,6 +183,8 @@
     if (!venda) throw new Error('Venda não encontrada');
     if (venda.status !== 'aprovada')
       throw new Error(`Venda está "${venda.status}", esperado "aprovada"`);
+    if (venda._baixouEstoque)
+      throw new Error('Estoque desta venda já foi baixado — reprocessamento bloqueado');
 
     // ── PASSO 1: Verifica estoque disponível ──────────────────────
     // Câmbios não movimentam estoque — pula verificação e baixa
@@ -249,6 +251,7 @@
         v.validadaPor = AuthService.getNome();
         v._baixaOk    = baixaOk;
         v._baixaErros = baixaErros.length > 0 ? baixaErros : undefined;
+        v._baixouEstoque = !venda._cambio; // true só quando realmente baixou (câmbio não mexe em estoque)
       }
     });
 
@@ -339,6 +342,7 @@
         v.validadaEm           = agora;
         v.validadaPor          = operador;
         v._baixaOk             = false;
+        v._baixouEstoque       = true; // admin já ajustou o estoque manualmente — bloqueia reprocessamento
         v._resolvidaManualmente = true;
         v._justificativaManual = justificativa;
         delete v.erroValidacaoEm;
@@ -440,6 +444,10 @@
       for (const venda of aprovadas) {
         try {
           // PASSO 1: Verifica estoque (câmbios pulam — não movimentam estoque)
+          if (venda._baixouEstoque) {
+            erros.push({ id: venda.id, erro: 'Estoque já baixado — reprocessamento bloqueado' });
+            continue;
+          }
           if (ES && !venda._cambio) {
             const errosEstoque = [];
             for (const item of venda.itens || []) {
@@ -506,6 +514,7 @@
               v.validadaPor = operador;
               v._baixaOk    = baixaOk;
               v._baixaErros = baixaErros.length > 0 ? baixaErros : undefined;
+              v._baixouEstoque = !venda._cambio;
             }
           });
 
