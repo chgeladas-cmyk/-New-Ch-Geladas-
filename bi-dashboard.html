@@ -785,29 +785,30 @@ function renderVisaoGeral(dash) {
     },
   });
 
-  // Formas de pagamento — separa vendas mistas (Dinheiro+Pix) e exclui câmbio saída
+  // Formas de pagamento — biService.getTicketMedio() já separa vendas mistas
+  // nas parcelas reais (_parcelaDinheiro/_parcelaRestante), então aqui só
+  // normalizamos variações de texto histórico e excluímos Fiado/Câmbio Saída.
   const tkt = BI.getTicketMedio(_de, _ate);
   const formasRaw = tkt.porForma || {};
+  const _normPgto = (f) => {
+    const chave = (f||'').trim().toLowerCase();
+    const mapa = {
+      'pix': 'Pix', 'dinheiro': 'Dinheiro',
+      'débito': 'Débito', 'debito': 'Débito',
+      'crédito': 'Crédito', 'credito': 'Crédito',
+      'cartão': 'Débito', 'cartao': 'Débito',
+    };
+    return mapa[chave] || f || 'Outro';
+  };
   const formasNorm = {};
   Object.entries(formasRaw).forEach(([f, d]) => {
-    if (f.startsWith('Dinheiro+')) {
-      // Misto: soma nas parcelas separadas usando _parcelaDinheiro/_parcelaRestante
-      // O biService já tem o total bruto — aproximamos como 50/50 se não tiver os campos
-      const f2 = f.replace('Dinheiro+', '');
-      formasNorm['Dinheiro'] = formasNorm['Dinheiro'] || { qtd: 0, total: 0 };
-      formasNorm[f2]         = formasNorm[f2]         || { qtd: 0, total: 0 };
-      // Para o gráfico, distribuir o total igualmente (melhor que mostrar "Dinheiro+Pix")
-      formasNorm['Dinheiro'].total += (d.total || 0) / 2;
-      formasNorm[f2].total         += (d.total || 0) / 2;
-      formasNorm['Dinheiro'].qtd   += d.qtd || 0;
-      formasNorm[f2].qtd           += d.qtd || 0;
-    } else {
-      formasNorm[f] = formasNorm[f] || { qtd: 0, total: 0 };
-      formasNorm[f].total += d.total || 0;
-      formasNorm[f].qtd   += d.qtd   || 0;
-    }
+    if (f.startsWith('Fiado') || f.includes('Câmbio Saída')) return;
+    const fNorm = _normPgto(f);
+    formasNorm[fNorm] = formasNorm[fNorm] || { qtd: 0, total: 0 };
+    formasNorm[fNorm].total += d.total || 0;
+    formasNorm[fNorm].qtd   += d.qtd   || 0;
   });
-  const formas = Object.entries(formasNorm).filter(([k]) => !k.includes('Câmbio Saída'));
+  const formas = Object.entries(formasNorm);
   _chart('chart-pgto', {
     type: 'pie',
     data: {

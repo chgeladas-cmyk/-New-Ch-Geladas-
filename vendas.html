@@ -167,10 +167,11 @@ body.is-admin .adm-flex{display:flex!important;}
               <span class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Total</span>
               <span id="cartTotal" class="text-3xl font-black text-white tracking-tight">R$ 0,00</span>
             </div>
-            <div id="quickPay" class="hidden grid grid-cols-3 gap-1.5 mb-2">
+            <div id="quickPay" class="hidden grid grid-cols-2 gap-1.5 mb-2">
               <button onclick="quickPagamento('Dinheiro')" class="py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/25 text-emerald-300 font-black text-[9px] uppercase flex flex-col items-center gap-0.5 transition-all active:scale-95"><i class="fas fa-money-bill-wave text-sm"></i>Dinheiro</button>
               <button onclick="quickPagamento('Pix')" class="py-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/35 border border-blue-500/25 text-blue-300 font-black text-[9px] uppercase flex flex-col items-center gap-0.5 transition-all active:scale-95"><i class="fas fa-qrcode text-sm"></i>Pix</button>
-              <button onclick="quickPagamento('Cartão')" class="py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 border border-purple-500/25 text-purple-300 font-black text-[9px] uppercase flex flex-col items-center gap-0.5 transition-all active:scale-95"><i class="fas fa-credit-card text-sm"></i>Cartão</button>
+              <button onclick="quickPagamento('Débito')" class="py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 border border-purple-500/25 text-purple-300 font-black text-[9px] uppercase flex flex-col items-center gap-0.5 transition-all active:scale-95"><i class="fas fa-credit-card text-sm"></i>Débito</button>
+              <button onclick="quickPagamento('Crédito')" class="py-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/35 border border-amber-500/25 text-amber-300 font-black text-[9px] uppercase flex flex-col items-center gap-0.5 transition-all active:scale-95"><i class="fas fa-credit-card text-sm"></i>Crédito</button>
             </div>
             <button onclick="abrirPagamento()" id="btnFinalizar" disabled class="w-full py-3 rounded-xl bg-slate-800 text-slate-500 font-black uppercase text-[10px] tracking-widest transition-all cursor-not-allowed">
               <i class="fas fa-lock mr-2"></i>Selecione produtos
@@ -216,10 +217,11 @@ body.is-admin .adm-flex{display:flex!important;}
         <p class="text-[9px] text-slate-500 uppercase font-bold">Total</p>
         <span id="cartTotalMob" class="text-2xl font-black text-white">R$ 0,00</span>
       </div>
-      <div id="quickPayMob" class="hidden grid grid-cols-3 gap-2 mb-2">
+      <div id="quickPayMob" class="hidden grid grid-cols-2 gap-2 mb-2">
         <button onclick="quickPagamento('Dinheiro');fecharDrawer()" class="py-3.5 rounded-xl bg-emerald-600/20 border border-emerald-500/25 text-emerald-300 font-black text-[10px] uppercase flex flex-col items-center gap-1 active:scale-95 transition-all"><i class="fas fa-money-bill-wave text-base"></i>Dinheiro</button>
         <button onclick="quickPagamento('Pix');fecharDrawer()" class="py-3.5 rounded-xl bg-blue-600/20 border border-blue-500/25 text-blue-300 font-black text-[10px] uppercase flex flex-col items-center gap-1 active:scale-95 transition-all"><i class="fas fa-qrcode text-base"></i>Pix</button>
-        <button onclick="quickPagamento('Cartão');fecharDrawer()" class="py-3.5 rounded-xl bg-purple-600/20 border border-purple-500/25 text-purple-300 font-black text-[10px] uppercase flex flex-col items-center gap-1 active:scale-95 transition-all"><i class="fas fa-credit-card text-base"></i>Cartão</button>
+        <button onclick="quickPagamento('Débito');fecharDrawer()" class="py-3.5 rounded-xl bg-purple-600/20 border border-purple-500/25 text-purple-300 font-black text-[10px] uppercase flex flex-col items-center gap-1 active:scale-95 transition-all"><i class="fas fa-credit-card text-base"></i>Débito</button>
+        <button onclick="quickPagamento('Crédito');fecharDrawer()" class="py-3.5 rounded-xl bg-amber-600/20 border border-amber-500/25 text-amber-300 font-black text-[10px] uppercase flex flex-col items-center gap-1 active:scale-95 transition-all"><i class="fas fa-credit-card text-base"></i>Crédito</button>
       </div>
       <button onclick="abrirPagamento();fecharDrawer()" id="btnFinalizarMob" disabled class="w-full py-3 rounded-xl bg-slate-800 text-slate-500 font-black uppercase text-[10px] tracking-widest transition-all cursor-not-allowed">
         <i class="fas fa-lock mr-2"></i>Selecione produtos
@@ -1215,12 +1217,17 @@ function abrirRelatorio() {
   _setText('relTicket',      Utils.formatCurrency(ticket));
   _setText('relData',        `Hoje — ${Utils.today()}`);
   // Formas de pagamento — separa parcelas de vendas mistas
+  const _normPgtoVendas = (f) => {
+    const chave = (f||'').trim().toLowerCase();
+    const mapa = { 'pix':'Pix','dinheiro':'Dinheiro','débito':'Débito','debito':'Débito','crédito':'Crédito','credito':'Crédito','cartão':'Débito','cartao':'Débito' };
+    return mapa[chave] || f || 'Outro';
+  };
   const pgtos = {};
-  vendas.forEach(v => {
+  vendas.filter(v => !(v.formaPgto||'').startsWith('Fiado')).forEach(v => {
     const f = v.formaPgto || 'Outros';
     if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
       // Misto: contabiliza cada parte separada
-      const f2 = f.replace('Dinheiro+', '');
+      const f2 = _normPgtoVendas(v._formaRestante || f.replace('Dinheiro+', ''));
       if (!pgtos['Dinheiro']) pgtos['Dinheiro'] = { total: 0, qtd: 0 };
       if (!pgtos[f2])         pgtos[f2]         = { total: 0, qtd: 0 };
       pgtos['Dinheiro'].total += v._parcelaDinheiro;
@@ -1228,23 +1235,34 @@ function abrirRelatorio() {
       pgtos[f2].total += v._parcelaRestante || 0;
       pgtos[f2].qtd++;
     } else {
-      if (!pgtos[f]) pgtos[f] = { total: 0, qtd: 0 };
-      pgtos[f].total += v.total || 0;
-      pgtos[f].qtd++;
+      const fNorm = _normPgtoVendas(f);
+      if (!pgtos[fNorm]) pgtos[fNorm] = { total: 0, qtd: 0 };
+      pgtos[fNorm].total += v.total || 0;
+      pgtos[fNorm].qtd++;
+    }
+    // Câmbio: saída de espécie física reduz o caixa — mostra em separado
+    if (v._cambio && v._cambioSaida > 0) {
+      if (!pgtos['Dinheiro (Câmbio Saída)']) pgtos['Dinheiro (Câmbio Saída)'] = { total: 0, qtd: 0, saida: true };
+      pgtos['Dinheiro (Câmbio Saída)'].total -= v._cambioSaida;
+      pgtos['Dinheiro (Câmbio Saída)'].qtd++;
     }
   });
-  const COR_PGTO = { Dinheiro:'text-emerald-400', Pix:'text-blue-400', Crédito:'text-amber-400', Débito:'text-purple-400', Fiado:'text-red-400' };
-  document.getElementById('relPorPgto').innerHTML = Object.entries(pgtos).sort((a,b)=>b[1].total-a[1].total)
+  const COR_PGTO = { Dinheiro:'text-emerald-400', Pix:'text-blue-400', Crédito:'text-amber-400', Débito:'text-purple-400', Fiado:'text-red-400', 'Dinheiro (Câmbio Saída)':'text-red-400' };
+  document.getElementById('relPorPgto').innerHTML = Object.entries(pgtos).sort((a,b)=>{
+      if (a[1].saida && !b[1].saida) return 1;
+      if (!a[1].saida && b[1].saida) return -1;
+      return b[1].total-a[1].total;
+    })
     .map(([f,d])=>`<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
-      <span class="text-[10px] font-black ${COR_PGTO[f]||'text-slate-300'}">${f}</span>
+      <span class="text-[10px] font-black ${COR_PGTO[f]||'text-slate-300'}">${d.saida?'↙ ':''}${f}</span>
       <div class="flex items-center gap-3">
-        <span class="text-[9px] text-slate-500 font-bold">${d.qtd} venda${d.qtd!==1?'s':''}</span>
-        <span class="text-[10px] font-black text-white">${Utils.formatCurrency(d.total)}</span>
+        <span class="text-[9px] text-slate-500 font-bold">${d.qtd} ${d.saida?'câmbio':'venda'}${d.qtd!==1?'s':''}</span>
+        <span class="text-[10px] font-black ${d.saida?'text-red-400':'text-white'}">${d.saida?'-':''}${Utils.formatCurrency(Math.abs(d.total))}</span>
       </div>
     </div>`).join('')
     ||'<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem vendas</p>';
   const prods = {};
-  vendas.forEach(v=>v.itens.forEach(i=>{ prods[i.nome]=(prods[i.nome]||0)+i.qtd; }));
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v=>v.itens.forEach(i=>{ prods[i.nome]=(prods[i.nome]||0)+i.qtd; }));
   const top   = Object.entries(prods).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const icons = ['🥇','🥈','🥉','4️⃣','5️⃣'];
   document.getElementById('relTopProd').innerHTML = top.map(([nome,qtd],i)=>

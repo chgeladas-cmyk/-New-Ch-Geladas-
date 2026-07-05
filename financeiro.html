@@ -624,34 +624,70 @@ function renderGrafico(vendas) {
 /* ═══════════════════════════════════
    FORMAS DE PAGAMENTO
 ═══════════════════════════════════ */
+// Normaliza variações históricas de texto livre para a taxonomia atual
+function _normalizarFormaPgto(f) {
+  const chave = (f||'').trim().toLowerCase();
+  const mapa = {
+    'pix': 'Pix',
+    'dinheiro': 'Dinheiro',
+    'débito': 'Débito', 'debito': 'Débito',
+    'crédito': 'Crédito', 'credito': 'Crédito',
+    'cartão': 'Débito', 'cartao': 'Débito', // dados antigos genéricos → Débito (melhor estimativa)
+  };
+  return mapa[chave] || f || 'Outro';
+}
+
 function renderFormasPgto(vendas) {
   const el = document.getElementById('formasPgto');
   if (!el) return;
   const pgtos = {};
-  const total = vendas.reduce((s,v)=>s+(v.total||0),0);
-  vendas.forEach(v => {
-    const f = v.formaPgto||'Outro';
-    pgtos[f] = (pgtos[f]||0) + (v.total||0);
+  // Fiado é dívida, não é recebimento — não entra no gráfico de forma de pagamento
+  const vendasSemFiado = vendas.filter(v => !(v.formaPgto||'').startsWith('Fiado'));
+  const total = vendasSemFiado.reduce((s,v)=>s+(v.total||0),0);
+  vendasSemFiado.forEach(v => {
+    const f = v.formaPgto || 'Outro';
+    // Misto: separa cada parcela na forma real, igual biService.js
+    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
+      const f2 = _normalizarFormaPgto(v._formaRestante || f.replace('Dinheiro+', ''));
+      pgtos['Dinheiro'] = (pgtos['Dinheiro']||0) + v._parcelaDinheiro;
+      pgtos[f2] = (pgtos[f2]||0) + (v._parcelaRestante || 0);
+    } else {
+      const fNorm = _normalizarFormaPgto(f);
+      pgtos[fNorm] = (pgtos[fNorm]||0) + (v.total||0);
+    }
+    // Câmbio: a entrada (formaPgto) já foi somada acima; a saída de espécie
+    // entregue ao cliente é dinheiro físico saindo do caixa — mostra em separado.
+    if (v._cambio && v._cambioSaida > 0) {
+      pgtos['Dinheiro (Câmbio Saída)'] = (pgtos['Dinheiro (Câmbio Saída)']||0) - v._cambioSaida;
+    }
   });
-  const sorted = Object.entries(pgtos).sort((a,b)=>b[1]-a[1]);
+  const sorted = Object.entries(pgtos).sort((a,b) => {
+    const aSaida = a[0] === 'Dinheiro (Câmbio Saída)', bSaida = b[0] === 'Dinheiro (Câmbio Saída)';
+    if (aSaida && !bSaida) return 1;
+    if (!aSaida && bSaida) return -1;
+    return b[1]-a[1];
+  });
   if (sorted.length === 0) {
     el.innerHTML = '<p class="text-[9px] text-slate-600 text-center py-4 font-bold">Sem vendas no período</p>';
     return;
   }
-  const icons = { Dinheiro:'💵', Pix:'📱', Débito:'💳', Crédito:'💳', Fiado:'🤝' };
+  const icons = { Dinheiro:'💵', Pix:'📱', Débito:'💳', Crédito:'💳', Fiado:'🤝', 'Dinheiro (Câmbio Saída)':'↙️' };
   el.innerHTML = sorted.map(([f, v]) => {
-    const pct = total > 0 ? (v/total*100).toFixed(0) : 0;
+    const isSaida = f === 'Dinheiro (Câmbio Saída)';
+    const pct = (!isSaida && total > 0) ? (v/total*100).toFixed(0) : 0;
+    const corTxt = isSaida ? 'text-red-400' : 'text-purple-400';
+    const corBar = isSaida ? '#f87171' : '#8b5cf6';
     return `<div class="space-y-1">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-black text-slate-300">${icons[f]||'💰'} ${f}</span>
+        <span class="text-[10px] font-black ${isSaida ? 'text-red-400' : 'text-slate-300'}">${icons[f]||'💰'} ${f}</span>
         <div class="text-right">
-          <span class="text-[10px] font-black text-purple-400">${Utils.formatCurrency(v)}</span>
-          <span class="text-[8px] text-slate-600 font-bold ml-2">${pct}%</span>
+          <span class="text-[10px] font-black ${corTxt}">${isSaida ? '-' : ''}${Utils.formatCurrency(Math.abs(v))}</span>
+          ${isSaida ? '' : `<span class="text-[8px] text-slate-600 font-bold ml-2">${pct}%</span>`}
         </div>
       </div>
-      <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-        <div class="h-full bg-purple-500 rounded-full transition-all" style="width:${pct}%"></div>
-      </div>
+      ${isSaida ? '' : `<div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full rounded-full transition-all" style="width:${pct}%;background:${corBar};"></div>
+      </div>`}
     </div>`;
   }).join('');
 }
@@ -663,7 +699,7 @@ function renderTopProdutos(vendas) {
   const el = document.getElementById('topProdutos');
   if (!el) return;
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd: 0, total: 0 };
     prods[k].qtd   += i.qtd||1;
@@ -780,7 +816,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
 
   // Top produtos
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0 };
     prods[k].qtd   += i.qtd||1;
@@ -889,7 +925,7 @@ function _abrirRelatorioMes(mes, ano) {
 
   // Top produtos
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0, lucro:0 };
     prods[k].qtd   += i.qtd||1;
@@ -1091,7 +1127,7 @@ function abrirRelatorio() {
 
   // Top produtos
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0 };
     prods[k].qtd   += i.qtd||1;
@@ -1133,9 +1169,16 @@ function _gerarTextoRelatorio() {
 
   // Formas de pgto
   const pgtos = {};
-  vendas.forEach(v => {
+  vendas.filter(v => !(v.formaPgto||'').startsWith('Fiado')).forEach(v => {
     const f = v.formaPgto||'Outro';
-    pgtos[f] = (pgtos[f]||0) + (v.total||0);
+    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro > 0) {
+      const f2 = _normalizarFormaPgto(v._formaRestante || f.replace('Dinheiro+', ''));
+      pgtos['Dinheiro'] = (pgtos['Dinheiro']||0) + v._parcelaDinheiro;
+      pgtos[f2] = (pgtos[f2]||0) + (v._parcelaRestante || 0);
+    } else {
+      const fNorm = _normalizarFormaPgto(f);
+      pgtos[fNorm] = (pgtos[fNorm]||0) + (v.total||0);
+    }
     // Câmbio: registra saída de espécie separada
     if (v._cambio && v._cambioSaida > 0) {
       pgtos['Dinheiro (Câmbio Saída)'] = (pgtos['Dinheiro (Câmbio Saída)']||0) - v._cambioSaida;
@@ -1147,7 +1190,7 @@ function _gerarTextoRelatorio() {
 
   // Top produtos
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k=i.nome||'?';
     if(!prods[k]) prods[k]={qtd:0,total:0};
     prods[k].qtd+=(i.qtd||1); prods[k].total+=(i.preco||0)*(i.qtd||1);
@@ -1300,20 +1343,24 @@ function abrirRelDiario() {
   // Formas de pagamento
   const formas = {};
   vendas.forEach(v => {
-    const f = v.formaPgto || 'Outros';
-    if (!formas[f]) formas[f] = { total: 0, qtd: 0 };
-    formas[f].total += v.total || 0;
-    formas[f].qtd++;
+    const fRaw = v.formaPgto || 'Outros';
+    // Fiado é dívida, não recebimento — não entra no gráfico de forma de pagamento
+    if (fRaw.startsWith('Fiado')) return;
 
-    // ── Misto (Dinheiro+Pix etc): separar parcelas ──
-    if (f.startsWith('Dinheiro+') && v._parcelaDinheiro) {
-      const f2 = f.replace('Dinheiro+', '');
+    // ── Misto (Dinheiro+Pix etc): separar parcelas na forma real ──
+    if (fRaw.startsWith('Dinheiro+') && v._parcelaDinheiro) {
+      const f2 = _normalizarFormaPgto(v._formaRestante || fRaw.replace('Dinheiro+', ''));
       if (!formas['Dinheiro']) formas['Dinheiro'] = { total: 0, qtd: 0 };
       if (!formas[f2])         formas[f2]         = { total: 0, qtd: 0 };
       formas['Dinheiro'].total += v._parcelaDinheiro || 0;
-      formas[f2].total         += v._parcelaRestante || 0;
-      formas[f].total -= v.total; formas[f].qtd--;
-      if (formas[f].qtd <= 0) delete formas[f];
+      formas['Dinheiro'].qtd++;
+      formas[f2].total += v._parcelaRestante || 0;
+      formas[f2].qtd++;
+    } else {
+      const f = _normalizarFormaPgto(fRaw);
+      if (!formas[f]) formas[f] = { total: 0, qtd: 0 };
+      formas[f].total += v.total || 0;
+      formas[f].qtd++;
     }
 
     // ── CÂMBIO: entrada Pix/Cartão, SAÍDA dinheiro espécie ──────────
@@ -1350,7 +1397,7 @@ function abrirRelDiario() {
 
   // Top produtos
   const prods = {};
-  vendas.forEach(v => v.itens?.forEach(i => {
+  vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome || '?';
     if (!prods[k]) prods[k] = { qtd: 0, total: 0, cat: i.categoria || '' };
     prods[k].qtd   += i.qtd || 1;
