@@ -120,6 +120,21 @@ body.is-admin .adm-flex{display:flex!important;}
   </header>
 
   <main class="flex-1 p-3 lg:p-4 max-w-7xl mx-auto w-full pb-28 lg:pb-6">
+    <!-- ÚLTIMA VENDA — fica visível para o colaborador conferir se registrou -->
+    <div id="ultimaVendaBar" onclick="abrirUltimaVendaDetalhe()" class="hidden mb-3 px-4 py-2.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer" style="background:rgba(17,24,39,.9);border:1px solid rgba(255,255,255,.06);">
+      <div class="flex items-center gap-3 min-w-0">
+        <div id="uvDot" class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#10b981;"></div>
+        <div class="min-w-0">
+          <p class="text-[8px] text-slate-500 font-black uppercase tracking-wider">Última venda registrada</p>
+          <p class="text-[11px] font-bold text-slate-200 truncate">
+            <span id="uvHora">--:--</span> · <span id="uvTotal">R$ 0,00</span> · <span id="uvStatus" class="font-black text-emerald-400">-</span>
+          </p>
+        </div>
+      </div>
+      <button onclick="event.stopPropagation();abrirUltimaVendaDetalhe()" class="flex-shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-black uppercase transition-all active:scale-95">
+        <i class="fas fa-receipt mr-1"></i>Ver
+      </button>
+    </div>
     <div class="lg:grid lg:grid-cols-12 lg:gap-4">
       <!-- CATÁLOGO -->
       <div class="lg:col-span-8 flex flex-col gap-3">
@@ -221,6 +236,8 @@ body.is-admin .adm-flex{display:flex!important;}
       <h2 class="text-2xl font-black mb-1">Finalizar Venda</h2>
       <p id="pgtoResumo" class="text-slate-400 text-sm">Escolha o pagamento</p>
     </div>
+    <!-- Conferência dos itens — confira antes de cobrar -->
+    <div id="pgtoItens" class="mb-4 bg-slate-900/60 rounded-2xl p-3 border border-white/5 space-y-1.5 max-h-32 overflow-y-auto scroll"></div>
     <!-- Desconto -->
     <div class="mb-4 bg-slate-900/60 rounded-2xl p-4 border border-white/5">
       <label class="label !text-amber-400">Desconto (R$)</label>
@@ -349,6 +366,29 @@ body.is-admin .adm-flex{display:flex!important;}
   </div>
 </div>
 
+<!-- ══ MODAL ÚLTIMA VENDA (somente consulta) ══ -->
+<div id="modalUltimaVendaDetalhe" class="modal">
+  <div class="modal-box max-w-sm p-0 overflow-hidden">
+    <div class="bg-slate-800/40 border-b border-white/5 px-6 pt-6 pb-4 text-center">
+      <div class="w-12 h-12 bg-slate-700/40 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i class="fas fa-receipt"></i></div>
+      <h2 class="text-lg font-black text-white">Última Venda</h2>
+      <p id="uvdStatus" class="text-[10px] font-black uppercase mt-1"></p>
+    </div>
+    <div class="px-5 py-4 border-b border-white/5">
+      <div id="uvdItens" class="space-y-1.5 mb-3 max-h-48 overflow-y-auto scroll"></div>
+      <div class="flex justify-between items-center bg-slate-900/60 rounded-xl px-3 py-2.5 mt-2">
+        <span class="text-[10px] font-black uppercase text-slate-400">Total</span>
+        <span id="uvdTotal" class="text-xl font-black text-white">R$ 0,00</span>
+      </div>
+      <p id="uvdPgto" class="text-[9px] font-bold text-blue-400 text-right mt-1.5"></p>
+      <p id="uvdHora" class="text-[8px] font-bold text-slate-700 text-right mt-1"></p>
+    </div>
+    <div class="p-4">
+      <button onclick="UIService.closeModal('modalUltimaVendaDetalhe')" class="w-full bg-slate-900 hover:bg-slate-800 text-slate-400 py-3 rounded-xl font-black uppercase text-xs transition-all active:scale-95">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL RELATÓRIO ══ -->
 <div id="modalRelatorio" class="modal">
   <div class="modal-box max-w-sm p-0 overflow-hidden">
@@ -473,15 +513,82 @@ function init() {
   renderCatalogo();
   renderCart();
   atualizarAlerta();
+  atualizarUltimaVendaBar();
   EventBus.on('store:updated', (col) => {
     renderCatalogo(); renderCart(); atualizarAlerta();
     // Re-renderiza histórico se estiver visível
     if (col === 'vendas') {
       const relatorio = document.getElementById('secRelatorio');
       if (relatorio && !relatorio.classList.contains('hidden')) abrirRelatorio();
+      // Mantém a barra de "última venda" sempre atualizada (ex: quando o
+      // controlador aprova/rejeita, ou quando o sync confirma no servidor)
+      atualizarUltimaVendaBar();
     }
   });
   EventBus.on('cart:updated', renderCart);
+}
+
+/* ══ ÚLTIMA VENDA — barra persistente para o colaborador conferir ══
+   Objetivo: mesmo que o colaborador feche o recibo, atualize a página
+   ou fique em dúvida se apertou o botão, a última venda registrada
+   por ele continua visível no topo da tela (com status atualizado). */
+let _vendaBarAtual = null;
+
+function _labelStatusVenda(status) {
+  switch (status) {
+    case 'concluida':
+    case 'validada':
+    case 'aprovada':
+      return { label: 'Concluída',            cls: 'text-emerald-400', dot: '#10b981' };
+    case 'pendente':
+      return { label: 'Aguardando aprovação', cls: 'text-amber-400',   dot: '#f59e0b' };
+    case 'rejeitada':
+      return { label: 'Rejeitada',            cls: 'text-red-400',    dot: '#ef4444' };
+    case 'cancelada':
+      return { label: 'Cancelada',            cls: 'text-red-400',    dot: '#ef4444' };
+    default:
+      return { label: status || '—',          cls: 'text-slate-400',  dot: '#64748b' };
+  }
+}
+
+function atualizarUltimaVendaBar(venda) {
+  const bar = document.getElementById('ultimaVendaBar');
+  if (!bar) return;
+  if (!venda) {
+    const nome = AuthService.getNome();
+    venda = Store.getVendas().find(v => v.operador === nome) || null;
+  }
+  _vendaBarAtual = venda;
+  if (!venda) { bar.classList.add('hidden'); return; }
+
+  const st = _labelStatusVenda(venda.status);
+  _setText('uvHora',  venda.hora || '--:--');
+  _setText('uvTotal', Utils.formatCurrency(venda.total || 0));
+  const stEl = document.getElementById('uvStatus');
+  if (stEl) { stEl.textContent = st.label; stEl.className = `font-black ${st.cls}`; }
+  const dot = document.getElementById('uvDot');
+  if (dot) dot.style.background = st.dot;
+  bar.classList.remove('hidden');
+}
+
+function abrirUltimaVendaDetalhe() {
+  if (!_vendaBarAtual) return;
+  const v  = _vendaBarAtual;
+  const st = _labelStatusVenda(v.status);
+  const stEl = document.getElementById('uvdStatus');
+  if (stEl) { stEl.textContent = st.label; stEl.className = `text-[10px] font-black uppercase mt-1 ${st.cls}`; }
+  _setText('uvdHora',  `${v.data || ''} ${v.hora || ''}`.trim());
+  _setText('uvdPgto',  v.formaPgto || '-');
+  _setText('uvdTotal', Utils.formatCurrency(v.total || 0));
+  const itensEl = document.getElementById('uvdItens');
+  if (itensEl) {
+    itensEl.innerHTML = (v.itens || []).map(i =>
+      `<div class="flex justify-between text-[10px] font-bold">
+        <span class="text-slate-300">${i.nome} <span class="text-slate-500">${i.label} ×${i.qtd}</span></span>
+        <span class="text-white">${Utils.formatCurrency(i.preco*i.qtd)}</span>
+      </div>`).join('') || '<p class="text-[10px] text-slate-500">Sem itens</p>';
+  }
+  UIService.openModal('modalUltimaVendaDetalhe');
 }
 
 /* ══ CATEGORIAS ══ */
@@ -583,11 +690,15 @@ function _renderCartList(id, items) {
     el.innerHTML = `<div class="flex flex-col items-center justify-center py-12 opacity-20"><i class="fas fa-shopping-cart text-3xl text-slate-600 mb-3"></i><p class="text-[9px] font-black uppercase text-slate-600">Carrinho vazio</p></div>`;
     return;
   }
-  el.innerHTML = items.map((item,idx) => `
+  el.innerHTML = items.map((item,idx) => {
+    const isPack   = item.label !== 'UNID';
+    const corLabel = isPack ? 'text-amber-300' : 'text-blue-300';
+    const labelTxt = isPack ? item.label : '1 un';
+    return `
     <div class="cart-item">
       <div class="flex-1 min-w-0">
         <p class="text-[11px] font-black text-white truncate">${item.nome}</p>
-        <p class="text-[9px] text-slate-500 font-bold">${item.label} × ${item.qtd} = ${Utils.formatCurrency(item.preco*item.qtd)}</p>
+        <p class="text-[9px] font-bold"><span class="${corLabel} font-black">${labelTxt}</span><span class="text-slate-500"> × ${item.qtd} = ${Utils.formatCurrency(item.preco*item.qtd)}</span></p>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button class="qty-btn bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10" onclick="CartService.updateQty(${idx},${item.qtd-1})">−</button>
@@ -595,7 +706,8 @@ function _renderCartList(id, items) {
         <button class="qty-btn bg-slate-800 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10" onclick="CartService.updateQty(${idx},${item.qtd+1})">+</button>
         <button class="qty-btn bg-red-500/10 text-red-400 hover:bg-red-500/20 ml-1" onclick="CartService.remove(${idx})"><i class="fas fa-times text-[9px]"></i></button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function _setCartFooter(count, total, empty, isMob) {
@@ -679,10 +791,28 @@ function abrirPagamento() {
   // ── Fim do bloqueio ────────────────────────────────────────────
 
   _setText('pgtoResumo', `${CartService.getCount()} itens — ${Utils.formatCurrency(CartService.getTotal())}`);
+  _renderPgtoItens();
   const di = document.getElementById('descontoInput');
   if (di) di.value = '';
   document.getElementById('descBox')?.classList.add('hidden');
   UIService.openModal('modalPagamento');
+}
+
+function _renderPgtoItens() {
+  const el = document.getElementById('pgtoItens');
+  if (!el) return;
+  const items = CartService.getItems();
+  el.innerHTML = items.map(item => {
+    const isPack   = item.label !== 'UNID';
+    const corLabel = isPack ? 'text-amber-300' : 'text-blue-300';
+    const icone    = isPack ? 'fa-boxes' : 'fa-cube';
+    const labelTxt = isPack ? item.label : '1 un';
+    return `<div class="flex items-center justify-between gap-2 text-[10px] font-bold">
+      <span class="text-slate-300 truncate">${item.nome}</span>
+      <span class="${corLabel} flex items-center gap-1 flex-shrink-0"><i class="fas ${icone} text-[8px]"></i>${labelTxt} ×${item.qtd}</span>
+      <span class="text-white flex-shrink-0">${Utils.formatCurrency(item.preco*item.qtd)}</span>
+    </div>`;
+  }).join('');
 }
 
 function calcDesconto() {
@@ -883,6 +1013,7 @@ function confirmarFiado(clienteId) {
   EventBus.emit('venda:pendente', venda);
   renderCatalogo();
   atualizarAlerta();
+  atualizarUltimaVendaBar(venda);
   UIService.showToast(`Fiado ${cliente.nome}`, 'Aguardando aprovação', 'warning');
 }
 
@@ -941,6 +1072,7 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
     EventBus.emit('venda:pendente', venda);
     renderCatalogo();
     atualizarAlerta();
+    atualizarUltimaVendaBar(venda);
     UIService.showToast('Enviado para aprovacao!', 'Aguarda controlador', 'warning');
     return;
   }
@@ -958,6 +1090,7 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
     mostrarRecibo(venda);
     renderCatalogo();
     atualizarAlerta();
+    atualizarUltimaVendaBar(venda);
     UIService.showToast('Venda concluida!', Utils.formatCurrency(venda.total), 'success');
   };
   if (result && typeof result.then === 'function') { result.then(_done); } else { _done(result); }
@@ -1010,6 +1143,7 @@ function cancelarUltimaVenda() {
   _ultimaVenda = null;
   renderCatalogo();
   atualizarAlerta();
+  atualizarUltimaVendaBar();
 }
 
 /* ══ RECIBO ══ */
