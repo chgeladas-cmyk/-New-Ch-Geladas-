@@ -105,6 +105,9 @@
     let totalGeral = 0;
 
     vendas.forEach(venda => {
+      // Câmbio, lançamentos manuais de fiado e vendas avulsas (descrição livre)
+      // não são produtos de estoque — contaminariam o ranking de produtos.
+      if (venda._cambio || venda._fiado || venda._avulsa) return;
       (venda.itens || []).forEach(item => {
         const id = item.prodId || item.id;
         if (!mapa[id]) {
