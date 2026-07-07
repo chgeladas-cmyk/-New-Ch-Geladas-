@@ -12,11 +12,13 @@
  *   window.CH.SoundService.beep()         // alias de 'aviso'
  *
  * Pode ser desativado por loja via Config.somAtivo === false.
+ * Volume ajustável por loja via Config.somVolume (0–2, padrão 1).
  */
 (function () {
   window.CH = window.CH || {};
 
   let _ctx = null;
+  let _master = null; // gain + compressor compartilhados, pra deixar mais alto sem estourar
   function _getCtx() {
     if (_ctx) return _ctx;
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -25,7 +27,31 @@
     return _ctx;
   }
 
-  function _tone(ctx, freq, start, duration, { gain = 0.15, type = 'sine' } = {}) {
+  function _getMaster(ctx) {
+    if (_master) return _master;
+    const comp = ctx.createDynamicsCompressor();
+    // Compressor "agressivo" — segura o pico e deixa o som médio bem mais alto
+    comp.threshold.setValueAtTime(-24, ctx.currentTime);
+    comp.knee.setValueAtTime(20, ctx.currentTime);
+    comp.ratio.setValueAtTime(12, ctx.currentTime);
+    comp.attack.setValueAtTime(0.003, ctx.currentTime);
+    comp.release.setValueAtTime(0.15, ctx.currentTime);
+
+    const vol = ctx.createGain();
+    let volume = 1;
+    try {
+      const cfg = window.CH?.Store?.getConfig?.();
+      if (typeof cfg?.somVolume === 'number') volume = cfg.somVolume; // 0–2, config opcional por loja
+    } catch (_) {}
+    vol.gain.setValueAtTime(volume, ctx.currentTime);
+
+    vol.connect(comp);
+    comp.connect(ctx.destination);
+    _master = vol;
+    return _master;
+  }
+
+  function _tone(ctx, freq, start, duration, { gain = 0.4, type = 'sine' } = {}) {
     const osc = ctx.createOscillator();
     const g   = ctx.createGain();
     osc.type  = type;
@@ -33,7 +59,7 @@
     g.gain.setValueAtTime(0.0001, start);
     g.gain.linearRampToValueAtTime(gain, start + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    osc.connect(g).connect(ctx.destination);
+    osc.connect(g).connect(_getMaster(ctx));
     osc.start(start);
     osc.stop(start + duration + 0.02);
   }
@@ -45,23 +71,26 @@
     } catch (_) { return true; }
   }
 
-  // "Cha-ching" — dois tons curtos ascendentes
+  // "Cha-ching" — dois tons curtos ascendentes, cada um com uma oitava
+  // dobrada por cima pra dar corpo/volume percebido sem distorcer
   function _somVenda(ctx) {
     const t = ctx.currentTime;
-    _tone(ctx, 880,    t,       0.12, { gain: 0.12, type: 'triangle' });
-    _tone(ctx, 1318.5, t + 0.09, 0.18, { gain: 0.14, type: 'triangle' });
+    _tone(ctx, 880,    t,        0.14, { gain: 0.5,  type: 'triangle' });
+    _tone(ctx, 880*2,  t,        0.10, { gain: 0.22, type: 'triangle' });
+    _tone(ctx, 1318.5, t + 0.09, 0.22, { gain: 0.55, type: 'triangle' });
+    _tone(ctx, 1318.5*2, t+0.09, 0.14, { gain: 0.20, type: 'triangle' });
   }
 
   // Tom grave duplo — erro/cancelamento
   function _somErro(ctx) {
     const t = ctx.currentTime;
-    _tone(ctx, 220, t,        0.15, { gain: 0.12, type: 'sawtooth' });
-    _tone(ctx, 180, t + 0.12, 0.18, { gain: 0.12, type: 'sawtooth' });
+    _tone(ctx, 220, t,        0.18, { gain: 0.45, type: 'sawtooth' });
+    _tone(ctx, 180, t + 0.12, 0.22, { gain: 0.45, type: 'sawtooth' });
   }
 
   // Bipe curto neutro — aviso genérico
   function _somAviso(ctx) {
-    _tone(ctx, 660, ctx.currentTime, 0.1, { gain: 0.10, type: 'sine' });
+    _tone(ctx, 660, ctx.currentTime, 0.12, { gain: 0.35, type: 'sine' });
   }
 
   function play(tipo = 'venda') {
