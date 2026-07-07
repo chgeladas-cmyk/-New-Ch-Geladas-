@@ -458,6 +458,7 @@ body.is-admin .adm-flex{display:flex!important;}
   <script src="./services/estoqueService.js"></script>
   <script src="./services/financeiroService.js"></script>
   <script src="./services/integrityService.js"></script>
+  <script src="./services/soundService.js"></script>
 <script src="./services/vendasService.js"></script>
 <script>
 'use strict';
@@ -1093,6 +1094,7 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
     renderCatalogo();
     atualizarAlerta();
     atualizarUltimaVendaBar(venda);
+    window.CH.SoundService?.play?.('venda');
     UIService.showToast('Venda concluida!', Utils.formatCurrency(venda.total), 'success');
   };
   if (result && typeof result.then === 'function') { result.then(_done); } else { _done(result); }
