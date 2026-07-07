@@ -545,7 +545,8 @@ function renderTudo() {
 
   // Investimento e ROI
   const invest  = Store.getInvestimento();
-  const lucroAcum = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida')).reduce((s,v) => s+(v.lucro||0), 0);
+  const _todasValidas = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
+  const lucroAcum = _calcFaturamento(_todasValidas, '2000-01-01', Utils.todayISO()).lucro;
   const roi     = invest > 0 ? ((lucroAcum/invest)*100).toFixed(1) + '%' : '—';
 
   // Label do período
@@ -580,6 +581,10 @@ function renderGrafico(vendas) {
   const totEl   = document.getElementById('graficoTotal');
   if (!el) return;
 
+  // FIX: fiado pendente é dívida, não caixa — não deve inflar o gráfico
+  // (mesmo princípio já aplicado no cálculo de Faturamento/Lucro Bruto).
+  const vendasCaixa = vendas.filter(v => !v._fiado);
+
   let dados = [];
   let titulo = 'Por Hora';
 
@@ -587,7 +592,7 @@ function renderGrafico(vendas) {
     // Agrupa por hora
     titulo = 'Por Hora';
     const horas = {};
-    vendas.forEach(v => {
+    vendasCaixa.forEach(v => {
       const h = (v.hora||'00:00').split(':')[0];
       horas[h] = (horas[h]||0) + (v.total||0);
     });
@@ -604,13 +609,13 @@ function renderGrafico(vendas) {
       const fmt = d.toLocaleDateString('pt-BR',{weekday:'short'}).slice(0,3);
       dias[iso] = { label: fmt, valor: 0 };
     }
-    vendas.forEach(v => { if (dias[v.dataCurta]) dias[v.dataCurta].valor += (v.total||0); });
+    vendasCaixa.forEach(v => { if (dias[v.dataCurta]) dias[v.dataCurta].valor += (v.total||0); });
     dados = Object.values(dias);
   } else if (_periodo === 'mes') {
     titulo = 'Por Semana';
     const semanas = ['S1','S2','S3','S4','S5'];
     const acc = [0,0,0,0,0];
-    vendas.forEach(v => {
+    vendasCaixa.forEach(v => {
       const dia = new Date(v.criadoEm||v.dataCurta).getDate();
       const idx = Math.min(Math.floor((dia-1)/7), 4);
       acc[idx] += (v.total||0);
@@ -620,7 +625,7 @@ function renderGrafico(vendas) {
     titulo = 'Por Mês';
     const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const acc   = new Array(12).fill(0);
-    vendas.forEach(v => {
+    vendasCaixa.forEach(v => {
       const m = new Date(v.criadoEm||v.dataCurta).getMonth();
       acc[m] += (v.total||0);
     });

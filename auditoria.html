@@ -567,6 +567,7 @@ select.inp option { background: #0f172a; color: #f1f5f9; }
 <script src="./core.js"></script>
 <script src="./services/auditService.js"></script>
 <script src="./services/permissoesService.js"></script>
+<script src="./services/financeiroService.js"></script>
 
 <script>
 'use strict';
@@ -765,13 +766,17 @@ function calcularKPIs(logs) {
   const vendasValidas    = logs.filter(l => l._origem === 'venda' && l._tipo === 'CRIACAO');
   const vendasCanceladas = logs.filter(l => l._origem === 'venda' && l._tipo === 'ESTORNO');
 
-  const faturBruto = vendasValidas.reduce((s,l) => s + l._total, 0);
+  // FIX: fiado pendente é dívida do cliente, não dinheiro em caixa — só deve
+  // entrar no Faturamento/Lucro quando o cliente paga (mesmo critério já
+  // usado em financeiro.html/vendas.html). Antes, esta tela somava o total
+  // de TODA venda "CRIACAO", inclusive fiado ainda não paga.
+  const vendasCaixa = vendasValidas.filter(l => !l._raw?._fiado);
+  let faturBruto = vendasCaixa.reduce((s,l) => s + l._total, 0);
   const estornado  = vendasCanceladas.reduce((s,l) => s + l._total, 0);
-  const ticket     = vendasValidas.length ? faturBruto / vendasValidas.length : 0;
 
   // Lucro Líquido Real: percorre itens para calcular margem correta
   let lucroItens = 0;
-  vendasValidas.forEach(l => {
+  vendasCaixa.forEach(l => {
     if (l._itens && l._itens.length) {
       l._itens.forEach(item => {
         const pv = item.preco  || item.precoVenda  || item.precoUn  || 0;
@@ -785,6 +790,20 @@ function calcularKPIs(logs) {
       lucroItens += l._lucro || 0;
     }
   });
+
+  // Soma pagamentos de fiado recebidos no período filtrado (lançamentos sem
+  // venda correspondente = pagamento registrado por fiado.html na quitação).
+  const FS = window.CH?.FinanceiroService;
+  if (FS) {
+    const dataInicio = document.getElementById('fDataInicio')?.value || '2000-01-01';
+    const dataFim     = document.getElementById('fDataFim')?.value    || _Utils()?.todayISO?.() || new Date().toISOString().slice(0,10);
+    const idsVendas   = new Set((window.CH?.Store?.getVendas?.() || []).map(v => v.id));
+    FS.getLancamentos({ tipo: 'receita', categoria: 'venda', dataDe: dataInicio, dataAte: dataFim })
+      .filter(l => !idsVendas.has(l.referencia))
+      .forEach(l => { faturBruto += (l.valor || 0); lucroItens += (l.lucro || 0); });
+  }
+
+  const ticket = vendasValidas.length ? faturBruto / vendasValidas.length : 0;
   const margem = faturBruto > 0 ? ((lucroItens / faturBruto) * 100).toFixed(1) : 0;
 
   return { faturBruto, lucroItens, ticket, estornado, margem,
