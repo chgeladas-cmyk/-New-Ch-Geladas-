@@ -1206,10 +1206,29 @@ function copiarRecibo() { if (!_ultimaVenda) return; Utils.copyToClipboard(_gera
 function baixarRecibo() { if (!_ultimaVenda) return; Utils.downloadBlob(_gerarTextoRecibo(_ultimaVenda),'text/plain;charset=utf-8;',`venda_${_ultimaVenda.dataCurta}.txt`); }
 
 /* ══ RELATÓRIO ══ */
+// FIX: Fiado é dívida do cliente, não dinheiro em caixa — só entra no
+// Faturamento quando o cliente paga (ver services/financeiroService.js e
+// fiado.html). Antes, este relatório somava o total de TODAS as vendas do
+// dia, inclusive fiado ainda não pago, inflando Faturamento/Lucro.
+function _calcFaturamentoHoje(vendas) {
+  const semFiado = vendas.filter(v => !v._fiado);
+  let fatur = semFiado.reduce((s,v) => s + (v.total||0), 0);
+  let lucro = semFiado.reduce((s,v) => s + (v.lucro||0), 0);
+
+  if (window.CH?.FinanceiroService) {
+    const hoje = Utils.todayISO();
+    const idsVendas = new Set(Store.getVendas().map(v => v.id));
+    window.CH.FinanceiroService
+      .getLancamentos({ tipo: 'receita', categoria: 'venda', dataDe: hoje, dataAte: hoje })
+      .filter(l => !idsVendas.has(l.referencia)) // sem venda correspondente = pagamento de fiado
+      .forEach(l => { fatur += (l.valor||0); lucro += (l.lucro||0); });
+  }
+  return { fatur, lucro };
+}
+
 function abrirRelatorio() {
   const vendas = Store.getVendasHoje();
-  const fatur  = vendas.reduce((s,v)=>s+v.total,0);
-  const lucro  = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { fatur, lucro } = _calcFaturamentoHoje(vendas);
   const ticket = vendas.length ? fatur/vendas.length : 0;
   _setText('relFaturamento', Utils.formatCurrency(fatur));
   _setText('relLucro',       Utils.formatCurrency(lucro));
@@ -1313,8 +1332,8 @@ function cancelarVendaHistorico(vendaId) {
 
 function _gerarTextoRelatorio() {
   const vendas = Store.getVendasHoje();
-  const fatur  = vendas.reduce((s,v)=>s+v.total,0);
-  const lucro  = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { fatur, lucro } = _calcFaturamentoHoje(vendas);
+  const fiadoPendente = vendas.filter(v => v._fiado).reduce((s,v) => s + (v.total||0), 0);
   const cfg    = Store.getConfig();
   const nome   = cfg?.nome||'CH Geladas';
   const sep    = '═'.repeat(40); const sep2='─'.repeat(40);
@@ -1322,7 +1341,9 @@ function _gerarTextoRelatorio() {
   txt += `Faturamento:  ${Utils.formatCurrency(fatur)}\n`;
   txt += `Lucro:        ${Utils.formatCurrency(lucro)}\n`;
   txt += `Nº Vendas:    ${vendas.length}\n`;
-  txt += `Ticket Médio: ${Utils.formatCurrency(vendas.length?fatur/vendas.length:0)}\n\n`;
+  txt += `Ticket Médio: ${Utils.formatCurrency(vendas.length?fatur/vendas.length:0)}\n`;
+  if (fiadoPendente > 0) txt += `Fiado (pendente, não incluso no faturamento): ${Utils.formatCurrency(fiadoPendente)}\n`;
+  txt += `\n`;
 
   // ── Fechamento por forma de pagamento (misto = separado) ──
   const pgtosCx = {};

@@ -446,6 +446,49 @@ function setPeriodo(per, btn) {
 /* ═══════════════════════════════════
    FILTRAR VENDAS POR PERÍODO
 ═══════════════════════════════════ */
+// ── Intervalo de datas (dataDe/dataAte) do período selecionado ───────────────
+// Usado para casar o período das vendas com os lançamentos do financeiro
+// (ex.: pagamentos de fiado, que não são "vendas" e sim lançamentos).
+function _periodoRange() {
+  const hoje  = Utils.todayISO();
+  const agora = new Date();
+  let dataDe  = hoje, dataAte = hoje;
+  if (_periodo === 'semana') { const d = new Date(); d.setDate(d.getDate()-6); dataDe = _localISO(d); }
+  if (_periodo === 'mes')    { dataDe = _localISO(new Date(agora.getFullYear(), agora.getMonth(), 1)); }
+  if (_periodo === 'ano')    { dataDe = _localISO(new Date(agora.getFullYear(), 0, 1)); }
+  if (_periodo === 'geral')  { dataDe = '2000-01-01'; }
+  if (_periodo === 'range' && _rangeIni) { dataDe = _rangeIni; dataAte = _rangeFim || _rangeIni; }
+  return { dataDe, dataAte };
+}
+
+// ── Faturamento / Lucro em regime de caixa ────────────────────────────────
+// FIX: Fiado é uma dívida do cliente, não dinheiro que entrou no caixa.
+// Enquanto a venda fiado está pendente, ela NÃO deve contar como Faturamento
+// nem Lucro Bruto — senão o relatório mostra receita que ainda não existe
+// (exatamente como o financeiroService.js já documenta e faz para os
+// lançamentos, mas os relatórios desta tela somavam direto de Store.getVendas(),
+// ignorando a flag `_fiado` e contando a venda inteira na hora da validação).
+// Quando o cliente paga (fiado.html), a receita é lançada no financeiro
+// (Store.getFinanceiro()) com um id próprio — sem uma "venda" correspondente
+// em Store.getVendas(). Por isso, aqui somamos:
+//   1) vendas concluídas SEM fiado (receita já é caixa)
+//   2) lançamentos de receita/venda cujo `referencia` não corresponde a
+//      nenhuma venda existente = pagamentos de fiado recebidos no período
+function _calcFaturamento(vendas, dataDe, dataAte) {
+  const semFiado = vendas.filter(v => !v._fiado);
+  let fatur = semFiado.reduce((s,v) => s + (v.total || 0), 0);
+  let lucro = semFiado.reduce((s,v) => s + (v.lucro || 0), 0);
+
+  if (window.CH?.FinanceiroService && dataDe) {
+    const idsVendas = new Set(Store.getVendas().map(v => v.id));
+    window.CH.FinanceiroService
+      .getLancamentos({ tipo: 'receita', categoria: 'venda', dataDe, dataAte: dataAte || dataDe })
+      .filter(l => !idsVendas.has(l.referencia)) // sem venda correspondente = pagamento de fiado
+      .forEach(l => { fatur += (l.valor || 0); lucro += (l.lucro || 0); });
+  }
+  return { fatur, lucro };
+}
+
 function filtrarVendas() {
   const todas  = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const agora  = new Date();
@@ -488,30 +531,14 @@ function filtrarVendas() {
 ═══════════════════════════════════ */
 function renderTudo() {
   const vendas  = filtrarVendas();
-  const fatur   = vendas.reduce((s,v) => s + (v.total||0), 0);
-  const lucro   = vendas.reduce((s,v) => s + (v.lucro||0), 0);
+  const { dataDe, dataAte } = _periodoRange();
+  const { fatur, lucro } = _calcFaturamento(vendas, dataDe, dataAte);
   const margem  = fatur > 0 ? (lucro/fatur*100).toFixed(1) : 0;
   const ticket  = vendas.length ? fatur/vendas.length : 0;
 
   // FinanceiroService — despesas e saldo real do período
   let despesas = 0;
   if (window.CH?.FinanceiroService) {
-    // FIX [ALTO]: Timezone — toISOString() retorna UTC (UTC-3 = Brazil).
-    // Após 21h BRT a data local é N+1 em UTC, jogando vendas no dia errado.
-    // Usa componentes locais (getFullYear/Month/Date) igual ao Utils.todayISO() correto.
-    const _localISO = (d) => {
-      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
-      return `${y}-${m}-${day}`;
-    };
-    const hoje  = Utils.todayISO();
-    const agora = new Date();
-    let dataDe  = hoje;
-    let dataAte = hoje;
-    if (_periodo === 'semana') { const d=new Date(); d.setDate(d.getDate()-6); dataDe=_localISO(d); }
-    if (_periodo === 'mes')    { dataDe=_localISO(new Date(agora.getFullYear(),agora.getMonth(),1)); }
-    if (_periodo === 'ano')    { dataDe=_localISO(new Date(agora.getFullYear(),0,1)); }
-    if (_periodo === 'geral')  { dataDe='2000-01-01'; }
-    if (_periodo === 'range' && _rangeIni) { dataDe = _rangeIni; dataAte = _rangeFim || _rangeIni; }
     const lancamentos = window.CH.FinanceiroService.getLancamentos({ dataDe, dataAte });
     despesas = lancamentos.filter(l => l.tipo === 'despesa').reduce((s,l) => s + l.valor, 0);
   }
@@ -763,8 +790,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
     return ts >= ini && ts <= fim;
   });
 
-  const fatur  = vendas.reduce((s,v)=>s+(v.total||0),0);
-  const lucro  = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { fatur, lucro } = _calcFaturamento(vendas, diaStr, diaStr);
   const margem = fatur>0?(lucro/fatur*100).toFixed(1):0;
   const ticket = vendas.length?fatur/vendas.length:0;
   const nomeMes= ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -791,7 +817,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
   const porDiaWrap = document.getElementById('relPorDiaWrap');
   porDiaWrap?.classList.remove('hidden');
   const horas = {};
-  vendas.forEach(v => {
+  vendas.filter(v => !v._fiado).forEach(v => {
     const ts = v.criadoEm ? new Date(v.criadoEm) : null;
     const hr = ts ? String(ts.getHours()).padStart(2,'0') + ':00' : (v.hora ? v.hora.slice(0,5) : '?');
     if (!horas[hr]) horas[hr] = { fatur:0, lucro:0, qtd:0 };
@@ -850,8 +876,7 @@ function _abrirRelatorioMes(mes, ano) {
     return ts >= ini && ts <= fimDt;
   });
 
-  const fatur   = vendas.reduce((s,v)=>s+(v.total||0),0);
-  const lucro   = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { fatur, lucro } = _calcFaturamento(vendas, iniStr, fimStr);
   const margem  = fatur>0?(lucro/fatur*100).toFixed(1):0;
   const ticket  = vendas.length?fatur/vendas.length:0;
   const nomeMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -880,7 +905,7 @@ function _abrirRelatorioMes(mes, ano) {
   const porDiaWrap = document.getElementById('relPorDiaWrap');
   porDiaWrap?.classList.remove('hidden');
   const dias = {};
-  vendas.forEach(v => {
+  vendas.filter(v => !v._fiado).forEach(v => {
     const d = v.dataCurta||v.data||'?';
     if (!dias[d]) dias[d] = { fatur:0, lucro:0, qtd:0 };
     dias[d].fatur += v.total||0;
@@ -1041,8 +1066,8 @@ function renderHistorico() {
 ═══════════════════════════════════ */
 function abrirRelatorio() {
   const vendas  = filtrarVendas();
-  const fatur   = vendas.reduce((s,v)=>s+(v.total||0),0);
-  const lucro   = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { dataDe, dataAte } = _periodoRange();
+  const { fatur, lucro } = _calcFaturamento(vendas, dataDe, dataAte);
   const margem  = fatur>0?(lucro/fatur*100).toFixed(1):0;
   const ticket  = vendas.length?fatur/vendas.length:0;
   const _rlRange = _rangeIni ? (_rangeIni===_rangeFim?_fmtBR(_rangeIni):`${_fmtBR(_rangeIni)} → ${_fmtBR(_rangeFim)}`) : '—';
@@ -1071,7 +1096,7 @@ function abrirRelatorio() {
   if (_periodo === 'hoje' || _periodo === 'dia') {
     porDiaSection?.classList.remove('hidden');
     const horas = {};
-    vendas.forEach(v => {
+    vendas.filter(v => !v._fiado).forEach(v => {
       const ts = v.criadoEm ? new Date(v.criadoEm) : null;
       const hr = ts ? String(ts.getHours()).padStart(2,'0')+':00' : (v.hora ? v.hora.slice(0,5) : '?');
       if (!horas[hr]) horas[hr] = { fatur:0, lucro:0, qtd:0 };
@@ -1097,7 +1122,7 @@ function abrirRelatorio() {
   } else if (_periodo === 'semana' || _periodo === 'mes' || _periodo === 'ano') {
     porDiaSection?.classList.remove('hidden');
     const dias = {};
-    vendas.forEach(v => {
+    vendas.filter(v => !v._fiado).forEach(v => {
       const d = v.dataCurta||v.data||'?';
       if (!dias[d]) dias[d] = { fatur:0, lucro:0, qtd:0 };
       dias[d].fatur += v.total||0;
@@ -1149,8 +1174,8 @@ function abrirRelatorio() {
 
 function _gerarTextoRelatorio() {
   const vendas  = filtrarVendas();
-  const fatur   = vendas.reduce((s,v)=>s+(v.total||0),0);
-  const lucro   = vendas.reduce((s,v)=>s+(v.lucro||0),0);
+  const { dataDe, dataAte } = _periodoRange();
+  const { fatur, lucro } = _calcFaturamento(vendas, dataDe, dataAte);
   const margem  = fatur>0?(lucro/fatur*100).toFixed(1):0;
   const ticket  = vendas.length?fatur/vendas.length:0;
   const cfg     = Store.getConfig();
@@ -1321,12 +1346,12 @@ function abrirRelDiario() {
     'Hoje — ' + new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 
   // KPIs
-  const fatur  = vendas.reduce((s,v) => s + (v.total||0), 0);
-  const lucro  = vendas.reduce((s,v) => s + (v.lucro||0), 0);
+  const { fatur, lucro } = _calcFaturamento(vendas, hoje, hoje);
   const totalDespesas = despesas.reduce((s,d) => s + (d.valor||0), 0);
   // Câmbio: saída de dinheiro físico reduz o caixa
   const saidaCambio = vendas.filter(v => v._cambio).reduce((s,v) => s + (v._cambioSaida||0), 0);
   const caixa  = fatur - totalDespesas - saidaCambio;
+  const fiadoPendenteHoje = vendas.filter(v => v._fiado).reduce((s,v) => s + (v.total||0), 0);
   document.getElementById('relDiarioKpis').innerHTML = [
     ['Faturamento', Utils.formatCurrency(fatur), 'text-emerald-400'],
     ['Lucro Bruto',  Utils.formatCurrency(lucro),  'text-blue-400'],
@@ -1334,6 +1359,7 @@ function abrirRelDiario() {
     ['Nº Vendas',    vendas.length,                 'text-amber-400'],
     ['Despesas',     Utils.formatCurrency(totalDespesas), 'text-red-400'],
     ['Ticket Médio', Utils.formatCurrency(vendas.length ? fatur/vendas.length : 0), 'text-purple-400'],
+    ...(fiadoPendenteHoje > 0 ? [['Fiado Pendente', Utils.formatCurrency(fiadoPendenteHoje), 'text-red-400']] : []),
   ].map(([k,v,cor]) => `
     <div class="bg-slate-900/60 border border-white/5 rounded-xl p-2 text-center">
       <p class="text-[8px] text-slate-500 font-bold uppercase mb-1">${k}</p>
@@ -1463,13 +1489,15 @@ function abrirRelDiario() {
 function baixarRelDiario() {
   const hoje   = Utils.todayISO();
   const vendas = (Store.getVendas() || []).filter(v => (v.dataCurta || v.data || '') === hoje && ['concluida','validada'].includes(v.status || 'concluida'));
-  const fatur  = vendas.reduce((s,v) => s + (v.total||0), 0);
-  const lucro  = vendas.reduce((s,v) => s + (v.lucro||0), 0);
+  const { fatur, lucro } = _calcFaturamento(vendas, hoje, hoje);
+  const fiadoPendente = vendas.filter(v => v._fiado).reduce((s,v) => s + (v.total||0), 0);
   let txt = `RELATÓRIO DIÁRIO — ${hoje}\n`;
   txt += `${'='.repeat(40)}\n`;
   txt += `Faturamento : ${Utils.formatCurrency(fatur)}\n`;
   txt += `Lucro Bruto : ${Utils.formatCurrency(lucro)}\n`;
-  txt += `Nº de Vendas: ${vendas.length}\n\n`;
+  txt += `Nº de Vendas: ${vendas.length}\n`;
+  if (fiadoPendente > 0) txt += `Fiado (pendente, não incluso no faturamento): ${Utils.formatCurrency(fiadoPendente)}\n`;
+  txt += `\n`;
   txt += `VENDAS:\n${'-'.repeat(40)}\n`;
   vendas.forEach((v, i) => {
     txt += `\n${i+1}. ${v.hora} — ${Utils.formatCurrency(v.total)} — ${v.formaPgto}\n`;
