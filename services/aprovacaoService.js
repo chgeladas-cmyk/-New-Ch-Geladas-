@@ -216,6 +216,9 @@
       if (ES?.baixarEstoqueVendaLote) {
         try {
           const resultado = await ES.baixarEstoqueVendaLote(venda);
+          if (resultado.jaProcessado) {
+            console.info(`[AprovacaoService] Venda ${vendaId}: guard atômico bloqueou repetição de baixa (já estava baixada).`);
+          }
           baixaOk    = resultado.ok || resultado.localFallback || false;
           baixaErros = resultado.erros || [];
           if (!resultado.ok && !resultado.localFallback && resultado.itensProcessados === 0) {
@@ -478,6 +481,9 @@
             baixaOk = false;
             if (ES?.baixarEstoqueVendaLote) {
               const res = await ES.baixarEstoqueVendaLote(venda);
+              if (res.jaProcessado) {
+                console.info(`[AprovacaoService] Venda ${venda.id}: guard atômico bloqueou repetição de baixa (já estava baixada).`);
+              }
               baixaOk    = res.ok && !res.erros?.length;
               baixaErros = res.erros || [];
 
