@@ -473,11 +473,17 @@ async function aprovar(id) {
 }
 
 async function validar(id) {
+  const btn = event?.currentTarget;
+  if (btn?.disabled) return;              // guard duplo clique
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando…'; }
   try {
     await window.CH.AprovacaoService.validarVenda(id);
     toast('Venda validada! Estoque e financeiro atualizados.', 'ok');
     renderizar();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch(e) {
+    toast(e.message, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-shield-alt"></i> Validar'; }
+  }
 }
 
 function abrirRejeitar(id) {
