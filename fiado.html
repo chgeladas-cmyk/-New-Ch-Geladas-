@@ -538,14 +538,19 @@ let _clienteAtualId = null;
 function init() {
   UIService.startClock('clock');
   if (AuthService.isAdmin()) document.body.classList.add('is-admin');
-  atualizarKpis();
-  renderClientes();
-  // Busca o histórico COMPLETO de clientes fiado direto da nova coleção
-  // (documento por cliente) e re-renderiza quando chegar — a chamada a
-  // SyncService.pull() que existia aqui não fazia nada (SyncService não
-  // existe no app ativo), então isso substitui o que deveria ter sido
-  // um refresh de verdade.
-  Store.carregarFiadoCompleto();
+  // Força pull do Firestore para carregar dados atualizados em qualquer aparelho
+  if (window.CH?.SyncService) {
+    window.CH.SyncService.pull(['fiado']).then(() => {
+      atualizarKpis();
+      renderClientes();
+    }).catch(() => {
+      atualizarKpis();
+      renderClientes();
+    });
+  } else {
+    atualizarKpis();
+    renderClientes();
+  }
   EventBus.on('store:updated', () => { atualizarKpis(); if (_clienteAtualId) renderDetalhe(); else renderClientes(); });
 
   // Listeners de ciclo de vida do fiado ──────────────────────────
@@ -1035,11 +1040,8 @@ async function _confirmarCancelItem() {
   });
 
   // ── 4) Sync ─────────────────────────────────────────────────────────
-  // O 'fiado' já sincroniza por documento individual dentro de
-  // Store.mutateFiado() (via core.js) — chamar SyncQueue aqui de novo
-  // ressuscitaria o documento único antigo (ch_dados/fiado) que a
-  // migração apagou. Mantido só o de 'vendas', que usa outro modelo.
   if (window.CH?.SyncQueue) {
+    window.CH.SyncQueue.enqueue('salvar', 'fiado',  Store.getFiado());
     window.CH.SyncQueue.enqueue('salvar', 'vendas', Store.getVendas().filter(v => v.id === _cancelItemVendaId));
   }
 
@@ -1287,8 +1289,7 @@ async function confirmarParcela(forma) {
     formaPgto: forma,
   });
 
-  // Sincronização de 'fiado' já acontece por documento individual dentro
-  // de Store.mutateFiado() — não repetir aqui (ver nota acima).
+  if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
 
   UIService.closeModal('modalParcela');
 
@@ -1334,8 +1335,7 @@ function confirmarRecebimento(forma) {
     lucro:     0,
     formaPgto: forma,
   });
-  // Sincronização de 'fiado' já acontece por documento individual dentro
-  // de Store.mutateFiado() — não repetir aqui.
+  if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
 
   UIService.closeModal('modalReceber');
   UIService.showToast(`Recebido ${Utils.formatCurrency(valor)}`, forma, 'success');

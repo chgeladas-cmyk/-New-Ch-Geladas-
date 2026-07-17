@@ -641,13 +641,6 @@ body.is-admin .valid-only { display: block; }
       <div class="app-desc">Sync · Backup · Auditoria</div>
     </a>
 
-    <!-- ARQUIVAMENTO (admin only) -->
-    <a href="arquivamento.html" class="app-card c-slate" data-modulo="__adm__" style="animation-delay:.51s;display:none">
-      <div class="app-icon">🗄️</div>
-      <div class="app-name">Arquivamento</div>
-      <div class="app-desc">Vendas antigas → histórico</div>
-    </a>
-
   </div>
 </div>
 
@@ -909,10 +902,6 @@ function iniciarHub() {
   _atualizarGraficoSemanal();
   _atualizarSyncStatus();
   _carregarConfig();
-  // Badge de fiado depende do histórico completo de clientes (documento
-  // por cliente) — sem isso, ficaria congelado no estado de antes da
-  // migração de ch_dados/fiado.
-  window.CH?.Store?.carregarFiadoCompleto?.();
 
   // Ouve mudanças de outras abas
   EventBus.on('store:updated', () => {

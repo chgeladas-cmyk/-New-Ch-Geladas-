@@ -253,10 +253,6 @@ window.addEventListener('DOMContentLoaded', () => {
   window.CH.FirebaseService.init().then(() => {
     window.CH.FirebaseService.subscribeRealtime();
     setTimeout(() => window.CH.SyncService.pull(), 500);
-    // Histórico completo de clientes fiado (documento por cliente) — a
-    // aprovação de vendas fiado precisa achar o cliente certo mesmo depois
-    // da migração de ch_dados/fiado para a coleção fiado_clientes.
-    window.CH.Store?.carregarFiadoCompleto?.();
   });
 
   renderizar();
@@ -477,11 +473,17 @@ async function aprovar(id) {
 }
 
 async function validar(id) {
+  const btn = event?.currentTarget;
+  if (btn?.disabled) return;              // guard duplo clique
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando…'; }
   try {
     await window.CH.AprovacaoService.validarVenda(id);
     toast('Venda validada! Estoque e financeiro atualizados.', 'ok');
     renderizar();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch(e) {
+    toast(e.message, 'err');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-shield-alt"></i> Validar'; }
+  }
 }
 
 function abrirRejeitar(id) {

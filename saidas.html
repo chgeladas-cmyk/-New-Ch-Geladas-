@@ -579,9 +579,6 @@ function init() {
   renderDashboard();
   renderHistorico();
   gerarRelatorio();
-  // Histórico completo de saídas (documento por registro, sem o corte de
-  // 5.000 do array único) — re-renderiza quando chegar.
-  window.CH?.Store?.carregarSaidasCompleto?.();
 
   // FIX: escuta sync do Firebase para re-renderizar quando dados chegam de outro dispositivo
   // Sem isso, os dados aparecem no localStorage mas a tela não atualiza.

@@ -1328,15 +1328,7 @@ function _mostrarApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   _syncInputs();
-  renderAll(); // render imediato com o que tiver em cache local (rápido)
-
-  // Busca o histórico COMPLETO de vendas direto do Firestore (sem o cap de
-  // 1000 do cache local) e re-renderiza assim que chegar. Mesma correção
-  // aplicada no Financeiro: Curva ABC, CMV, ranking de produtos etc. estavam
-  // subestimados em negócios de alto volume.
-  window.CH?.BIService?.carregarHistoricoCompleto?.()
-    .then(resultado => { if (resultado) renderAll(); })
-    .catch(e => console.warn('[BI] Falha ao buscar histórico completo:', e?.message));
+  renderAll();
 }
 
 // ── Keyboard ─────────────────────────────────────────────────────────

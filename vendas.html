@@ -460,11 +460,6 @@ body.is-admin .adm-flex{display:flex!important;}
   <script src="./services/integrityService.js"></script>
   <script src="./services/soundService.js"></script>
 <script src="./services/vendasService.js"></script>
-<!-- Necessário para VendasService.cancelarVenda() reverter saldo fiado
-     corretamente ao cancelar uma venda fiado já validada (ver
-     reverterFiadoPorCancelamento). Sem isto carregado, a reversão
-     silenciosamente não acontecia nesta tela. -->
-<script src="./services/aprovacaoService.js"></script>
 <script>
 'use strict';
 
@@ -522,12 +517,6 @@ function init() {
   renderCart();
   atualizarAlerta();
   atualizarUltimaVendaBar();
-  // Busca o histórico COMPLETO de clientes fiado (documento por cliente,
-  // sem o teto de 1 MiB do documento único) — importante aqui porque a
-  // venda fiado depende do saldo/limite/bloqueio corretos do cliente.
-  Store.carregarFiadoCompleto();
-  // Idem para ponto — usado para checar se o colaborador bateu entrada hoje.
-  Store.carregarPontoCompleto();
   EventBus.on('store:updated', (col) => {
     renderCatalogo(); renderCart(); atualizarAlerta();
     // Re-renderiza histórico se estiver visível
@@ -1112,25 +1101,53 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
 }
 
 /* ══ CANCELAR VENDA ══ */
-async function cancelarUltimaVenda() {
+function cancelarUltimaVenda() {
   if (!_ultimaVenda) return;
   if (!confirm(`Cancelar venda de ${Utils.formatCurrency(_ultimaVenda.total)}?\nO estoque será restaurado.`)) return;
-
-  // Delega pro caminho único e correto de cancelamento: checa status,
-  // restaura estoque via EstoqueService, reverte saldo fiado se aplicável
-  // (não reconstrói a lógica aqui — ver services/vendasService.js).
-  try {
-    await window.CH.VendasService.cancelarVenda(_ultimaVenda.id);
-    UIService.closeModal('modalVenda');
-    UIService.showToast('Venda cancelada', 'Estoque restaurado', 'warning');
-  } catch (e) {
-    UIService.showToast('Não foi possível cancelar', e.message, 'error');
-  } finally {
-    _ultimaVenda = null;
-    renderCatalogo();
-    atualizarAlerta();
-    atualizarUltimaVendaBar();
+  // Restaurar estoque local
+  Store.mutateEstoque(estoque => {
+    (_ultimaVenda.itens||[]).forEach(item => {
+      const prod = estoque.find(p=>p.id===item.prodId);
+      if (!prod) return;
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);
+      const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
+      prod.qtdUn = (prod.qtdUn||0) + qtdDev;
+    });
+  });
+  // Restaurar estoque no Firebase (Transaction)
+  const _estoqueService = window.CH?.EstoqueService;
+  if (_estoqueService) {
+    _estoqueService.cancelarVenda(_ultimaVenda.id, _ultimaVenda.itens || []).catch(e =>
+      console.warn('[cancelar] estoque Firebase falhou:', e.message)
+    );
   }
+  // Remove venda local
+  Store.mutateVendas(vendas => {
+    const idx = vendas.findIndex(v=>v.id===_ultimaVenda.id);
+    if (idx >= 0) vendas.splice(idx,1);
+  });
+  // Sincroniza exclusão com Firebase
+  if (window.CH.SyncQueue) {
+    window.CH.SyncQueue.enqueue('deletar', 'vendas', [_ultimaVenda.id]);
+  }
+  // Se foi fiado, reverte saldo
+  if ((_ultimaVenda.formaPgto||'').startsWith('Fiado')) {
+    const nomeCliente = _ultimaVenda.formaPgto.replace('Fiado — ','').trim();
+    Store.mutateFiado(fiado => {
+      const c = fiado.find(x=>x.nome===nomeCliente);
+      if (!c) return;
+      c.saldo = Math.max(0,(c.saldo||0)-_ultimaVenda.total);
+      if (!Array.isArray(c.movimentacoes)) c.movimentacoes=[];
+      c.movimentacoes.unshift({ id:Utils.generateId(), tipo:'cancelamento', descricao:'Cancelamento PDV', valor:_ultimaVenda.total, criadoEm:new Date().toISOString() });
+      if (c.saldo <= 0) c.bloqueado = false;
+    });
+  }
+  UIService.closeModal('modalVenda');
+  UIService.showToast('Venda cancelada','Estoque restaurado','warning');
+  _ultimaVenda = null;
+  renderCatalogo();
+  atualizarAlerta();
+  atualizarUltimaVendaBar();
 }
 
 /* ══ RECIBO ══ */
@@ -1286,25 +1303,33 @@ function abrirRelatorio() {
   UIService.openModal('modalRelatorio');
 }
 
-async function cancelarVendaHistorico(vendaId) {
+function cancelarVendaHistorico(vendaId) {
   const venda = Store.getVendas().find(v=>v.id===vendaId);
   if (!venda) return;
   if (!confirm(`Cancelar venda de ${Utils.formatCurrency(venda.total)}?`)) return;
-
-  // Delega pro caminho único e correto de cancelamento (mesma razão do
-  // cancelarUltimaVenda acima). Importante aqui especificamente: o
-  // histórico do dia inclui vendas PENDENTES (fiado ainda não validado) —
-  // VendasService.cancelarVenda() bloqueia esse caso com uma mensagem
-  // clara em vez de inflar o estoque com uma reserva que nunca foi
-  // realmente descontada.
-  try {
-    await window.CH.VendasService.cancelarVenda(vendaId);
-    UIService.showToast('Venda cancelada', '', 'warning');
-  } catch (e) {
-    UIService.showToast('Não foi possível cancelar', e.message, 'error');
-  } finally {
-    abrirRelatorio();
+  Store.mutateEstoque(estoque => {
+    (venda.itens||[]).forEach(item => {
+      const prod = estoque.find(p=>p.id===item.prodId);
+      if (!prod) return;
+      const pack=prod?.packs?.find(pk=>pk.label===item.label||(pk.qtd+'x')===item.label);
+      const qtdDev=item.label==='UNID'?item.qtd:item.qtd*(pack?.qtd||1);
+      prod.qtdUn = (prod.qtdUn||0)+qtdDev;
+    });
+  });
+  // Restaurar estoque no Firebase (Transaction)
+  const _esSvc = window.CH?.EstoqueService;
+  if (_esSvc) {
+    _esSvc.cancelarVenda(vendaId, venda.itens || []).catch(e =>
+      console.warn('[cancelarHistorico] estoque Firebase falhou:', e.message)
+    );
   }
+  Store.mutateVendas(vendas => { const idx=vendas.findIndex(v=>v.id===vendaId); if(idx>=0) vendas.splice(idx,1); });
+  // Sincroniza exclusão com Firebase
+  if (window.CH.SyncQueue) {
+    window.CH.SyncQueue.enqueue('deletar', 'vendas', [vendaId]);
+  }
+  UIService.showToast('Venda cancelada','','warning');
+  abrirRelatorio();
 }
 
 function _gerarTextoRelatorio() {

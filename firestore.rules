@@ -115,64 +115,6 @@ service cloud.firestore {
       allow delete: if autenticado() && temAdminToken(request.resource.data);
     }
 
-    // ─── /historico_vendas/{vendaId} ─────────────────────────────────
-    // Vendas arquivadas via a tela de Arquivamento (admin only no app).
-    // Mesmo formato de /vendas — mesma validação (sem exigir adminToken
-    // no documento em si, pois o código de arquivamento não anexa esse
-    // campo — a proteção de quem pode rodar a migração é feita no app,
-    // via AuthService.isAdmin() em arquivamento.html). Delete continua
-    // exigindo adminToken, como em /vendas.
-    match /historico_vendas/{vendaId} {
-      allow read:   if autenticado();
-      allow create, update: if autenticado() && vendaValida(request.resource.data);
-      allow delete: if autenticado() && temAdminToken(request.resource.data);
-    }
-
-    // ─── /financeiro_lancamentos/{id} ────────────────────────────────
-    // Documento por lançamento financeiro (substituiu o array único em
-    // ch_dados/financeiro, que tinha corte de 5.000 registros e risco de
-    // limite de 1 MiB). Escrita por qualquer autenticado — hoje qualquer
-    // venda/despesa registrada por PDV/colaborador já grava direto aqui,
-    // sem exigir adminToken (mesmo modelo que ch_dados/financeiro tinha).
-    match /financeiro_lancamentos/{id} {
-      allow read:   if autenticado();
-      allow create, update: if autenticado()
-        && request.resource.data.keys().hasAll(['id', 'tipo', 'valor', 'dataCurta']);
-      allow delete: if autenticado();
-    }
-
-    // ─── /fiado_clientes/{id} ─────────────────────────────────────────
-    // Documento por cliente (substituiu o array único em ch_dados/fiado).
-    // Mesmo modelo de permissão que ch_dados/fiado tinha: qualquer
-    // autenticado pode escrever (colaborador registra pagamento, admin
-    // aprova débito, etc. — sem exigir adminToken).
-    match /fiado_clientes/{id} {
-      allow read:   if autenticado();
-      allow create, update: if autenticado()
-        && request.resource.data.keys().hasAll(['id', 'nome']);
-      allow delete: if autenticado();
-    }
-
-    // ─── /saidas_registros/{id} ───────────────────────────────────────
-    // Documento por registro de saída (substituiu ch_dados/saidas).
-    match /saidas_registros/{id} {
-      allow read:   if autenticado();
-      allow create, update: if autenticado()
-        && request.resource.data.keys().hasAll(['id', 'tipo', 'valor']);
-      allow delete: if autenticado();
-    }
-
-    // ─── /ponto_registros/{id} ────────────────────────────────────────
-    // Documento por registro de ponto (substituiu ch_dados/ponto).
-    // Ponto é registrado por colaboradores sem adminToken — mesma regra
-    // de hoje, preservada.
-    match /ponto_registros/{id} {
-      allow read:   if autenticado();
-      allow create, update: if autenticado()
-        && request.resource.data.keys().hasAll(['id', 'nome', 'tipo']);
-      allow delete: if autenticado();
-    }
-
     // ─── /movimentacoes/{movId} ──────────────────────────────────────
     match /movimentacoes/{movId} {
       allow create: if autenticado() && movimentacaoValida(request.resource.data);

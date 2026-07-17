@@ -624,10 +624,6 @@ function salvarRegistro() {
     if (window.CH.SyncQueue) {
       window.CH.SyncQueue.enqueue('salvar', 'vendas', [vendaCambio]);
     }
-    // BUG CORRIGIDO: faltava este emit — sem ele, o câmbio nunca disparava
-    // financeiroService.registrarReceita() nem auditService.auditarVenda().
-    // A receita do câmbio simplesmente não entrava no ledger financeiro.
-    window.CH.EventBus?.emit('venda:finalizada', vendaCambio);
   }
 
   // Sync Firestore cambio
