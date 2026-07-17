@@ -170,15 +170,6 @@
     if (['concluida', 'validada'].includes(venda.status)) {
       const EstoqueService = window.CH.EstoqueService;
       if (EstoqueService) await EstoqueService.cancelarVenda(vendaId, venda.itens || []);
-
-      // BUG CORRIGIDO: cancelar uma venda fiado já validada restaurava o
-      // estoque mas nunca revertia o débito no saldo do cliente — ele
-      // continuava devendo por uma venda que não existe mais. Delegado
-      // pro AprovacaoService, que já tem a lógica simétrica de aplicar
-      // esse débito (ver Passo 5 de validarVenda).
-      if (venda._fiado && venda._fiadoClienteId) {
-        window.CH.AprovacaoService?.reverterFiadoPorCancelamento?.(venda);
-      }
     }
 
     Store.mutateVendas(vendas => {
