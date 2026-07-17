@@ -279,8 +279,9 @@
         });
         if (cx.limite > 0 && cx.saldo >= cx.limite) cx.bloqueado = true;
       });
-      if (window.CH.SyncQueue)
-        window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+      // Sincronização de 'fiado' já acontece por documento individual
+      // dentro de Store.mutateFiado() — não repetir aqui (repetir
+      // ressuscitaria o documento único antigo que a migração apagou).
     }
 
     // ── PASSO 6: Eventos ──────────────────────────────────────────
@@ -379,7 +380,8 @@
         });
         if (cx.limite > 0 && cx.saldo >= cx.limite) cx.bloqueado = true;
       });
-      if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+      // Sincronização de 'fiado' já acontece por documento individual
+      // dentro de Store.mutateFiado() — não repetir aqui.
     }
 
     const vendaFinal = Store.getVendas().find(v => v.id === vendaId) || venda;
@@ -560,9 +562,9 @@
 
       if (validadas.length > 0) _syncLote(validadas);
 
-      const temFiado = aprovadas.some(v => v._fiado && v._fiadoClienteId);
-      if (temFiado && window.CH.SyncQueue)
-        window.CH.SyncQueue.enqueue('salvar', 'fiado', Store.getFiado());
+      // Sincronização de 'fiado' já acontece por documento individual
+      // dentro de cada Store.mutateFiado() do loop acima — não repetir
+      // aqui (repetir ressuscitaria o documento único antigo).
 
       if (validadas.length > 0) {
         EventBus.emit('venda:validada:lote', { total: validadas.length, operador, erros: erros.length });
@@ -578,6 +580,51 @@
     return { total: aprovadas.length, sucesso: validadas.length, erros };
   }
 
+  // ── Reversão de saldo fiado por cancelamento de venda ────────────────
+  // Espelho exato do bloco "PASSO 5" acima (que aplica o débito na
+  // validação) — aqui, em vez de somar, subtrai. Chamada por
+  // VendasService.cancelarVenda() quando a venda cancelada é fiado e já
+  // tinha o débito efetivado (ou seja, estava concluida/validada).
+  //
+  // LIMITAÇÃO CONHECIDA: pagamentos de fiado não são vinculados a uma
+  // venda específica no sistema (só abatem o saldo geral do cliente).
+  // Subtrair o total da venda do saldo, com piso em zero, é a aproximação
+  // mais correta possível dado esse modelo — não é matematicamente
+  // perfeito se o cliente já tiver pago parte do saldo geral dele antes
+  // do cancelamento, mas evita deixar a dívida "fantasma" no ar.
+  function reverterFiadoPorCancelamento(venda) {
+    if (!venda?._fiado || !venda._fiadoClienteId) return null;
+
+    let clienteEncontrado = null;
+    Store.mutateFiado(fiado => {
+      const cx = fiado.find(x => x.id === venda._fiadoClienteId);
+      if (!cx) return;
+      clienteEncontrado = cx.nome;
+
+      cx.saldo = Math.max(0, (cx.saldo || 0) - (venda.total || 0));
+      if (!Array.isArray(cx.movimentacoes)) cx.movimentacoes = [];
+      cx.movimentacoes.unshift({
+        id:          Utils.generateId(),
+        tipo:        'estorno_cancelamento',
+        descricao:   `Cancelamento da venda #${venda.id.slice(-6)}`,
+        valor:       -(venda.total || 0),
+        vendaId:     venda.id,
+        validadoPor: AuthService.getNome(),
+        criadoEm:    Utils.nowISO(),
+      });
+
+      // Reavalia o bloqueio com o saldo já revertido
+      if (cx.limite > 0 && cx.saldo < cx.limite) cx.bloqueado = false;
+    });
+
+    if (!clienteEncontrado) {
+      console.warn(`[AprovacaoService] Reversão de fiado: cliente ${venda._fiadoClienteId} não encontrado (venda ${venda.id})`);
+    } else {
+      console.info(`[AprovacaoService] Saldo fiado revertido: ${clienteEncontrado} (-${venda.total}) — venda ${venda.id} cancelada`);
+    }
+    return clienteEncontrado;
+  }
+
   // Exposição
   window.CH.AprovacaoService = {
     getPendentes, getAprovadas, getRejeitadas, getValidadas, getErrosValidacao,
@@ -585,6 +632,7 @@
     aprovarVenda, rejeitarVenda, validarVenda,
     tentarNovamenteValidacao, resolverManualmenteValidacao,
     aprovarTodas, validarTodas,
+    reverterFiadoPorCancelamento,
     isProcessandoLote: () => _processandoLote,
   };
 
