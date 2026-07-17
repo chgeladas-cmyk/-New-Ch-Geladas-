@@ -345,6 +345,14 @@ function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logou
 ═══════════════════════════════════ */
 let _periodo  = 'hoje';
 let _filtroDia = ''; // legado — mantido para _abrirRelatorioDia
+
+// Cache do histórico COMPLETO de vendas, buscado direto do Firestore
+// (sem o cap de 1000 do onSnapshot em core.js). null até a primeira busca
+// terminar; enquanto isso, filtrarVendas() cai no Store.getVendas() normal.
+// BUG CORRIGIDO: relatórios (inclusive "Geral") somavam só as 1000 vendas
+// mais recentes do cache local, subestimando faturamento em negócios de
+// alto volume (ex.: R$13k exibido vs R$50k+ real).
+let _vendasFull = null;
 // ── Range personalizado ──────────────────────────────────────────────────────
 let _rangeIni = ''; // YYYY-MM-DD
 let _rangeFim = ''; // YYYY-MM-DD
@@ -430,8 +438,35 @@ function limparRange() {
 ═══════════════════════════════════ */
 function init() {
   UIService.startClock('clock');
-  renderTudo();
+  renderTudo(); // render imediato com o que tiver em cache local (rápido)
   EventBus.on('store:updated', renderTudo);
+  _carregarHistoricoCompleto();
+  _carregarLancamentosCompletos();
+}
+
+// Busca o histórico COMPLETO de vendas direto do Firestore (paginado, sem
+// o cap de 1000 do cache local) e re-renderiza assim que chegar. Feito uma
+// vez por carregamento da tela; não é persistido em localStorage.
+async function _carregarHistoricoCompleto() {
+  try {
+    if (!window.CH?.FirebaseService?.lerVendasPeriodo) return; // fallback seguro
+    _vendasFull = await window.CH.FirebaseService.lerVendasCompleto();
+    renderTudo();
+  } catch (e) {
+    console.warn('[Financeiro] Falha ao buscar histórico completo, usando cache local (pode estar incompleto):', e.message);
+  }
+}
+
+// Busca o histórico COMPLETO de lançamentos financeiros (documento por
+// lançamento, sem o corte de 5.000 do array único nem o corte de 500 que
+// existia dentro de getLancamentos) e re-renderiza assim que chegar.
+async function _carregarLancamentosCompletos() {
+  try {
+    await window.CH?.FinanceiroService?.carregarLancamentosCompletos?.();
+    renderTudo();
+  } catch (e) {
+    console.warn('[Financeiro] Falha ao buscar lançamentos completos, usando cache local (pode estar incompleto):', e.message);
+  }
 }
 
 function setPeriodo(per, btn) {
@@ -480,7 +515,7 @@ function _calcFaturamento(vendas, dataDe, dataAte) {
   let lucro = semFiado.reduce((s,v) => s + (v.lucro || 0), 0);
 
   if (window.CH?.FinanceiroService && dataDe) {
-    const idsVendas = new Set(Store.getVendas().map(v => v.id));
+    const idsVendas = new Set((_vendasFull || Store.getVendas()).map(v => v.id));
     window.CH.FinanceiroService
       .getLancamentos({ tipo: 'receita', categoria: 'venda', dataDe, dataAte: dataAte || dataDe })
       .filter(l => !idsVendas.has(l.referencia)) // sem venda correspondente = pagamento de fiado
@@ -490,7 +525,11 @@ function _calcFaturamento(vendas, dataDe, dataAte) {
 }
 
 function filtrarVendas() {
-  const todas  = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
+  // Usa o histórico completo (sem cap de 1000) assim que estiver disponível;
+  // até lá, cai no cache local do Store (pode estar incompleto em negócios
+  // de alto volume, mas evita tela vazia enquanto o fetch completo roda).
+  const fonte  = _vendasFull || Store.getVendas();
+  const todas  = fonte.filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const agora  = new Date();
 
   // ── Range personalizado (início → fim, 00:00 a 23:59) ──────────────────
@@ -545,7 +584,9 @@ function renderTudo() {
 
   // Investimento e ROI
   const invest  = Store.getInvestimento();
-  const _todasValidas = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
+  // Mesmo fix aplicado aqui: ROI acumulado também somava só o cache
+  // capado em 1000 vendas, subestimando o lucro total.
+  const _todasValidas = (_vendasFull || Store.getVendas()).filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const lucroAcum = _calcFaturamento(_todasValidas, '2000-01-01', Utils.todayISO()).lucro;
   const roi     = invest > 0 ? ((lucroAcum/invest)*100).toFixed(1) + '%' : '—';
 
@@ -785,7 +826,7 @@ function _parseMesAno(str) {
 }
 
 function _abrirRelatorioDia(dia, mes, ano) {
-  const todas  = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
+  const todas  = (_vendasFull || Store.getVendas()).filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const pad    = n => String(n).padStart(2,'0');
   const diaStr = `${ano}-${pad(mes)}-${pad(dia)}`;
   const ini    = new Date(diaStr + 'T00:00:00');
@@ -870,7 +911,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
 }
 
 function _abrirRelatorioMes(mes, ano) {
-  const todas   = Store.getVendas().filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
+  const todas   = (_vendasFull || Store.getVendas()).filter(v => ['concluida','validada'].includes(v.status || 'concluida'));
   const iniStr  = `${ano}-${String(mes).padStart(2,'0')}-01`;
   const fim     = new Date(ano, mes, 0); // último dia do mês
   const fimStr  = `${ano}-${String(mes).padStart(2,'0')}-${String(fim.getDate()).padStart(2,'0')}`;

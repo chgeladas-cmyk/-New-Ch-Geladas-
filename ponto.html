@@ -460,6 +460,10 @@ function init() {
     document.getElementById('secaoColabsAdmin')?.classList.remove('hidden');
     renderColabsHoje();
   }
+  // Histórico completo de ponto (documento por registro, sem o corte de
+  // 1.000 do array único — o mais exposto de todos, com múltiplos
+  // colaboradores batendo ponto todo dia).
+  window.CH?.Store?.carregarPontoCompleto?.();
   EventBus.on('store:updated', ()=>{ atualizarKpis(); renderLista(); preencherSugestoes(); atualizarUICaixa(); if(AuthService.isAdmin()) renderColabsHoje(); });
   EventBus.on('store:ponto',   ()=>{ atualizarKpis(); renderLista(); if(AuthService.isAdmin()) renderColabsHoje(); });
 }

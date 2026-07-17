@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#04060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CH Geladas">
+<title>Arquivamento — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg:       #04060d;
+  --card:     rgba(12,16,26,.95);
+  --border:   rgba(255,255,255,0.06);
+  --border-m: rgba(255,255,255,0.10);
+  --primary:  #3b82f6;
+  --emerald:  #10b981;
+  --amber:    #f59e0b;
+  --red:      #ef4444;
+  --violet:   #8b5cf6;
+  --text:     #f1f5f9;
+  --muted:    #64748b;
+  --dimmed:   #334155;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(59,130,246,.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(139,92,246,.04) 0%, transparent 55%);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+#lock { position: fixed; inset: 0; z-index: 9999; background: radial-gradient(ellipse at 50% 40%, #0a1020 0%, var(--bg) 75%); display: flex; align-items: center; justify-content: center; }
+#lock.hidden { display: none; }
+#app { min-height: 100vh; padding-bottom: 6rem; }
+#topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(4,6,13,.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  padding: .75rem 1rem;
+  display: flex; align-items: center; gap: .75rem;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  padding: 1.1rem;
+}
+.kpi-val { font-size: 1.5rem; font-weight: 900; letter-spacing: -.02em; }
+.kpi-label { font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.btn {
+  font-size: .72rem; font-weight: 800; letter-spacing: .02em;
+  padding: .75rem 1.1rem; border-radius: .85rem;
+  display: inline-flex; align-items: center; gap: .5rem;
+  transition: all .15s; cursor: pointer; border: none;
+}
+.btn-primary { background: var(--violet); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+.btn-ghost { background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--border-m); }
+.btn-ghost:hover { background: rgba(255,255,255,.09); }
+.progress-track { background: rgba(255,255,255,.06); border-radius: 999px; height: .5rem; overflow: hidden; }
+.progress-fill { background: linear-gradient(90deg, var(--violet), var(--primary)); height: 100%; transition: width .3s ease; }
+.log-line { font-size: .68rem; font-family: 'SF Mono', monospace; color: var(--muted); padding: .15rem 0; }
+.log-line.ok   { color: var(--emerald); }
+.log-line.warn { color: var(--amber); }
+.log-line.err  { color: var(--red); }
+.modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); padding: 1rem; }
+.modal.show { display: flex; }
+.modal-box { background: #0b0f1a; border: 1px solid var(--border-m); border-radius: 1.25rem; padding: 1.5rem; max-width: 26rem; width: 100%; }
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <div class="text-center px-8">
+    <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+      <i class="fas fa-box-archive text-violet-400 text-2xl"></i>
+    </div>
+    <p class="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">CH Geladas</p>
+    <p class="text-slate-600 text-[10px]">Verificando autenticação…</p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+
+  <div id="topbar">
+    <a href="index.html" class="w-8 h-8 rounded-xl bg-white/5 border border-white/08 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white transition-all flex-shrink-0">
+      <i class="fas fa-arrow-left text-xs"></i>
+    </a>
+    <div class="flex-1">
+      <p class="text-sm font-black">Arquivamento</p>
+      <p class="text-[10px] text-slate-500 -mt-0.5">Vendas antigas → histórico</p>
+    </div>
+    <span id="roleTag" class="hidden text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-violet-500/15 text-violet-300"></span>
+  </div>
+
+  <div class="p-4 space-y-4 max-w-lg mx-auto">
+
+    <!-- EXPLICAÇÃO -->
+    <div class="card">
+      <p class="text-[11px] text-slate-400 leading-relaxed">
+        A coleção <b class="text-slate-200">vendas</b> é a que o PDV usa em tempo real. Quando ela cresce
+        demais, o app fica mais lento e o Firestore pode estourar cota. Esta tela move as vendas
+        <b class="text-slate-200">mais antigas</b> para <b class="text-slate-200">historico_vendas</b> —
+        nenhum dado é perdido, os relatórios continuam somando tudo (ativas + histórico).
+      </p>
+    </div>
+
+    <!-- STATUS ATUAL -->
+    <div class="grid grid-cols-2 gap-3">
+      <div class="card">
+        <div class="kpi-label mb-1">Vendas (ativas)</div>
+        <div class="kpi-val" id="kpiAtivas">—</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label mb-1">Histórico (arquivado)</div>
+        <div class="kpi-val" id="kpiHistorico">—</div>
+      </div>
+    </div>
+
+    <div id="avisoLimite" class="hidden card" style="border-color: rgba(245,158,11,.35)">
+      <div class="flex items-start gap-2.5">
+        <i class="fas fa-triangle-exclamation text-amber-400 text-sm mt-0.5"></i>
+        <p class="text-[11px] text-amber-200/90 leading-relaxed" id="avisoLimiteTexto"></p>
+      </div>
+    </div>
+
+    <button id="btnAtualizar" onclick="atualizarContagens()" class="btn btn-ghost w-full justify-center">
+      <i class="fas fa-rotate text-xs"></i> Atualizar contagem
+    </button>
+
+    <!-- CONFIGURAÇÃO DO ARQUIVAMENTO -->
+    <div class="card space-y-3">
+      <div>
+        <label class="kpi-label block mb-1.5">Manter na coleção ativa</label>
+        <select id="selManter" class="w-full text-[12px] font-bold bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2.5 outline-none">
+          <option value="1000">1.000 vendas mais recentes</option>
+          <option value="2000" selected>2.000 vendas mais recentes</option>
+          <option value="5000">5.000 vendas mais recentes</option>
+        </select>
+        <p class="text-[10px] text-slate-500 mt-1.5">O restante (as mais antigas) vai para o histórico.</p>
+      </div>
+
+      <button id="btnArquivar" onclick="confirmarArquivamento()" class="btn btn-primary w-full justify-center">
+        <i class="fas fa-box-archive text-xs"></i> Arquivar vendas antigas
+      </button>
+    </div>
+
+    <!-- MIGRAÇÃO: financeiro (array único → documento por lançamento) -->
+    <div class="card space-y-3" style="border-color: rgba(139,92,246,.35)">
+      <div>
+        <p class="text-sm font-black mb-1">Migrar Financeiro</p>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Move os lançamentos de <b class="text-slate-200">ch_dados/financeiro</b> (array único, sujeito a corte de
+          5.000 registros) para a coleção <b class="text-slate-200">financeiro_lancamentos</b> (1 documento por
+          lançamento, sem corte). Ação única — depois de migrado, o app passa a usar o modelo novo automaticamente.
+        </p>
+      </div>
+      <button id="btnMigrarFinanceiro" onclick="confirmarMigracaoFinanceiro()" class="btn btn-primary w-full justify-center">
+        <i class="fas fa-database text-xs"></i> Migrar financeiro agora
+      </button>
+    </div>
+
+    <!-- MIGRAÇÃO: fiado (array único de clientes → documento por cliente) -->
+    <div class="card space-y-3" style="border-color: rgba(139,92,246,.35)">
+      <div>
+        <p class="text-sm font-black mb-1">Migrar Fiado</p>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Move os clientes de <b class="text-slate-200">ch_dados/fiado</b> (array único com todos os clientes) para
+          a coleção <b class="text-slate-200">fiado_clientes</b> (1 documento por cliente, com o histórico de cada
+          um preservado dentro). Ação única — depois de migrado, o app passa a ler/escrever fiado nesse modelo
+          automaticamente.
+        </p>
+      </div>
+      <button id="btnMigrarFiado" onclick="confirmarMigracaoFiado()" class="btn btn-primary w-full justify-center">
+        <i class="fas fa-users text-xs"></i> Migrar fiado agora
+      </button>
+    </div>
+
+    <!-- MIGRAÇÃO: saidas (array único → documento por registro) -->
+    <div class="card space-y-3" style="border-color: rgba(139,92,246,.35)">
+      <div>
+        <p class="text-sm font-black mb-1">Migrar Saídas</p>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Move os registros de <b class="text-slate-200">ch_dados/saidas</b> (array único, sujeito a corte de
+          5.000 registros) para <b class="text-slate-200">saidas_registros</b> (1 documento por registro, sem
+          corte).
+        </p>
+      </div>
+      <button id="btnMigrarSaidas" onclick="confirmarMigracaoSaidas()" class="btn btn-primary w-full justify-center">
+        <i class="fas fa-money-bill-wave text-xs"></i> Migrar saídas agora
+      </button>
+    </div>
+
+    <!-- MIGRAÇÃO: ponto (array único → documento por registro) -->
+    <div class="card space-y-3" style="border-color: rgba(139,92,246,.35)">
+      <div>
+        <p class="text-sm font-black mb-1">Migrar Ponto</p>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Move os registros de <b class="text-slate-200">ch_dados/ponto</b> (array único, sujeito a corte de
+          1.000 registros — o mais exposto de todos) para <b class="text-slate-200">ponto_registros</b> (1
+          documento por registro, sem corte).
+        </p>
+      </div>
+      <button id="btnMigrarPonto" onclick="confirmarMigracaoPonto()" class="btn btn-primary w-full justify-center">
+        <i class="fas fa-clock text-xs"></i> Migrar ponto agora
+      </button>
+    </div>
+
+    <!-- PROGRESSO -->
+    <div id="cardProgresso" class="card hidden space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="kpi-label">Progresso</span>
+        <span class="text-[11px] font-bold text-slate-300" id="progressoTexto">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressoBarra" style="width:0%"></div>
+      </div>
+      <div id="logArea" class="mt-2 max-h-48 overflow-y-auto space-y-0.5"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO — ARQUIVAMENTO -->
+<div id="modalConfirma" class="modal">
+  <div class="modal-box">
+    <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+      <i class="fas fa-triangle-exclamation text-amber-400"></i>
+    </div>
+    <p class="text-sm font-black mb-1.5">Confirmar arquivamento</p>
+    <p class="text-[11px] text-slate-400 leading-relaxed mb-4" id="modalConfirmaTexto"></p>
+    <div class="flex gap-2">
+      <button onclick="fecharModalConfirma()" class="btn btn-ghost flex-1 justify-center">Cancelar</button>
+      <button onclick="executarArquivamento()" class="btn btn-primary flex-1 justify-center">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO — MIGRAÇÃO DE FINANCEIRO -->
+<div id="modalConfirmaFin" class="modal">
+  <div class="modal-box">
+    <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-3">
+      <i class="fas fa-database text-violet-400"></i>
+    </div>
+    <p class="text-sm font-black mb-1.5">Confirmar migração do Financeiro</p>
+    <p class="text-[11px] text-slate-400 leading-relaxed mb-4">
+      Isso vai ler todo o array de <b class="text-slate-200">ch_dados/financeiro</b> e gravar cada lançamento como
+      um documento individual em <b class="text-slate-200">financeiro_lancamentos</b>. O documento antigo só é
+      apagado depois de confirmar que TODOS os lançamentos foram gravados com sucesso — se algo falhar no meio do
+      caminho, nada é perdido e nada é apagado. Ação única, não pode ser desfeita pelo app.
+    </p>
+    <div class="flex gap-2">
+      <button onclick="fecharModalConfirmaFin()" class="btn btn-ghost flex-1 justify-center">Cancelar</button>
+      <button onclick="executarMigracaoFinanceiro()" class="btn btn-primary flex-1 justify-center">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO — MIGRAÇÃO DE FIADO -->
+<div id="modalConfirmaFiado" class="modal">
+  <div class="modal-box">
+    <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-3">
+      <i class="fas fa-users text-violet-400"></i>
+    </div>
+    <p class="text-sm font-black mb-1.5">Confirmar migração do Fiado</p>
+    <p class="text-[11px] text-slate-400 leading-relaxed mb-4">
+      Isso vai ler todo o array de <b class="text-slate-200">ch_dados/fiado</b> e gravar cada cliente (com
+      movimentações e cancelamentos preservados) como um documento individual em
+      <b class="text-slate-200">fiado_clientes</b>. O documento antigo só é apagado depois de confirmar que TODOS
+      os clientes foram gravados com sucesso — se algo falhar no meio do caminho, nada é perdido e nada é apagado.
+      Ação única, não pode ser desfeita pelo app.
+    </p>
+    <div class="flex gap-2">
+      <button onclick="fecharModalConfirmaFiado()" class="btn btn-ghost flex-1 justify-center">Cancelar</button>
+      <button onclick="executarMigracaoFiado()" class="btn btn-primary flex-1 justify-center">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO — MIGRAÇÃO DE SAÍDAS -->
+<div id="modalConfirmaSaidas" class="modal">
+  <div class="modal-box">
+    <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-3">
+      <i class="fas fa-money-bill-wave text-violet-400"></i>
+    </div>
+    <p class="text-sm font-black mb-1.5">Confirmar migração de Saídas</p>
+    <p class="text-[11px] text-slate-400 leading-relaxed mb-4">
+      Isso vai ler todo o array de <b class="text-slate-200">ch_dados/saidas</b> e gravar cada registro como um
+      documento individual em <b class="text-slate-200">saidas_registros</b>. O documento antigo só é apagado
+      depois de confirmar que TODOS os registros foram gravados com sucesso. Ação única, não pode ser desfeita
+      pelo app.
+    </p>
+    <div class="flex gap-2">
+      <button onclick="fecharModalConfirmaSaidas()" class="btn btn-ghost flex-1 justify-center">Cancelar</button>
+      <button onclick="executarMigracaoSaidas()" class="btn btn-primary flex-1 justify-center">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO — MIGRAÇÃO DE PONTO -->
+<div id="modalConfirmaPonto" class="modal">
+  <div class="modal-box">
+    <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-3">
+      <i class="fas fa-clock text-violet-400"></i>
+    </div>
+    <p class="text-sm font-black mb-1.5">Confirmar migração de Ponto</p>
+    <p class="text-[11px] text-slate-400 leading-relaxed mb-4">
+      Isso vai ler todo o array de <b class="text-slate-200">ch_dados/ponto</b> e gravar cada registro como um
+      documento individual em <b class="text-slate-200">ponto_registros</b>. O documento antigo só é apagado
+      depois de confirmar que TODOS os registros foram gravados com sucesso. Ação única, não pode ser desfeita
+      pelo app.
+    </p>
+    <div class="flex gap-2">
+      <button onclick="fecharModalConfirmaPonto()" class="btn btn-ghost flex-1 justify-center">Cancelar</button>
+      <button onclick="executarMigracaoPonto()" class="btn btn-primary flex-1 justify-center">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script src="./core.js"></script>
+<script>
+const _CH     = () => window.CH || {};
+const AuthSvc = () => _CH().AuthService;
+const FbSvc   = () => _CH().FirebaseService;
+
+let _manterEscolhido = 2000;
+
+function _addLog(texto, tipo) {
+  const el = document.getElementById('logArea');
+  const linha = document.createElement('div');
+  linha.className = `log-line ${tipo || ''}`;
+  linha.textContent = texto;
+  el.appendChild(linha);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function atualizarContagens() {
+  const btn = document.getElementById('btnAtualizar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Atualizando…';
+  try {
+    const [ativas, historico] = await Promise.all([
+      FbSvc().contarVendas(),
+      FbSvc().contarHistorico(),
+    ]);
+    document.getElementById('kpiAtivas').textContent    = ativas.toLocaleString('pt-BR');
+    document.getElementById('kpiHistorico').textContent = historico.toLocaleString('pt-BR');
+
+    const aviso = document.getElementById('avisoLimite');
+    const avisoTexto = document.getElementById('avisoLimiteTexto');
+    if (ativas >= 10000) {
+      aviso.classList.remove('hidden');
+      avisoTexto.textContent = `A coleção de vendas já passou de 10.000 registros (${ativas.toLocaleString('pt-BR')}). Recomendado arquivar agora.`;
+    } else {
+      aviso.classList.add('hidden');
+    }
+  } catch (e) {
+    _addLog('Erro ao buscar contagem: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-rotate text-xs"></i> Atualizar contagem';
+  }
+}
+
+function confirmarArquivamento() {
+  _manterEscolhido = parseInt(document.getElementById('selManter').value, 10);
+  const ativasEl = document.getElementById('kpiAtivas').textContent.replace(/\D/g, '');
+  const ativas = parseInt(ativasEl || '0', 10);
+  const aArquivar = Math.max(0, ativas - _manterEscolhido);
+
+  document.getElementById('modalConfirmaTexto').textContent = aArquivar > 0
+    ? `Isso vai mover ${aArquivar.toLocaleString('pt-BR')} vendas antigas para historico_vendas, mantendo as ${_manterEscolhido.toLocaleString('pt-BR')} mais recentes na coleção ativa. Os relatórios continuam somando tudo. Essa ação não pode ser desfeita pelo app.`
+    : `A coleção já está dentro do limite de ${_manterEscolhido.toLocaleString('pt-BR')} — nada será arquivado.`;
+
+  document.getElementById('modalConfirma').classList.add('show');
+}
+
+function fecharModalConfirma() {
+  document.getElementById('modalConfirma').classList.remove('show');
+}
+
+function confirmarMigracaoFinanceiro() {
+  document.getElementById('modalConfirmaFin').classList.add('show');
+}
+
+function fecharModalConfirmaFin() {
+  document.getElementById('modalConfirmaFin').classList.remove('show');
+}
+
+async function executarMigracaoFinanceiro() {
+  fecharModalConfirmaFin();
+  const btn = document.getElementById('btnMigrarFinanceiro');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Migrando…';
+
+  const cardProgresso = document.getElementById('cardProgresso');
+  cardProgresso.classList.remove('hidden');
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressoBarra').style.width = '0%';
+  document.getElementById('progressoTexto').textContent = '0 / 0';
+
+  _addLog('Iniciando migração do Financeiro…');
+
+  try {
+    const resultado = await FbSvc().migrarFinanceiroParaDocumentos({
+      onProgresso: (info) => {
+        if (info.fase === 'inicio') {
+          _addLog(`Total de lançamentos a migrar: ${info.total.toLocaleString('pt-BR')}`);
+          document.getElementById('progressoTexto').textContent = `0 / ${info.total.toLocaleString('pt-BR')}`;
+        }
+        if (info.fase === 'progresso') {
+          const pct = Math.min(100, (info.migrados / info.total) * 100);
+          document.getElementById('progressoBarra').style.width = pct.toFixed(1) + '%';
+          document.getElementById('progressoTexto').textContent = `${info.migrados.toLocaleString('pt-BR')} / ${info.total.toLocaleString('pt-BR')}`;
+          _addLog(`✓ ${info.migrados.toLocaleString('pt-BR')} lançamentos migrados até agora…`, 'ok');
+        }
+        if (info.fase === 'erro_escrita') {
+          _addLog(`✗ Falha ao gravar lote (índice ${info.loteIndex}): ${info.erro} — migração interrompida, nada foi apagado.`, 'err');
+        }
+        if (info.fase === 'aviso_delete_antigo') {
+          _addLog(`⚠ Lançamentos migrados com sucesso, mas falha ao apagar o documento antigo: ${info.erro}. Pode apagar manualmente depois.`, 'warn');
+        }
+        if (info.fase === 'fim') {
+          document.getElementById('progressoBarra').style.width = '100%';
+        }
+      },
+    });
+
+    if (resultado.mensagem) {
+      _addLog(resultado.mensagem, 'warn');
+    } else if (resultado.sucesso) {
+      _addLog(`Concluído: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} lançamentos migrados. Documento antigo removido.`, 'ok');
+    } else {
+      _addLog(`Migração parcial: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} migrados antes do erro. Documento antigo NÃO foi apagado — pode rodar de novo (itens já migrados são apenas regravados, sem duplicar).`, 'warn');
+    }
+  } catch (e) {
+    _addLog('Erro inesperado: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-database text-xs"></i> Migrar financeiro agora';
+  }
+}
+
+function confirmarMigracaoFiado() {
+  document.getElementById('modalConfirmaFiado').classList.add('show');
+}
+
+// ── Executor genérico de migração, reaproveitado por saidas/ponto ──────
+// (fiado e financeiro mantêm suas próprias funções acima, já testadas;
+// este executor evita triplicar a mesma lógica de UI pros dois novos).
+async function _executarMigracaoGenerica({ btnId, fbFn, itemLabel, iconClass, labelText }) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Migrando…';
+
+  const cardProgresso = document.getElementById('cardProgresso');
+  cardProgresso.classList.remove('hidden');
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressoBarra').style.width = '0%';
+  document.getElementById('progressoTexto').textContent = '0 / 0';
+
+  _addLog(`Iniciando migração de ${labelText}…`);
+
+  try {
+    const resultado = await fbFn({
+      onProgresso: (info) => {
+        if (info.fase === 'inicio') {
+          _addLog(`Total de ${itemLabel} a migrar: ${info.total.toLocaleString('pt-BR')}`);
+          document.getElementById('progressoTexto').textContent = `0 / ${info.total.toLocaleString('pt-BR')}`;
+        }
+        if (info.fase === 'progresso') {
+          const pct = Math.min(100, (info.migrados / info.total) * 100);
+          document.getElementById('progressoBarra').style.width = pct.toFixed(1) + '%';
+          document.getElementById('progressoTexto').textContent = `${info.migrados.toLocaleString('pt-BR')} / ${info.total.toLocaleString('pt-BR')}`;
+          _addLog(`✓ ${info.migrados.toLocaleString('pt-BR')} ${itemLabel} migrados até agora…`, 'ok');
+        }
+        if (info.fase === 'erro_escrita') {
+          _addLog(`✗ Falha ao gravar lote (índice ${info.loteIndex}): ${info.erro} — migração interrompida, nada foi apagado.`, 'err');
+        }
+        if (info.fase === 'aviso_delete_antigo') {
+          _addLog(`⚠ ${labelText} migrados com sucesso, mas falha ao apagar o documento antigo: ${info.erro}. Pode apagar manualmente depois.`, 'warn');
+        }
+        if (info.fase === 'fim') {
+          document.getElementById('progressoBarra').style.width = '100%';
+        }
+      },
+    });
+
+    if (resultado.mensagem) {
+      _addLog(resultado.mensagem, 'warn');
+    } else if (resultado.sucesso) {
+      _addLog(`Concluído: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} ${itemLabel} migrados. Documento antigo removido.`, 'ok');
+    } else {
+      _addLog(`Migração parcial: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} migrados antes do erro. Documento antigo NÃO foi apagado — pode rodar de novo (itens já migrados são apenas regravados, sem duplicar).`, 'warn');
+    }
+  } catch (e) {
+    _addLog('Erro inesperado: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fas ${iconClass} text-xs"></i> ${labelText}`;
+  }
+}
+
+function confirmarMigracaoSaidas() { document.getElementById('modalConfirmaSaidas').classList.add('show'); }
+function fecharModalConfirmaSaidas() { document.getElementById('modalConfirmaSaidas').classList.remove('show'); }
+async function executarMigracaoSaidas() {
+  fecharModalConfirmaSaidas();
+  await _executarMigracaoGenerica({
+    btnId: 'btnMigrarSaidas',
+    fbFn: (opts) => FbSvc().migrarSaidasParaDocumentos(opts),
+    itemLabel: 'registros',
+    iconClass: 'fa-money-bill-wave',
+    labelText: 'Migrar saídas agora',
+  });
+}
+
+function confirmarMigracaoPonto() { document.getElementById('modalConfirmaPonto').classList.add('show'); }
+function fecharModalConfirmaPonto() { document.getElementById('modalConfirmaPonto').classList.remove('show'); }
+async function executarMigracaoPonto() {
+  fecharModalConfirmaPonto();
+  await _executarMigracaoGenerica({
+    btnId: 'btnMigrarPonto',
+    fbFn: (opts) => FbSvc().migrarPontoParaDocumentos(opts),
+    itemLabel: 'registros',
+    iconClass: 'fa-clock',
+    labelText: 'Migrar ponto agora',
+  });
+}
+
+function fecharModalConfirmaFiado() {
+  document.getElementById('modalConfirmaFiado').classList.remove('show');
+}
+
+async function executarMigracaoFiado() {
+  fecharModalConfirmaFiado();
+  const btn = document.getElementById('btnMigrarFiado');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Migrando…';
+
+  const cardProgresso = document.getElementById('cardProgresso');
+  cardProgresso.classList.remove('hidden');
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressoBarra').style.width = '0%';
+  document.getElementById('progressoTexto').textContent = '0 / 0';
+
+  _addLog('Iniciando migração do Fiado…');
+
+  try {
+    const resultado = await FbSvc().migrarFiadoParaDocumentos({
+      onProgresso: (info) => {
+        if (info.fase === 'inicio') {
+          _addLog(`Total de clientes a migrar: ${info.total.toLocaleString('pt-BR')}`);
+          document.getElementById('progressoTexto').textContent = `0 / ${info.total.toLocaleString('pt-BR')}`;
+        }
+        if (info.fase === 'progresso') {
+          const pct = Math.min(100, (info.migrados / info.total) * 100);
+          document.getElementById('progressoBarra').style.width = pct.toFixed(1) + '%';
+          document.getElementById('progressoTexto').textContent = `${info.migrados.toLocaleString('pt-BR')} / ${info.total.toLocaleString('pt-BR')}`;
+          _addLog(`✓ ${info.migrados.toLocaleString('pt-BR')} clientes migrados até agora…`, 'ok');
+        }
+        if (info.fase === 'erro_escrita') {
+          _addLog(`✗ Falha ao gravar lote (índice ${info.loteIndex}): ${info.erro} — migração interrompida, nada foi apagado.`, 'err');
+        }
+        if (info.fase === 'aviso_delete_antigo') {
+          _addLog(`⚠ Clientes migrados com sucesso, mas falha ao apagar o documento antigo: ${info.erro}. Pode apagar manualmente depois.`, 'warn');
+        }
+        if (info.fase === 'fim') {
+          document.getElementById('progressoBarra').style.width = '100%';
+        }
+      },
+    });
+
+    if (resultado.mensagem) {
+      _addLog(resultado.mensagem, 'warn');
+    } else if (resultado.sucesso) {
+      _addLog(`Concluído: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} clientes migrados. Documento antigo removido.`, 'ok');
+    } else {
+      _addLog(`Migração parcial: ${resultado.migrados.toLocaleString('pt-BR')} de ${resultado.total.toLocaleString('pt-BR')} migrados antes do erro. Documento antigo NÃO foi apagado — pode rodar de novo (clientes já migrados são apenas regravados, sem duplicar).`, 'warn');
+    }
+  } catch (e) {
+    _addLog('Erro inesperado: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-users text-xs"></i> Migrar fiado agora';
+  }
+}
+
+async function executarArquivamento() {
+  fecharModalConfirma();
+  const btn = document.getElementById('btnArquivar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Arquivando…';
+
+  const cardProgresso = document.getElementById('cardProgresso');
+  cardProgresso.classList.remove('hidden');
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressoBarra').style.width = '0%';
+  document.getElementById('progressoTexto').textContent = '0 / 0';
+
+  _addLog(`Iniciando — mantendo as ${_manterEscolhido.toLocaleString('pt-BR')} vendas mais recentes ativas…`);
+
+  try {
+    const resultado = await FbSvc().arquivarVendasAntigas({
+      manterRecentes: _manterEscolhido,
+      onProgresso: (info) => {
+        if (info.fase === 'inicio') {
+          _addLog(`Total atual: ${info.total.toLocaleString('pt-BR')} · A arquivar: ${info.qtdParaArquivar.toLocaleString('pt-BR')}`);
+          document.getElementById('progressoTexto').textContent = `0 / ${info.qtdParaArquivar.toLocaleString('pt-BR')}`;
+        }
+        if (info.fase === 'progresso') {
+          const pct = Math.min(100, (info.arquivados / info.qtdParaArquivar) * 100);
+          document.getElementById('progressoBarra').style.width = pct.toFixed(1) + '%';
+          document.getElementById('progressoTexto').textContent = `${info.arquivados.toLocaleString('pt-BR')} / ${info.qtdParaArquivar.toLocaleString('pt-BR')}`;
+          _addLog(`✓ ${info.arquivados.toLocaleString('pt-BR')} vendas arquivadas até agora…`, 'ok');
+        }
+        if (info.fase === 'erro_escrita') {
+          _addLog(`✗ Falha ao gravar lote no histórico: ${info.erro} — nada foi deletado deste lote.`, 'err');
+        }
+        if (info.fase === 'erro_delete') {
+          _addLog(`✗ Gravou no histórico mas falhou ao apagar da origem: ${info.erro} — revise manualmente os IDs no console.`, 'err');
+          console.warn('IDs afetados (duplicados em vendas + historico_vendas):', info.idsAfetados);
+        }
+        if (info.fase === 'fim') {
+          document.getElementById('progressoBarra').style.width = '100%';
+        }
+      },
+    });
+
+    if (resultado.mensagem) {
+      _addLog(resultado.mensagem, 'warn');
+    } else {
+      _addLog(`Concluído: ${resultado.arquivados.toLocaleString('pt-BR')} vendas arquivadas. Coleção ativa agora tem ${resultado.totalDepois.toLocaleString('pt-BR')} vendas.`, 'ok');
+    }
+    await atualizarContagens();
+  } catch (e) {
+    _addLog('Erro inesperado: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-box-archive text-xs"></i> Arquivar vendas antigas';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await new Promise(resolve => {
+    if (window.CH?.AuthService) return resolve();
+    window.addEventListener('load', resolve);
+  });
+
+  const auth = AuthSvc();
+  if (!auth || !auth.isLogged?.()) { location.href = 'index.html'; return; }
+
+  const role = auth.getRole();
+  if (!['adm', 'admin'].includes(role)) { location.href = 'index.html'; return; }
+
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  const rt = document.getElementById('roleTag');
+  rt.textContent = role.toUpperCase();
+  rt.classList.remove('hidden');
+
+  window.CH?.FirebaseService?.init?.().catch(() => {});
+  await atualizarContagens();
+});
+</script>
+</body>
+</html>
