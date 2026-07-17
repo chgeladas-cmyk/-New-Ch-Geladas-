@@ -24,10 +24,38 @@
 (function () {
   const { Store, Utils } = window.CH;
 
+  // Cache do histórico COMPLETO de vendas, buscado direto do Firestore
+  // (sem o cap de 1000 do onSnapshot em core.js). null até a primeira busca
+  // terminar; enquanto isso, os helpers abaixo caem no Store.getVendas()
+  // normal (mesmo comportamento de antes, sem regressão).
+  // BUG CORRIGIDO: Curva ABC, CMV, ranking de produtos, ticket médio etc.
+  // somavam só as 1000 vendas mais recentes do cache local, subestimando
+  // os resultados em negócios de alto volume (mesma causa raiz do bug do
+  // Financeiro: R$13k exibido vs R$50k+ real).
+  let _vendasFullCache = null;
+
+  // Busca o histórico completo uma vez e guarda em cache neste módulo.
+  // Deve ser chamada pela tela (ex.: bi-dashboard.html) ao carregar, antes
+  // de chamar os getters de KPI, para garantir números corretos.
+  async function carregarHistoricoCompleto() {
+    if (!window.CH?.FirebaseService?.lerVendasCompleto) return null; // fallback seguro
+    try {
+      _vendasFullCache = await window.CH.FirebaseService.lerVendasCompleto();
+      return _vendasFullCache;
+    } catch (e) {
+      console.warn('[BIService] Falha ao buscar histórico completo, usando cache local (pode estar incompleto):', e.message);
+      return null;
+    }
+  }
+
+  function _todasVendas() {
+    return _vendasFullCache || Store.getVendas() || [];
+  }
+
   // ── Helpers internos ──────────────────────────────────────────────
 
   function _vendasPeriodo(de, ate, { incluirCambio = false } = {}) {
-    const vendas = Store.getVendas() || [];
+    const vendas = _todasVendas();
     const STATUS_VALIDOS = ['concluida', 'validada', 'aprovada'];
     return vendas.filter(v =>
       STATUS_VALIDOS.includes(v.status || 'concluida') &&
@@ -41,7 +69,7 @@
 
   // Retorna apenas os câmbios do período (para o gráfico de formas de pagamento)
   function _cambiosPeriodo(de, ate) {
-    const vendas = Store.getVendas() || [];
+    const vendas = _todasVendas();
     return vendas.filter(v =>
       v._cambio &&
       ['concluida','validada'].includes(v.status || 'concluida') &&
@@ -320,7 +348,7 @@
       .filter(p => !vendeUltimosPeriodo.has(p.id))
       .map(p => {
         // Última venda desse produto (em todo o histórico)
-        const todasVendas = (Store.getVendas() || []).filter(v =>
+        const todasVendas = _todasVendas().filter(v =>
           ['concluida', 'validada'].includes(v.status) &&
           (v.itens || []).some(i => (i.prodId || i.id) === p.id)
         );
@@ -744,6 +772,7 @@
 
   // ── Exportar ──────────────────────────────────────────────────────
   window.CH.BIService = {
+    carregarHistoricoCompleto,
     getCurvaABC,
     getTicketMedio,
     getCMV,

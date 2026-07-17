@@ -30,13 +30,38 @@
 (function () {
   const { Store, AuthService, Utils, EventBus } = window.CH;
 
+  // Cache do histórico COMPLETO de lançamentos, buscado direto da nova
+  // coleção 'financeiro_lancamentos' (documento por lançamento, sem corte
+  // de quantidade). null até a primeira busca terminar; enquanto isso,
+  // getLancamentos() cai no Store.getFinanceiro() antigo (array único,
+  // sujeito ao corte de 5.000 já conhecido — mesmo comportamento de antes,
+  // sem regressão durante a transição).
+  let _lancamentosFullCache = null;
+
+  // Busca o histórico completo uma vez e guarda em cache neste módulo.
+  // Deve ser chamada pela tela (financeiro.html) ao carregar.
+  async function carregarLancamentosCompletos() {
+    if (!window.CH?.FirebaseService?.lerLancamentosFinanceiro) return null; // fallback seguro
+    try {
+      _lancamentosFullCache = await window.CH.FirebaseService.lerLancamentosFinanceiro({});
+      return _lancamentosFullCache;
+    } catch (e) {
+      console.warn('[FinanceiroService] Falha ao buscar histórico completo, usando cache local (pode estar incompleto):', e.message);
+      return null;
+    }
+  }
+
+  function _todosLancamentos() {
+    return _lancamentosFullCache || Store.getFinanceiro() || [];
+  }
+
   // ── Registrar lançamento ──────────────────────────────────────────
   function _lancar({ tipo, categoria, descricao, valor, formaPgto = '', referencia = '', extra = {} }) {
     if (!valor || valor <= 0) return null;
 
     // FIX #4: Idempotência — impede duplo lançamento para a mesma referência+tipo
     if (referencia) {
-      const jaExiste = Store.getFinanceiro().some(
+      const jaExiste = _todosLancamentos().some(
         l => l.referencia === referencia && l.tipo === tipo
       );
       if (jaExiste) {
@@ -60,7 +85,20 @@
       ...extra,
     };
 
+    // Escrita local (mantida por compatibilidade — cache local + telas que
+    // ainda leem Store.getFinanceiro() diretamente durante a transição).
     Store.mutateFinanceiro(fin => { fin.unshift(lancamento); });
+
+    // Escrita nova: documento individual em 'financeiro_lancamentos', sem
+    // o corte de 5.000 do array único. Não bloqueia _lancar() (que é
+    // síncrona e chamada de vários lugares) — roda em paralelo.
+    window.CH?.FirebaseService?.salvarLancamentoFinanceiro?.(lancamento)
+      .catch(e => console.warn('[FinanceiroService] Falha ao gravar lançamento individual:', e.message));
+
+    // Mantém o cache em memória em dia, se já estiver carregado, para que
+    // getLancamentos() reflita o lançamento novo imediatamente.
+    if (_lancamentosFullCache) _lancamentosFullCache.unshift(lancamento);
+
     EventBus.emit('financeiro:lancado', lancamento);
     return lancamento;
   }
@@ -94,6 +132,16 @@
 
   /** Registra estorno de uma venda cancelada */
   function registrarEstorno(venda) {
+    // Espelha o mesmo bloqueio de registrarReceita(): venda fiado nunca
+    // gerou uma "receita" correspondente aqui (receita fiado só é
+    // reconhecida no pagamento, não na venda) — então lançar um estorno
+    // pra ela criaria um estorno fantasma, sem contrapartida, reduzindo o
+    // faturamento reportado indevidamente. A reversão do saldo do cliente,
+    // quando aplicável, é feita separadamente (ver AprovacaoService).
+    if (venda._fiado) {
+      console.info(`[Financeiro] Estorno da venda ${venda.id} ignorado — venda fiado nunca gerou receita aqui`);
+      return null;
+    }
     return _lancar({
       tipo:       'estorno',
       categoria:  'cancelamento',
@@ -126,13 +174,19 @@
 
   // ── Consultas ─────────────────────────────────────────────────────
 
-  function getLancamentos({ tipo, categoria, dataDe, dataAte, limit = 500 } = {}) {
-    let fin = Store.getFinanceiro();
+  // BUG CORRIGIDO: o parâmetro `limit` (default 500) cortava o resultado
+  // ANTES de somar — relatórios de período "Geral" pareciam travados num
+  // valor porque nunca refletiam o histórico real, só uma fatia rotativa
+  // dele. Agora usa o histórico completo (_todosLancamentos) sem corte;
+  // `limit` continua aceito por compatibilidade, mas só é aplicado se
+  // explicitamente passado por quem chama.
+  function getLancamentos({ tipo, categoria, dataDe, dataAte, limit } = {}) {
+    let fin = _todosLancamentos();
     if (tipo)      fin = fin.filter(l => l.tipo      === tipo);
     if (categoria) fin = fin.filter(l => l.categoria === categoria);
     if (dataDe)    fin = fin.filter(l => l.dataCurta >= dataDe);
     if (dataAte)   fin = fin.filter(l => l.dataCurta <= dataAte);
-    return fin.slice(0, limit);
+    return limit ? fin.slice(0, limit) : fin;
   }
 
   function getCaixaDia(data = Utils.todayISO()) {
@@ -213,6 +267,7 @@
 
   // ── Exportar ─────────────────────────────────────────────────────
   window.CH.FinanceiroService = {
+    carregarLancamentosCompletos,
     registrarReceita,
     registrarEstorno,
     registrarDespesa,

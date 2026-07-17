@@ -450,27 +450,11 @@
     // ── Modo Firebase: UMA transaction para todos os itens ──────────
     if (_isOnline() && FirebaseService.isReady() && _tok) {
       let resultados = [];
-      let jaProcessadoNoServidor = false;
 
       try {
         await FirebaseService.runTransaction(async (tx) => {
           const estoqueRef = FirebaseService.docRef('ch_dados', 'estoque');
-          const vendaRef   = FirebaseService.docRef('vendas', venda.id);
-
-          const [snap, vendaSnap] = await Promise.all([tx.get(estoqueRef), tx.get(vendaRef)]);
-
-          // ── GUARD ATÔMICO ──────────────────────────────────────────
-          // Lê `_baixouEstoque` do PRÓPRIO doc da venda dentro desta mesma
-          // transaction. Se já for true (baixado por este ou outro
-          // dispositivo), aborta sem tocar no estoque de novo. É isso que
-          // fecha a corrida de "tentar novamente" / reprocessamento
-          // concorrente entre dispositivos.
-          if (vendaSnap.exists() && vendaSnap.data()?._baixouEstoque === true) {
-            jaProcessadoNoServidor = true;
-            resultados = [];
-            return;
-          }
-
+          const snap       = await tx.get(estoqueRef);
           const dadosFB    = snap.exists() ? (snap.data().dados || []) : [];
           const dadosMapa  = new Map(dadosFB.map(p => [p.id, { ...p }]));
 
@@ -523,19 +507,7 @@
               adminToken:    _tok,
             });
           }
-
-          // Marca a baixa como concluída no PRÓPRIO doc da venda, na MESMA
-          // transaction do débito de estoque — guard atômico de verdade,
-          // não depende do sync do array local de vendas ter completado.
-          if (vendaSnap.exists()) {
-            tx.set(vendaRef, { _baixouEstoque: true, _baixaEm: Utils.nowISO() }, { merge: true });
-          }
         });
-
-        if (jaProcessadoNoServidor) {
-          console.info(`[Estoque] Lote venda ${venda.id}: já baixado (bloqueado pelo guard atômico) — ignorando repetição.`);
-          return { ok: true, itensProcessados: 0, erros: [], jaProcessado: true };
-        }
 
         if (resultados.length > 0) {
           Store.mutateEstoque(estoque => {
@@ -545,10 +517,16 @@
             }
           }, { _semSync: true });
 
-          // Espelha localmente as movimentações já confirmadas no Firestore.
-          // Antes só o fallback offline fazia isso — deixando o guard
-          // `jaProcessado` (baseado em Store.getMovimentacoes()) cego
-          // justamente no caminho online, que é o mais usado.
+          // BUG CORRIGIDO: sem isto, o array local de movimentacoes nunca
+          // refletia o sucesso desta transação. A checagem de idempotência
+          // (`jaProcessado`, no início desta função) lê justamente este
+          // array local — sem populá-lo aqui, um retry (ex.: pela aba
+          // "⚠️ Erros" de aprovacao.html) num lote com sucesso PARCIAL
+          // (alguns itens baixam, outro falha por falta de estoque, e o
+          // lote inteiro é marcado como erro) reprocessava e baixava DE
+          // NOVO os itens que já tinham sido corretamente baixados na
+          // primeira tentativa — dedução duplicada de estoque real.
+          const agora = Utils.nowISO();
           Store.mutateMovimentacoes(movs => {
             for (const r of resultados) {
               movs.unshift({
@@ -562,7 +540,7 @@
                 origem:        r.origemKey,
                 operador:      venda.operador || _usuario(),
                 vendaId:       venda.id,
-                timestamp:     Utils.nowISO(),
+                timestamp:     agora,
                 dataCurta:     Utils.todayISO(),
               });
             }
