@@ -781,8 +781,8 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
-    : ['estoque', 'config', 'fiado', 'usuarios', 'sistemaUpdate'];
+    ? ['estoque', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
+    : ['estoque', 'config', 'usuarios', 'sistemaUpdate'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
@@ -830,6 +830,26 @@ const FirebaseService = (() => {
    _unsubscribers.push(unsubFin);
     } catch(e) { console.warn('[RT] financeiro subscribe falhou:', e.message); }
   }
+
+  // ── Listener em tempo real para coleção fiado ───────────────────────
+  // FIX (jul/2026): fiado saiu do doc único ch_dados/fiado (mesmo teto
+  // de 1MB) e virou coleção própria, 1 doc por cliente. Mantém o mesmo
+  // escopo de acesso que já existia (todo role que tinha 'fiado' no
+  // colsRT antigo continua recebendo tempo real).
+  try {
+    const fiadoQuery = _fb.query(_fb.collection(_db, 'fiado'), _fb.limit(1000));
+    const unsubFiado = _fb.onSnapshot(fiadoQuery, snap => {
+   const fiado = snap.docs
+     .map(d => ({ ...d.data(), _fbSynced: true }))
+     .filter(c => !c._deleted);
+   try { localStorage.setItem(CONSTANTS.DB.FIADO, JSON.stringify(fiado)); } catch(_) {}
+   Store.invalidate('fiado');
+   EventBus.emit('store:updated', 'fiado');
+   EventBus.emit('store:fiado');
+   EventBus.emit('sync:ok', 'fiado');
+    }, err => console.warn('[RT] fiado:', err.code));
+    _unsubscribers.push(unsubFiado);
+  } catch(e) { console.warn('[RT] fiado subscribe falhou:', e.message); }
 
   colsRT.forEach(col => {
     try {
@@ -996,6 +1016,34 @@ const FirebaseService = (() => {
      Store.invalidate('financeiro');
    } catch(_) {}
    console.info(`[Firebase] ✓ ${pendentes.length} lançamento(s) financeiro sincronizados.`);
+    } else if (colName === 'fiado') {
+   // FIX (jul/2026): fiado migrado do doc único ch_dados/fiado (mesmo
+   // risco de teto de 1MB) para a coleção 'fiado', 1 documento por
+   // cliente. Diferença importante em relação a vendas/financeiro: aqui
+   // os registros são MUTÁVEIS (saldo e movimentações mudam toda hora no
+   // mesmo cliente), não um log imutável. Por isso sincroniza a lista de
+   // clientes inteira a cada salvar, em vez de filtrar por _fbSynced —
+   // evita ficar desatualizado no Firestore quando o saldo muda mas a
+   // flag não é resetada em algum ponto do fiado.html. O nº de clientes
+   // fiado é naturalmente pequeno (não cresce como histórico de vendas),
+   // então isso é seguro.
+   const clientes = Array.isArray(dados) ? dados.filter(c => c?.id) : [];
+   if (!clientes.length) return true;
+   for (let i = 0; i < clientes.length; i += 400) {
+     const lote = clientes.slice(i, i + 400);
+     const batch = _fb.writeBatch(_db);
+     lote.forEach(c => {
+       const ref = _fb.doc(_db, 'fiado', c.id);
+       batch.set(ref, { ...c, _fbSynced: true, syncedAt: Utils.nowISO() });
+     });
+     await batch.commit();
+   }
+   const key = CONSTANTS.DB.FIADO;
+   try {
+     localStorage.setItem(key, JSON.stringify(clientes.map(c => ({ ...c, _fbSynced: true }))));
+     Store.invalidate('fiado');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${clientes.length} cliente(s) fiado sincronizados.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
       const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
@@ -1038,6 +1086,37 @@ const FirebaseService = (() => {
     return { ok: true, migrados };
   } catch(e) {
     console.warn('[Firebase] Migração financeiro falhou:', e.code || e.message);
+    return { ok: false, motivo: e.message };
+  }
+  }
+
+  // Migração única do fiado: ch_dados/fiado (array de clientes) → 1 doc
+  // por cliente na coleção 'fiado'. Rodar uma vez, como admin:
+  // await window.CH.FirebaseService.migrarFiadoParaColecao()
+  async function migrarFiadoParaColecao() {
+  if (!_ready || !_db || !_fb) return { ok: false, motivo: 'Firebase não pronto' };
+  try {
+    const snapAntigo = await _fb.getDoc(_fb.doc(_db, 'ch_dados', 'fiado'));
+    if (!snapAntigo.exists()) return { ok: true, migrados: 0, motivo: 'nada para migrar' };
+    const antigos = snapAntigo.data()?.dados || [];
+    if (!antigos.length) return { ok: true, migrados: 0 };
+
+    let migrados = 0;
+    for (let i = 0; i < antigos.length; i += 400) {
+   const lote = antigos.slice(i, i + 400);
+   const batch = _fb.writeBatch(_db);
+   lote.forEach(c => {
+     if (!c?.id) return;
+     const ref = _fb.doc(_db, 'fiado', c.id);
+     batch.set(ref, { ...c, _fbSynced: true, migradoEm: Utils.nowISO() }, { merge: true });
+   });
+   await batch.commit();
+   migrados += lote.length;
+    }
+    console.info(`[Firebase] ✓ Migração fiado: ${migrados} cliente(s) movidos para a coleção 'fiado'.`);
+    return { ok: true, migrados };
+  } catch(e) {
+    console.warn('[Firebase] Migração fiado falhou:', e.code || e.message);
     return { ok: false, motivo: e.message };
   }
   }
@@ -1101,6 +1180,9 @@ const FirebaseService = (() => {
      _fb.query(_fb.collection(_db, 'financeiro'), _fb.orderBy('criadoEm','desc'), _fb.limit(2000))
    );
    return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(l => !l._deleted);
+    } else if (colName === 'fiado') {
+   const snap = await _fb.getDocs(_fb.query(_fb.collection(_db, 'fiado'), _fb.limit(1000)));
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(c => !c._deleted);
     } else {
    const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
    return snap.exists() ? snap.data().dados : null;
@@ -1167,6 +1249,7 @@ const FirebaseService = (() => {
   subscribeRealtime: _subscribeRealtime,
   forcarAtualizacaoGlobal,
   migrarFinanceiroParaColecao,
+  migrarFiadoParaColecao,
 
   runTransaction,
   docRef,
