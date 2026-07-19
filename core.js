@@ -781,7 +781,7 @@ const FirebaseService = (() => {
   if (!role || !_db || !_fb) return;
 
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'financeiro', 'usuarios', 'ponto', 'sistemaUpdate']
+    ? ['estoque', 'config', 'fiado', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
     : ['estoque', 'config', 'fiado', 'usuarios', 'sistemaUpdate'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
@@ -803,6 +803,33 @@ const FirebaseService = (() => {
     }, err => console.warn('[RT] vendas:', err.code));
     _unsubscribers.push(unsubVendas);
   } catch(e) { console.warn('[RT] vendas subscribe falhou:', e.message); }
+
+  // ── Listener em tempo real para coleção financeiro ─────────────────
+  // FIX (jul/2026): financeiro saiu do doc único ch_dados/financeiro
+  // (limite físico de 1MB no Firestore) e virou coleção própria, 1
+  // documento por lançamento — mesmo padrão de 'vendas' acima. Mantém
+  // o mesmo escopo de acesso que já existia (só quem tinha 'financeiro'
+  // no colsRT de admin recebia tempo real; preservado aqui).
+  if (role === 'admin' || role === 'adm') {
+    try {
+   const financeiroQuery = _fb.query(
+     _fb.collection(_db, 'financeiro'),
+     _fb.orderBy('criadoEm', 'desc'),
+     _fb.limit(2000)
+   );
+   const unsubFin = _fb.onSnapshot(financeiroQuery, snap => {
+     const financeiro = snap.docs
+       .map(d => ({ ...d.data(), _fbSynced: true }))
+       .filter(l => !l._deleted);
+     try { localStorage.setItem(CONSTANTS.DB.FINANCEIRO, JSON.stringify(financeiro)); } catch(_) {}
+     Store.invalidate('financeiro');
+     EventBus.emit('store:updated', 'financeiro');
+     EventBus.emit('store:financeiro');
+     EventBus.emit('sync:ok', 'financeiro');
+   }, err => console.warn('[RT] financeiro:', err.code));
+   _unsubscribers.push(unsubFin);
+    } catch(e) { console.warn('[RT] financeiro subscribe falhou:', e.message); }
+  }
 
   colsRT.forEach(col => {
     try {
@@ -944,6 +971,31 @@ const FirebaseService = (() => {
      Store.invalidate('vendas');
    } catch(_) {}
    console.info(`[Firebase] ✓ ${pendentes.length} venda(s) sincronizadas.`);
+    } else if (colName === 'financeiro') {
+   // FIX (jul/2026): financeiro migrado do modelo "1 doc com array gigante"
+   // (ch_dados/financeiro, teto físico de 1MB no Firestore) para o mesmo
+   // modelo de 'vendas' — 1 documento por lançamento na coleção 'financeiro'.
+   // Isso elimina de vez o limite, não é mais uma questão de "arquivar
+   // quando encher": nunca mais enche.
+   const pendentes = Array.isArray(dados)
+     ? dados.filter(l => l?.id && !l._fbSynced).slice(0, 100)
+     : [];
+   if (!pendentes.length) return true;
+   const batch = _fb.writeBatch(_db);
+   pendentes.forEach(lanc => {
+     const ref = _fb.doc(_db, 'financeiro', lanc.id);
+     batch.set(ref, { ...lanc, _fbSynced: true, syncedAt: Utils.nowISO() });
+   });
+   await batch.commit();
+   const key = CONSTANTS.DB.FINANCEIRO;
+   try {
+     const finLocal = JSON.parse(localStorage.getItem(key) || '[]');
+     const ids = new Set(pendentes.map(l => l.id));
+     finLocal.forEach(l => { if (ids.has(l.id)) l._fbSynced = true; });
+     localStorage.setItem(key, JSON.stringify(finLocal));
+     Store.invalidate('financeiro');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${pendentes.length} lançamento(s) financeiro sincronizados.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
       const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
@@ -955,6 +1007,38 @@ const FirebaseService = (() => {
   } catch(e) {
     console.warn('[Firebase] Salvar falhou:', colName, e.code || e.message);
     return false;
+  }
+  }
+
+  // ── Migração única: copia o array antigo de ch_dados/financeiro para
+  // documentos individuais na coleção 'financeiro'. Rodar UMA VEZ depois
+  // do deploy desta versão (ex: no console do navegador, logado como
+  // admin): await window.CH.FirebaseService.migrarFinanceiroParaColecao()
+  async function migrarFinanceiroParaColecao() {
+  if (!_ready || !_db || !_fb) return { ok: false, motivo: 'Firebase não pronto' };
+  try {
+    const snapAntigo = await _fb.getDoc(_fb.doc(_db, 'ch_dados', 'financeiro'));
+    if (!snapAntigo.exists()) return { ok: true, migrados: 0, motivo: 'nada para migrar' };
+    const antigos = snapAntigo.data()?.dados || [];
+    if (!antigos.length) return { ok: true, migrados: 0 };
+
+    let migrados = 0;
+    for (let i = 0; i < antigos.length; i += 400) {
+   const lote = antigos.slice(i, i + 400);
+   const batch = _fb.writeBatch(_db);
+   lote.forEach(l => {
+     if (!l?.id) return;
+     const ref = _fb.doc(_db, 'financeiro', l.id);
+     batch.set(ref, { ...l, criadoEm: l.criadoEm || l.data || Utils.nowISO(), _fbSynced: true, migradoEm: Utils.nowISO() }, { merge: true });
+   });
+   await batch.commit();
+   migrados += lote.length;
+    }
+    console.info(`[Firebase] ✓ Migração financeiro: ${migrados} lançamento(s) movidos para a coleção 'financeiro'.`);
+    return { ok: true, migrados };
+  } catch(e) {
+    console.warn('[Firebase] Migração financeiro falhou:', e.code || e.message);
+    return { ok: false, motivo: e.message };
   }
   }
 
@@ -1012,6 +1096,11 @@ const FirebaseService = (() => {
      _fb.query(_fb.collection(_db, 'vendas'), _fb.orderBy('criadoEm','desc'), _fb.limit(1000))
    );
    return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(v => !v._deleted);
+    } else if (colName === 'financeiro') {
+   const snap = await _fb.getDocs(
+     _fb.query(_fb.collection(_db, 'financeiro'), _fb.orderBy('criadoEm','desc'), _fb.limit(2000))
+   );
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(l => !l._deleted);
     } else {
    const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
    return snap.exists() ? snap.data().dados : null;
@@ -1077,6 +1166,7 @@ const FirebaseService = (() => {
   clearAdminToken:   () => { _adminToken = null; sessionStorage.removeItem('CH_ADMIN_TOKEN'); },
   subscribeRealtime: _subscribeRealtime,
   forcarAtualizacaoGlobal,
+  migrarFinanceiroParaColecao,
 
   runTransaction,
   docRef,
