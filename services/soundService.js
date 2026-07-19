@@ -38,7 +38,10 @@
     comp.release.setValueAtTime(0.15, ctx.currentTime);
 
     const vol = ctx.createGain();
-    let volume = 1;
+    // FIX (jul/2026): pedido explícito de "som alto" na conclusão da venda.
+    // Volume base subiu de 1 para 1.6 — o compressor acima já segura o pico
+    // pra não estourar/distorcer mesmo nesse volume maior.
+    let volume = 1.6;
     try {
       const cfg = window.CH?.Store?.getConfig?.();
       if (typeof cfg?.somVolume === 'number') volume = cfg.somVolume; // 0–2, config opcional por loja
@@ -71,14 +74,18 @@
     } catch (_) { return true; }
   }
 
-  // "Cha-ching" — dois tons curtos ascendentes, cada um com uma oitava
-  // dobrada por cima pra dar corpo/volume percebido sem distorcer
+  // "Cha-ching" — três tons ascendentes, cada um com uma oitava dobrada
+  // por cima pra dar corpo/volume percebido sem distorcer.
+  // FIX (jul/2026): ganhos maiores + terceira nota final pra ficar mais
+  // alto e chamativo na conclusão da venda (pedido explícito do usuário).
   function _somVenda(ctx) {
     const t = ctx.currentTime;
-    _tone(ctx, 880,    t,        0.14, { gain: 0.5,  type: 'triangle' });
-    _tone(ctx, 880*2,  t,        0.10, { gain: 0.22, type: 'triangle' });
-    _tone(ctx, 1318.5, t + 0.09, 0.22, { gain: 0.55, type: 'triangle' });
-    _tone(ctx, 1318.5*2, t+0.09, 0.14, { gain: 0.20, type: 'triangle' });
+    _tone(ctx, 880,    t,        0.14, { gain: 0.75, type: 'triangle' });
+    _tone(ctx, 880*2,  t,        0.10, { gain: 0.35, type: 'triangle' });
+    _tone(ctx, 1318.5, t + 0.09, 0.22, { gain: 0.85, type: 'triangle' });
+    _tone(ctx, 1318.5*2, t+0.09, 0.14, { gain: 0.32, type: 'triangle' });
+    _tone(ctx, 1760,   t + 0.20, 0.28, { gain: 0.9,  type: 'triangle' });
+    _tone(ctx, 1760*2, t + 0.20, 0.16, { gain: 0.30, type: 'triangle' });
   }
 
   // Tom grave duplo — erro/cancelamento
