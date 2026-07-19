@@ -57,6 +57,8 @@
       data:       Utils.nowISO(),
       dataCurta:  Utils.todayISO(),
       hora:       Utils.nowTime(),
+      criadoEm:   Utils.nowISO(),
+      _fbSynced:  false,
       ...extra,
     };
 
@@ -126,7 +128,14 @@
 
   // ── Consultas ─────────────────────────────────────────────────────
 
-  function getLancamentos({ tipo, categoria, dataDe, dataAte, limit = 500 } = {}) {
+  // FIX (jul/2026): limite padrão era 500 registros. Como os lançamentos
+  // ficam do mais novo pro mais antigo, em meses com mais de 500
+  // lançamentos (comum com ticket médio baixo) os lançamentos mais
+  // antigos do período ficavam de fora da soma — o financeiro "parava
+  // de somar" perto de R$15 mil (≈500 vendas × ticket médio). Removido
+  // o teto padrão; quem realmente precisar limitar (paginação de lista
+  // em tela, por ex.) agora tem que pedir isso explicitamente.
+  function getLancamentos({ tipo, categoria, dataDe, dataAte, limit = Infinity } = {}) {
     let fin = Store.getFinanceiro();
     if (tipo)      fin = fin.filter(l => l.tipo      === tipo);
     if (categoria) fin = fin.filter(l => l.categoria === categoria);
