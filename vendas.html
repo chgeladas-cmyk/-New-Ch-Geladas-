@@ -120,20 +120,12 @@ body.is-admin .adm-flex{display:flex!important;}
   </header>
 
   <main class="flex-1 p-3 lg:p-4 max-w-7xl mx-auto w-full pb-28 lg:pb-6">
-    <!-- ÚLTIMA VENDA — fica visível para o colaborador conferir se registrou -->
-    <div id="ultimaVendaBar" onclick="abrirUltimaVendaDetalhe()" class="hidden mb-3 px-4 py-2.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer" style="background:rgba(17,24,39,.9);border:1px solid rgba(255,255,255,.06);">
-      <div class="flex items-center gap-3 min-w-0">
-        <div id="uvDot" class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#10b981;"></div>
-        <div class="min-w-0">
-          <p class="text-[8px] text-slate-500 font-black uppercase tracking-wider">Última venda registrada</p>
-          <p class="text-[11px] font-bold text-slate-200 truncate">
-            <span id="uvHora">--:--</span> · <span id="uvTotal">R$ 0,00</span> · <span id="uvStatus" class="font-black text-emerald-400">-</span>
-          </p>
-        </div>
-      </div>
-      <button onclick="event.stopPropagation();abrirUltimaVendaDetalhe()" class="flex-shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-black uppercase transition-all active:scale-95">
-        <i class="fas fa-receipt mr-1"></i>Ver
-      </button>
+    <!-- ÚLTIMAS VENDAS — mostra as 5 mais recentes de QUALQUER aparelho/operador,
+         não só as feitas neste dispositivo. Atualiza sozinha via store:updated
+         quando o Firestore sincroniza uma venda feita em outro aparelho. -->
+    <div id="ultimaVendaBar" class="hidden mb-3 rounded-2xl overflow-hidden" style="background:rgba(17,24,39,.9);border:1px solid rgba(255,255,255,.06);">
+      <p class="text-[8px] text-slate-500 font-black uppercase tracking-wider px-4 pt-2.5">Últimas vendas · todos os aparelhos</p>
+      <div id="ultimasVendasLista" class="divide-y divide-white/5"></div>
     </div>
     <div class="lg:grid lg:grid-cols-12 lg:gap-4">
       <!-- CATÁLOGO -->
@@ -382,11 +374,36 @@ body.is-admin .adm-flex{display:flex!important;}
         <span class="text-[10px] font-black uppercase text-slate-400">Total</span>
         <span id="uvdTotal" class="text-xl font-black text-white">R$ 0,00</span>
       </div>
-      <p id="uvdPgto" class="text-[9px] font-bold text-blue-400 text-right mt-1.5"></p>
+      <p id="uvdOperador" class="text-[9px] font-bold text-slate-400 text-right mt-1.5"></p>
+      <p id="uvdPgto" class="text-[9px] font-bold text-blue-400 text-right mt-1"></p>
       <p id="uvdHora" class="text-[8px] font-bold text-slate-700 text-right mt-1"></p>
     </div>
     <div class="p-4">
       <button onclick="UIService.closeModal('modalUltimaVendaDetalhe')" class="w-full bg-slate-900 hover:bg-slate-800 text-slate-400 py-3 rounded-xl font-black uppercase text-xs transition-all active:scale-95">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL CONFIRMAÇÃO FINAL — conferência obrigatória antes de gravar a venda ══ -->
+<div id="modalConfirmarVenda" class="modal">
+  <div class="modal-box max-w-sm p-0 overflow-hidden">
+    <div class="bg-emerald-500/10 border-b border-emerald-500/20 px-6 pt-6 pb-4 text-center">
+      <div class="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl"><i class="fas fa-clipboard-check"></i></div>
+      <h2 class="text-lg font-black text-white">Confirmar Venda</h2>
+      <p class="text-slate-400 text-[10px] font-bold uppercase mt-1">Confira os itens antes de gravar</p>
+    </div>
+    <div class="px-5 py-4 border-b border-white/5">
+      <div id="confItens" class="space-y-1.5 mb-3 max-h-56 overflow-y-auto scroll"></div>
+      <div class="flex justify-between items-center bg-slate-900/60 rounded-xl px-3 py-2.5 mt-2">
+        <span class="text-[10px] font-black uppercase text-slate-400">Total</span>
+        <span id="confTotal" class="text-xl font-black text-white">R$ 0,00</span>
+      </div>
+      <p id="confForma" class="text-[10px] font-bold text-blue-400 text-right mt-1.5"></p>
+      <p id="confTrocoBox" class="hidden text-[10px] font-bold text-amber-400 text-right mt-1">Troco: <span id="confTroco">R$ 0,00</span></p>
+    </div>
+    <div class="p-4 flex gap-2">
+      <button onclick="cancelarConfirmacaoVenda()" class="flex-1 bg-slate-900 hover:bg-slate-800 text-slate-400 py-3.5 rounded-xl font-black uppercase text-[10px] transition-all active:scale-95">Voltar</button>
+      <button onclick="confirmarVendaFinal()" class="flex-[2] bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-3.5 rounded-xl font-black uppercase text-[10px] transition-all active:scale-95"><i class="fas fa-check mr-1"></i>Confirmar Venda</button>
     </div>
   </div>
 </div>
@@ -531,11 +548,16 @@ function init() {
   EventBus.on('cart:updated', renderCart);
 }
 
-/* ══ ÚLTIMA VENDA — barra persistente para o colaborador conferir ══
-   Objetivo: mesmo que o colaborador feche o recibo, atualize a página
-   ou fique em dúvida se apertou o botão, a última venda registrada
-   por ele continua visível no topo da tela (com status atualizado). */
-let _vendaBarAtual = null;
+/* ══ ÚLTIMAS VENDAS — lista viva das 5 mais recentes, de QUALQUER aparelho ══
+   FIX (jul/2026): antes filtrava por `v.operador === nome do usuário logado`,
+   então cada aparelho só via a própria venda. Isso não é sync — vira
+   filtro. Store.getVendas() já é sincronizado em tempo real pelo
+   core.js/SyncQueue; o que faltava era PARAR de filtrar por operador
+   e mostrar as últimas N de todo mundo. Continua atualizando sozinho
+   porque o listener de 'store:updated' (em init()) já chama esta função
+   sempre que qualquer aparelho grava uma venda nova. */
+const N_ULTIMAS_VENDAS = 5;
+let _ultimasVendasCache = [];
 
 function _labelStatusVenda(status) {
   switch (status) {
@@ -554,35 +576,49 @@ function _labelStatusVenda(status) {
   }
 }
 
-function atualizarUltimaVendaBar(venda) {
-  const bar = document.getElementById('ultimaVendaBar');
-  if (!bar) return;
-  if (!venda) {
-    const nome = AuthService.getNome();
-    venda = Store.getVendas().find(v => v.operador === nome) || null;
-  }
-  _vendaBarAtual = venda;
-  if (!venda) { bar.classList.add('hidden'); return; }
+function atualizarUltimaVendaBar() {
+  const bar  = document.getElementById('ultimaVendaBar');
+  const lista = document.getElementById('ultimasVendasLista');
+  if (!bar || !lista) return;
 
-  const st = _labelStatusVenda(venda.status);
-  _setText('uvHora',  venda.hora || '--:--');
-  _setText('uvTotal', Utils.formatCurrency(venda.total || 0));
-  const stEl = document.getElementById('uvStatus');
-  if (stEl) { stEl.textContent = st.label; stEl.className = `font-black ${st.cls}`; }
-  const dot = document.getElementById('uvDot');
-  if (dot) dot.style.background = st.dot;
+  _ultimasVendasCache = Store.getVendas()
+    .slice()
+    .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''))
+    .slice(0, N_ULTIMAS_VENDAS);
+
+  if (!_ultimasVendasCache.length) { bar.classList.add('hidden'); return; }
+
+  lista.innerHTML = _ultimasVendasCache.map((v, idx) => {
+    const st = _labelStatusVenda(v.status);
+    return `<div onclick="abrirUltimaVendaDetalhe('${v.id}')" class="flex items-center justify-between gap-3 px-4 py-2 cursor-pointer hover:bg-white/5 transition-colors">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:${st.dot};"></div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-slate-200 truncate">
+            ${v.hora || '--:--'} · ${Utils.formatCurrency(v.total || 0)}
+            <span class="font-black ${st.cls}">· ${st.label}</span>
+          </p>
+          <p class="text-[9px] text-slate-500 truncate">${v.operador || '—'}</p>
+        </div>
+      </div>
+      <i class="fas fa-chevron-right text-slate-600 text-[10px] flex-shrink-0"></i>
+    </div>`;
+  }).join('');
   bar.classList.remove('hidden');
 }
 
-function abrirUltimaVendaDetalhe() {
-  if (!_vendaBarAtual) return;
-  const v  = _vendaBarAtual;
+function abrirUltimaVendaDetalhe(vendaId) {
+  const v = vendaId
+    ? (_ultimasVendasCache.find(x => x.id === vendaId) || Store.getVendas().find(x => x.id === vendaId))
+    : _ultimasVendasCache[0];
+  if (!v) return;
   const st = _labelStatusVenda(v.status);
   const stEl = document.getElementById('uvdStatus');
   if (stEl) { stEl.textContent = st.label; stEl.className = `text-[10px] font-black uppercase mt-1 ${st.cls}`; }
-  _setText('uvdHora',  `${v.data || ''} ${v.hora || ''}`.trim());
-  _setText('uvdPgto',  v.formaPgto || '-');
-  _setText('uvdTotal', Utils.formatCurrency(v.total || 0));
+  _setText('uvdHora',     `${v.data || ''} ${v.hora || ''}`.trim());
+  _setText('uvdPgto',     v.formaPgto || '-');
+  _setText('uvdOperador', `Vendido por: ${v.operador || '—'}`);
+  _setText('uvdTotal',    Utils.formatCurrency(v.total || 0));
   const itensEl = document.getElementById('uvdItens');
   if (itensEl) {
     itensEl.innerHTML = (v.itens || []).map(i =>
@@ -1021,66 +1057,65 @@ function confirmarFiado(clienteId) {
 }
 
 /* ══ FINALIZAR VENDA ══ */
+/* FIX split-brain (jul/2026): a verificação de aprovação e a montagem manual
+ * da venda pendente foram REMOVIDAS daqui. Essa lógica já existe, de forma
+ * mais completa, em services/vendasService.js::finalizarVenda() — que além
+ * de checar a flag vendas_requer_aprovacao via PermissoesService, também
+ * chama EstoqueService.reservarEstoque() para a venda pendente, coisa que
+ * este arquivo NUNCA fazia. Delegar 100% para CartService.finalize()
+ * elimina a duplicação e a reserva de estoque ausente. */
 
-/* ══ APROVAÇÃO INLINE — independente de serviços externos ══ */
-function _verificarAprovacao() {
-  try {
-    const role = window.CH?.AuthService?.getRole?.() || '';
-
-    // Roles que NUNCA precisam de aprovação
-    const LIVRES = ['adm','admin','gerente','operador','pdv','entregador'];
-    if (LIVRES.includes(role)) return false;
-
-    // Tenta PermissoesService (configuração do ADM)
-    const Perm = window.CH?.PermissoesService;
-    if (Perm) {
-      const p = Perm.getPerfil(role);
-      // Se o perfil existe e tem a flag EXPLICITAMENTE definida, usa ela
-      if (p && p.flags && typeof p.flags.vendas_requer_aprovacao === 'boolean') {
-        return p.flags.vendas_requer_aprovacao;
-      }
-    }
-
-    // Fallback conservador: qualquer role fora da lista livre requer aprovação
-    // Isso garante que colaborador/controlador/analista/validador
-    // e qualquer perfil personalizado sempre requeiram aprovação
-    return true;
-  } catch(e) { return true; }
-}
+/* ── CONFIRMAÇÃO OBRIGATÓRIA (jul/2026) ──────────────────────────
+ * finalizarVenda() agora NÃO grava nada direto — ela abre um modal
+ * mostrando todos os itens do carrinho + total + forma de pagamento
+ * e só grava de fato quando o operador toca em "Confirmar Venda"
+ * (confirmarVendaFinal). Isso vale pra todas as formas de pagamento
+ * (dinheiro, pix, débito, crédito, misto), porque todas passam por
+ * aqui antes de chegar em _executarFinalizacao(). */
+let _pendingFinalizacao = null;
 
 function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '', parcelaRestante = 0) {
   if (CartService.isEmpty()) return;
+  _pendingFinalizacao = { forma, troco, parcelaDinheiro, formaRestante, parcelaRestante };
 
-  // ── Verifica aprovação independente dos serviços ──────────────
-  if (_verificarAprovacao()) {
-    const { Store, AuthService, Utils, EventBus } = window.CH;
-    const itens    = CartService.getItems();
-    const total    = CartService.getTotal();
-    const subtotal = CartService.getSubtotal ? CartService.getSubtotal() : total;
-    const desconto = CartService.getDesconto ? CartService.getDesconto() : 0;
-    const lucro    = itens.reduce((s,i) => s + (i.preco - (i.custo||0)) * i.qtd, 0) - desconto;
-    const venda = {
-      id: Utils.generateId(), dataCurta: Utils.todayISO(), data: Utils.today(),
-      hora: Utils.nowTime(), criadoEm: Utils.nowISO(),
-      itens, total, subtotal, desconto, lucro,
-      formaPgto: forma || 'Dinheiro', origem: 'PDV',
-      operador: AuthService.getNome(), role: AuthService.getRole(),
-      status: 'pendente', _fbSynced: false,
-      _troco: troco, _parcelaDinheiro: parcelaDinheiro,
-      _parcelaRestante: parcelaRestante, _formaRestante: formaRestante,
-    };
-    Store.mutateVendas(v => { v.unshift(venda); });
-    if (window.CH.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'vendas', [venda]);
-    CartService.clear();
-    EventBus.emit('venda:pendente', venda);
-    renderCatalogo();
-    atualizarAlerta();
-    atualizarUltimaVendaBar(venda);
-    UIService.showToast('Enviado para aprovacao!', 'Aguarda controlador', 'warning');
-    return;
+  const itens = CartService.getItems();
+  const total = CartService.getTotal();
+  const itensEl = document.getElementById('confItens');
+  if (itensEl) {
+    itensEl.innerHTML = itens.map(i =>
+      `<div class="flex justify-between text-[11px] font-bold">
+        <span class="text-slate-300">${i.nome} <span class="text-slate-500">${i.label} ×${i.qtd}</span></span>
+        <span class="text-white">${Utils.formatCurrency(i.preco*i.qtd)}</span>
+      </div>`).join('') || '<p class="text-[11px] text-slate-500">Carrinho vazio</p>';
   }
+  const pgtoTxt = (parcelaDinheiro > 0 && parcelaRestante > 0)
+    ? `Dinheiro ${Utils.formatCurrency(parcelaDinheiro)} + ${formaRestante} ${Utils.formatCurrency(parcelaRestante)}`
+    : (forma || 'Dinheiro');
+  _setText('confForma', pgtoTxt);
+  _setText('confTotal', Utils.formatCurrency(total));
+  const trocoBox = document.getElementById('confTrocoBox');
+  if (troco > 0) { _setText('confTroco', Utils.formatCurrency(troco)); trocoBox?.classList.remove('hidden'); }
+  else trocoBox?.classList.add('hidden');
 
-  // ── Fluxo direto (sem aprovacao) ─────────────────────────────
+  UIService.openModal('modalConfirmarVenda');
+}
+
+function cancelarConfirmacaoVenda() {
+  UIService.closeModal('modalConfirmarVenda');
+  _pendingFinalizacao = null;
+}
+
+function confirmarVendaFinal() {
+  UIService.closeModal('modalConfirmarVenda');
+  if (!_pendingFinalizacao) return;
+  const { forma, troco, parcelaDinheiro, formaRestante, parcelaRestante } = _pendingFinalizacao;
+  _pendingFinalizacao = null;
+  _executarFinalizacao(forma, troco, parcelaDinheiro, formaRestante, parcelaRestante);
+}
+
+function _executarFinalizacao(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '', parcelaRestante = 0) {
+  if (CartService.isEmpty()) return;
+
   const extras = { troco, parcelaDinheiro, parcelaRestante, formaRestante };
   const result = CartService.finalize(forma, extras);
   const _done = (venda) => {
@@ -1089,6 +1124,15 @@ function finalizarVenda(forma, troco = 0, parcelaDinheiro = 0, formaRestante = '
     venda._parcelaDinheiro = venda._parcelaDinheiro || parcelaDinheiro;
     venda._parcelaRestante = venda._parcelaRestante || parcelaRestante;
     venda._formaRestante   = venda._formaRestante   || formaRestante;
+
+    if (venda.status === 'pendente') {
+      renderCatalogo();
+      atualizarAlerta();
+      atualizarUltimaVendaBar(venda);
+      UIService.showToast('Enviado para aprovacao!', 'Aguarda controlador', 'warning');
+      return;
+    }
+
     _ultimaVenda = venda;
     mostrarRecibo(venda);
     renderCatalogo();
@@ -1229,7 +1273,13 @@ function _calcFaturamentoHoje(vendas) {
 }
 
 function abrirRelatorio() {
-  const vendas = Store.getVendasHoje();
+  // FIX (jul/2026): totais financeiros usam só concluida/validada (mesmo
+  // critério do relatório de texto/vendasService); vendas pendentes,
+  // canceladas e rejeitadas não entram no faturamento. O histórico exibido
+  // (relHistorico) continua mostrando TODAS as vendas do dia, com operador
+  // e status, pra não esconder nada.
+  const todasHoje = Store.getVendasHoje();
+  const vendas    = todasHoje.filter(v => ['concluida','validada'].includes(v.status));
   const { fatur, lucro } = _calcFaturamentoHoje(vendas);
   const ticket = vendas.length ? fatur/vendas.length : 0;
   _setText('relFaturamento', Utils.formatCurrency(fatur));
@@ -1289,17 +1339,20 @@ function abrirRelatorio() {
   document.getElementById('relTopProd').innerHTML = top.map(([nome,qtd],i)=>
     `<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2"><span class="text-[10px] font-black text-slate-300">${icons[i]} ${nome}</span><span class="text-[10px] font-black text-amber-400">${qtd} un</span></div>`).join('')
     ||'<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem itens</p>';
-  document.getElementById('relHistorico').innerHTML = [...vendas].reverse().map(v=>`
+  document.getElementById('relHistorico').innerHTML = [...todasHoje].reverse().map(v=>{
+    const st = _labelStatusVenda(v.status);
+    return `
     <div class="bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2 flex justify-between items-center">
-      <div>
-        <p class="text-[10px] font-black text-white">${Utils.formatCurrency(v.total)}</p>
-        <p class="text-[8px] text-slate-500 font-bold">${v.hora} · ${v.formaPgto}</p>
+      <div class="min-w-0">
+        <p class="text-[10px] font-black text-white">${Utils.formatCurrency(v.total)} <span class="font-black ${st.cls}">· ${st.label}</span></p>
+        <p class="text-[8px] text-slate-500 font-bold truncate">${v.hora} · ${v.formaPgto} · ${v.operador||'—'}</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-shrink-0">
         <span class="badge b-blue text-[8px]">${v.itens.length} item${v.itens.length>1?'s':''}</span>
         <button onclick="cancelarVendaHistorico('${v.id}')" class="w-6 h-6 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center adm-only" title="Cancelar"><i class="fas fa-times text-[8px]"></i></button>
       </div>
-    </div>`).join('')||'<p class="text-[9px] text-slate-600 text-center py-4 font-bold">Sem vendas hoje</p>';
+    </div>`;
+  }).join('')||'<p class="text-[9px] text-slate-600 text-center py-4 font-bold">Sem vendas hoje</p>';
   UIService.openModal('modalRelatorio');
 }
 
@@ -1333,21 +1386,34 @@ function cancelarVendaHistorico(vendaId) {
 }
 
 function _gerarTextoRelatorio() {
-  const vendas = Store.getVendasHoje();
+  // FIX (jul/2026): antes `vendas` = TODAS do dia sem filtro de status, e
+  // Faturamento/Fechamento de Caixa somavam junto vendas pendentes,
+  // canceladas e rejeitadas — inflava o caixa. Agora os totais financeiros
+  // usam só concluida/validada (mesmo critério de vendasService.getResumoHoje),
+  // mas a listagem "VENDAS INDIVIDUAIS" continua trazendo TODAS as vendas do
+  // dia — cada uma com horário, quem vendeu e status, pra não sumir nada.
+  const todasHoje = Store.getVendasHoje();
+  const vendas    = todasHoje.filter(v => ['concluida','validada'].includes(v.status));
+  const pendentes  = todasHoje.filter(v => v.status === 'pendente').length;
+  const canceladas = todasHoje.filter(v => v.status === 'cancelada').length;
+  const rejeitadas = todasHoje.filter(v => v.status === 'rejeitada').length;
   const { fatur, lucro } = _calcFaturamentoHoje(vendas);
-  const fiadoPendente = vendas.filter(v => v._fiado).reduce((s,v) => s + (v.total||0), 0);
+  const fiadoPendente = todasHoje.filter(v => v._fiado).reduce((s,v) => s + (v.total||0), 0);
   const cfg    = Store.getConfig();
   const nome   = cfg?.nome||'CH Geladas';
   const sep    = '═'.repeat(40); const sep2='─'.repeat(40);
   let txt = `${sep}\n  ${nome} — RELATÓRIO DO DIA\n  ${Utils.today()}\n${sep}\n\n`;
   txt += `Faturamento:  ${Utils.formatCurrency(fatur)}\n`;
   txt += `Lucro:        ${Utils.formatCurrency(lucro)}\n`;
-  txt += `Nº Vendas:    ${vendas.length}\n`;
+  txt += `Nº Vendas concluídas: ${vendas.length}\n`;
   txt += `Ticket Médio: ${Utils.formatCurrency(vendas.length?fatur/vendas.length:0)}\n`;
+  if (pendentes)  txt += `Pendentes de aprovação (não incluso acima): ${pendentes}\n`;
+  if (canceladas) txt += `Canceladas (não incluso acima): ${canceladas}\n`;
+  if (rejeitadas) txt += `Rejeitadas (não incluso acima): ${rejeitadas}\n`;
   if (fiadoPendente > 0) txt += `Fiado (pendente, não incluso no faturamento): ${Utils.formatCurrency(fiadoPendente)}\n`;
   txt += `\n`;
 
-  // ── Fechamento por forma de pagamento (misto = separado) ──
+  // ── Fechamento por forma de pagamento (misto = separado) — só vendas concluídas ──
   const pgtosCx = {};
   vendas.forEach(v => {
     const f = v.formaPgto || 'Outros';
@@ -1365,17 +1431,22 @@ function _gerarTextoRelatorio() {
   });
   txt += `${'─'.repeat(28)}\n  ${'TOTAL'.padEnd(12)} ${Utils.formatCurrency(fatur)}\n\n`;
 
-  txt += `${sep2}\nVENDAS INDIVIDUAIS\n${sep2}\n`;
-  vendas.forEach((v,i) => {
-    const misto = v._parcelaDinheiro > 0 && v._parcelaRestante > 0;
-    const pgtoTxt = misto
-      ? `Dinheiro ${Utils.formatCurrency(v._parcelaDinheiro)} + ${v._formaRestante||''} ${Utils.formatCurrency(v._parcelaRestante)}`
-      : v.formaPgto;
-    txt += `\n#${i+1} | ${v.hora} | ${pgtoTxt}\n`;
-    v.itens.forEach(it=>txt+=`  · ${it.nome} (${it.label}) x${it.qtd}  ${Utils.formatCurrency(it.preco*it.qtd)}\n`);
-    txt += `  TOTAL: ${Utils.formatCurrency(v.total)}\n`;
-    if (v._troco > 0) txt += `  Troco: ${Utils.formatCurrency(v._troco)}\n`;
-  });
+  // ── Todas as vendas do dia, sem exceção — com horário e quem vendeu ──
+  txt += `${sep2}\nVENDAS INDIVIDUAIS — TODAS DO DIA (${todasHoje.length})\n${sep2}\n`;
+  todasHoje
+    .slice()
+    .sort((a,b) => (a.hora||'').localeCompare(b.hora||''))
+    .forEach((v,i) => {
+      const misto = v._parcelaDinheiro > 0 && v._parcelaRestante > 0;
+      const pgtoTxt = misto
+        ? `Dinheiro ${Utils.formatCurrency(v._parcelaDinheiro)} + ${v._formaRestante||''} ${Utils.formatCurrency(v._parcelaRestante)}`
+        : v.formaPgto;
+      const st = _labelStatusVenda(v.status);
+      txt += `\n#${i+1} | ${v.hora} | ${v.operador||'—'} | ${pgtoTxt} | [${st.label}]\n`;
+      (v.itens||[]).forEach(it=>txt+=`  · ${it.nome} (${it.label}) x${it.qtd}  ${Utils.formatCurrency(it.preco*it.qtd)}\n`);
+      txt += `  TOTAL: ${Utils.formatCurrency(v.total)}\n`;
+      if (v._troco > 0) txt += `  Troco: ${Utils.formatCurrency(v._troco)}\n`;
+    });
   txt += `\n${sep}\nGerado por ${nome} PDV\n${sep}\n`;
   return txt;
 }
