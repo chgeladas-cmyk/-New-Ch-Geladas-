@@ -292,7 +292,7 @@ const Store = (() => {
   // Colecoes locais apenas — nao sobem pro Firebase (logs por dispositivo)
   const _localOnly = new Set(['auditoria', 'movimentacoes']);
 
-  function _mutate(col, fn) {
+  function _mutate(col, fn, opts = {}) {
   const data = _read(col);
   fn(data);
   const limit = _limits[col];
@@ -300,6 +300,15 @@ const Store = (() => {
   _write(col, final);
   _notify(col);
   if (_localOnly.has(col)) return;
+  // FIX (jul/2026): _semSync — usado quando o chamador já gravou os dados
+  // diretamente no Firestore (ex: dentro de uma runTransaction), pra não
+  // reenfileirar uma escrita "salvar" comum por cima. Uma escrita comum
+  // concorrente sobrescreve o documento sem controle de versão, e isso
+  // derruba a próxima transaction que estiver lendo o mesmo doc
+  // (Firestore aborta com failed-precondition ao detectar mudança entre
+  // leitura e commit). Sem esse guard, toda baixa de estoque em lote via
+  // transaction corria contra o próprio SyncQueue e falhava.
+  if (opts._semSync) return;
   if (window.CH?.SyncQueue) {
     const role = typeof AuthService !== 'undefined' ? AuthService.getRole() : null;
     // FIX: inclui gerente e operador (UserService) além de admin/pdv (CONSTANTS.PERMISSOES)
@@ -364,7 +373,7 @@ const Store = (() => {
   getOutOfStock()    { return this.getEstoque().filter(p => (p.qtdUn||0) <= 0); },
   getInvestimento()  { return this.getConfig()?.investimento || 0; },
 
-  mutateEstoque(fn) {
+  mutateEstoque(fn, opts) {
     _mutate('estoque', (data) => {
    fn(data);
    data.forEach(p => {
@@ -376,7 +385,7 @@ const Store = (() => {
      if (p.qtdUn        !== undefined) p.estoqueAtual = p.qtdUn;
      else if (p.estoqueAtual !== undefined) p.qtdUn   = p.estoqueAtual;
    });
-    });
+    }, opts);
   },
   mutateVendas(fn)        { _mutate('vendas',        fn); },
   mutateComandas(fn)      { _mutate('comandas',      fn); },
