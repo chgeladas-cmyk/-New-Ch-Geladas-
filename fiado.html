@@ -151,6 +151,9 @@ body.is-admin .adm-only{display:flex!important;}
       <button id="btnRelatorio" onclick="abrirRelatorio()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-red-400 transition-all">
         <i class="fas fa-chart-bar text-xs"></i>
       </button>
+      <button id="btnCobrancaLote" onclick="abrirCobrancaLote()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-blue-400 transition-all">
+        <i class="fab fa-whatsapp text-xs"></i>
+      </button>
       <button id="btnNovoCliente" onclick="abrirFormCliente()" class="bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wide transition-all flex items-center gap-1.5">
         <i class="fas fa-user-plus text-[9px]"></i>Cliente
       </button>
@@ -215,6 +218,9 @@ body.is-admin .adm-only{display:flex!important;}
         </button>
         <button onclick="abrirParcela()" class="py-3 rounded-2xl bg-amber-600/20 border border-amber-500/25 text-amber-300 font-black text-[9px] uppercase flex flex-col items-center gap-1 transition-all active:scale-95 hover:bg-amber-600/35">
           <i class="fas fa-layer-group text-base"></i>Parcelas
+        </button>
+        <button onclick="cobrarCliente()" class="py-3 rounded-2xl bg-blue-600/20 border border-blue-500/25 text-blue-300 font-black text-[9px] uppercase flex flex-col items-center gap-1 transition-all active:scale-95 hover:bg-blue-600/35">
+          <i class="fab fa-whatsapp text-base"></i>Cobrar
         </button>
         <button onclick="editarCliente()" class="py-3 rounded-2xl bg-slate-800 border border-white/5 text-slate-400 font-black text-[9px] uppercase flex flex-col items-center gap-1 transition-all active:scale-95 hover:bg-slate-700">
           <i class="fas fa-cog text-base"></i>Config
@@ -417,7 +423,27 @@ body.is-admin .adm-only{display:flex!important;}
   </div>
 </div>
 
-<!-- ══════ MODAL CANCELAR ITEM (ADM) ══════ -->
+<!-- ══════ MODAL COBRANÇA EM LOTE ══════ -->
+<div id="modalCobranca" class="modal">
+  <div class="modal-box max-w-sm p-0 overflow-hidden">
+    <div class="p-5 border-b border-white/5 flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-black text-blue-400 flex items-center gap-2"><i class="fab fa-whatsapp"></i> Cobrança em Lote</h3>
+        <p id="cobTotalTxt" class="text-[9px] text-slate-500 font-bold mt-0.5"></p>
+      </div>
+      <button onclick="UIService.closeModal('modalCobranca')" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <div class="px-5 py-3 border-b border-white/5">
+      <p class="text-[8px] text-slate-500 font-bold leading-relaxed mb-2">O WhatsApp exige toque em "Enviar" dentro do próprio app pra cada conversa — não dá pra disparar tudo sozinho, sem toque nenhum.</p>
+      <button onclick="enviarTodosCobranca()" class="w-full py-2.5 rounded-xl bg-blue-600/20 border border-blue-500/25 text-blue-300 font-black text-[9px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-blue-600/35">
+        <i class="fab fa-whatsapp text-xs"></i>Enviar Todos de Uma Vez
+      </button>
+    </div>
+    <div class="overflow-y-auto scroll p-4" style="max-height:56vh;">
+      <div id="cobLista" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
 <div id="modalCancelItem" class="modal">
   <div class="modal-box max-w-sm p-7">
     <div class="flex items-center gap-3 mb-5">
@@ -1073,6 +1099,84 @@ function abrirFormCliente(id) {
 }
 
 function editarCliente() { abrirFormCliente(_clienteAtualId); }
+
+// Monta o texto de cobrança (tom firme, não é lembrete gentil) — usado tanto
+// no botão individual (detalhe do cliente) quanto na cobrança em lote.
+function _montarMsgCobranca(c) {
+  const nomeLoja = Store.getConfig()?.nome || 'CH Geladas';
+  const saldo    = c.saldo || 0;
+  return `⚠️ *AVISO DE COBRANÇA*\n\nOlá, ${c.nome}!\n\nConsta em nosso sistema um débito em aberto no valor de *${Utils.formatCurrency(saldo)}*, referente a compras fiado na ${nomeLoja}.\n\nSolicitamos a regularização o quanto antes.\n\nNós da ${nomeLoja} agradecemos a compreensão. Volte sempre e pague logo! 😉`;
+}
+
+// Envia mensagem de cobrança via WhatsApp para o número cadastrado do
+// cliente, com o valor do débito devido atualizado na hora (c.saldo).
+function cobrarCliente() {
+  const c = Store.getFiado().find(x=>x.id===_clienteAtualId);
+  if (!c) return;
+  if (!c.telefone) { UIService.showToast('Cliente sem telefone cadastrado','Cadastre em Config','warning'); return; }
+  const saldo = c.saldo||0;
+  if (saldo <= 0) { UIService.showToast('Cliente sem débito pendente','','success'); return; }
+  Utils.openWhatsApp(c.telefone, _montarMsgCobranca(c));
+}
+
+/* ══ COBRANÇA EM LOTE ══ */
+let _cobrancaEnviados = new Set();
+
+function abrirCobrancaLote() {
+  _cobrancaEnviados = new Set();
+  renderListaCobranca();
+  UIService.openModal('modalCobranca');
+}
+
+function renderListaCobranca() {
+  const devedores = [...Store.getFiado()].filter(c => (c.saldo||0) > 0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
+  const total = devedores.reduce((s,c)=>s+(c.saldo||0),0);
+  _set('cobTotalTxt', `${devedores.length} cliente${devedores.length!==1?'s':''} devendo · Total ${Utils.formatCurrency(total)}`);
+  const el = document.getElementById('cobLista');
+  if (!el) return;
+  if (devedores.length === 0) {
+    el.innerHTML = '<p class="text-[9px] text-slate-600 text-center py-6 font-bold">Nenhum cliente devendo no momento</p>';
+    return;
+  }
+  el.innerHTML = devedores.map(c => {
+    const enviado = _cobrancaEnviados.has(c.id);
+    const semTel  = !c.telefone;
+    return `
+    <div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2.5 gap-2">
+      <div class="min-w-0">
+        <p class="text-[10px] font-black text-white truncate">${c.nome}</p>
+        <p class="text-[8px] text-slate-500 font-bold">${c.telefone || 'Sem telefone cadastrado'} · <span class="text-red-400">${Utils.formatCurrency(c.saldo||0)}</span></p>
+      </div>
+      <button onclick="_enviarCobrancaLote('${c.id}')" ${semTel?'disabled':''}
+        class="flex-shrink-0 px-3 py-2 rounded-lg font-black text-[9px] uppercase flex items-center gap-1.5 transition-all active:scale-95 ${enviado ? 'bg-emerald-600/20 text-emerald-400' : semTel ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600/20 text-blue-300 hover:bg-blue-600/35'}">
+        <i class="fas ${enviado?'fa-check':'fa-paper-plane'} text-[9px]"></i>${enviado?'Enviado':'Enviar'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function _enviarCobrancaLote(clienteId) {
+  const c = Store.getFiado().find(x=>x.id===clienteId);
+  if (!c || !c.telefone) return;
+  Utils.openWhatsApp(c.telefone, _montarMsgCobranca(c));
+  _cobrancaEnviados.add(clienteId);
+  renderListaCobranca();
+}
+
+// Abre todas as conversas pendentes de uma vez. Como é um loop síncrono
+// dentro do próprio clique, a maioria dos navegadores libera os pop-ups —
+// mas alguns (principalmente Safari/iOS) podem bloquear a partir do 2º.
+// Se bloquear, o próprio navegador mostra o aviso de pop-up bloqueado.
+function enviarTodosCobranca() {
+  const pendentes = [...Store.getFiado()].filter(c => (c.saldo||0) > 0 && c.telefone && !_cobrancaEnviados.has(c.id));
+  if (pendentes.length === 0) { UIService.showToast('Nada pendente para enviar','','success'); return; }
+  if (!confirm(`Abrir ${pendentes.length} conversa(s) do WhatsApp agora?\n\nSe o navegador bloquear os pop-ups, envie um por um pela lista abaixo.`)) return;
+  pendentes.forEach(c => {
+    Utils.openWhatsApp(c.telefone, _montarMsgCobranca(c));
+    _cobrancaEnviados.add(c.id);
+  });
+  renderListaCobranca();
+}
 
 function salvarCliente() {
   const nome   = (document.getElementById('fCliNome')?.value||'').trim();
