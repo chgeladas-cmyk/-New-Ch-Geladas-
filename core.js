@@ -62,16 +62,23 @@ const CONSTANTS = Object.freeze({
 
   PERMISSOES: Object.freeze({
   pdv: Object.freeze({
-    ler:      ['estoque', 'config', 'perfis'],
+    // FIX (jul/2026): 'validade' adicionado — sem isto a leitura de lotes
+    // cadastrados em outro aparelho nunca chegava neste papel.
+    ler:      ['estoque', 'validade', 'config', 'perfis'],
     escrever: ['vendas'],
   }),
   admin: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    // FIX (jul/2026): 'validade' não existia em NENHUM papel — SyncQueue
+    // descartava toda escrita de lote (_podeEscrever retornava falso) e
+    // nenhum outro aparelho puxava os dados (hydrateAsync/pull usam esta
+    // lista). Resultado: validade.html ficava preso ao localStorage do
+    // aparelho onde o lote foi cadastrado.
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   adm: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
   }),
   colaborador: Object.freeze({
     ler:      ['vendas', 'comandas', 'fiado', 'ponto', 'perfis'],
@@ -85,19 +92,20 @@ const CONSTANTS = Object.freeze({
     escrever: ['aprovacao', 'ponto'],
   }),
   validador: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
-    escrever: ['aprovacao', 'estoque', 'ponto'],
+    // FIX (jul/2026): 'validade' adicionado (mesmo nível de acesso que 'estoque')
+    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis'],
+    escrever: ['aprovacao', 'estoque', 'validade', 'ponto'],
   }),
   analista: Object.freeze({
-    ler:      ['vendas','estoque','financeiro','aprovacao', 'ponto', 'perfis'],
+    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis'],
     escrever: ['aprovacao', 'ponto'],
   }),
   gerente: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
-    escrever: ['estoque','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','vendas','comandas','fiado','ponto','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','perfis'],
     // FIX: 'ponto' adicionado — operador também bate ponto
     escrever: ['vendas','comandas','ponto'],
   }),
@@ -789,9 +797,13 @@ const FirebaseService = (() => {
   const role = AuthService.getRole();
   if (!role || !_db || !_fb) return;
 
+  // FIX (jul/2026): 'validade' adicionado — coleção nunca tinha listener
+  // em tempo real, então nenhum aparelho recebia os lotes cadastrados em
+  // outros aparelhos sem um reload manual (e mesmo assim dependia do
+  // hydrateAsync/pull, que também não incluíam 'validade' antes desta correção).
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
-    : ['estoque', 'config', 'usuarios', 'sistemaUpdate'];
+    ? ['estoque', 'validade', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
+    : ['estoque', 'validade', 'config', 'usuarios', 'sistemaUpdate'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
