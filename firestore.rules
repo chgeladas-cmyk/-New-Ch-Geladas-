@@ -47,6 +47,12 @@ service cloud.firestore {
           && data.itens is list;
     }
 
+    function fiadoValido(data) {
+      return data.keys().hasAll(['id'])
+          && data.id is string
+          && data.id.size() > 0;
+    }
+
     function movimentacaoValida(data) {
       return data.keys().hasAll(['produtoId', 'tipo', 'quantidade', 'timestamp'])
           && data.quantidade is number;
@@ -113,6 +119,33 @@ service cloud.firestore {
       allow read:   if autenticado();
       allow update: if autenticado();
       allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /fiado/{clienteId} ────────────────────────────────────────────
+    // FIX (jul/2026): regra que faltava desde a migração de ch_dados/fiado
+    // (doc único) para este modelo por-cliente. Sem esta regra, toda
+    // escrita em 'fiado' caía no bloqueio geral do fim do arquivo
+    // (match /{document=**} { allow read, write: if false; }) e nunca
+    // chegava no Firestore — risco real de perda de dados de fiado.
+    // create/update: qualquer autenticado (saldo muda a cada venda/pagamento,
+    // registrado por pdv/validador/gerente/admin, sem adminToken — mesmo
+    // comportamento que o antigo /ch_dados/fiado).
+    // delete: apenas admin.
+    match /fiado/{clienteId} {
+      allow create, update: if autenticado() && fiadoValido(request.resource.data);
+      allow read:   if autenticado();
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /fiado_backups/{snapshotId} ───────────────────────────────────
+    // Snapshot incremental do fiado a cada alteração (proteção extra além
+    // do backup diário em /backups). Mesmo nível de acesso que /fiado —
+    // qualquer autenticado grava, ninguém edita/apaga pelo app (só leitura
+    // pra restauração manual, feita como admin).
+    match /fiado_backups/{snapshotId} {
+      allow create: if autenticado();
+      allow read:   if autenticado();
+      allow update, delete: if autenticado() && temAdminToken(request.resource.data);
     }
 
     // ─── /movimentacoes/{movId} ──────────────────────────────────────
