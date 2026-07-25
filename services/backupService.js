@@ -216,6 +216,55 @@
     await fazerBackup(false); // sem download automático
   }
 
+  // ── Backup incremental do fiado (a cada alteração) ─────────────────
+  // FIX (jul/2026): além do backup diário (admin-only, 1x/dia), fiado é
+  // dado financeiro sensível (dívida de cliente) — agora gera um snapshot
+  // completo da coleção 'fiado' toda vez que ela muda, não só quando o
+  // admin loga. Não exige adminToken (mesma regra de escrita de /fiado),
+  // então funciona mesmo disparado por pdv/validador/gerente.
+  let _fiadoDebounceTimer = null;
+
+  async function _backupFiadoIncremental() {
+    try {
+      if (!FirebaseService.isReady()) return; // sem rede, ok — próxima mudança tenta de novo
+      const dados = Store.getFiado();
+      if (!Array.isArray(dados) || !dados.length) return;
+
+      const ref = FirebaseService.newDocRef('fiado_backups');
+      const snap = {
+        fiado:       dados,
+        qtdClientes: dados.length,
+        geradoEm:    Utils.nowISO(),
+        geradoPor:   AuthService.getNome(),
+      };
+      const _tok = FirebaseService.getAdminToken();
+      if (_tok) snap.adminToken = _tok;
+
+      await _setDocDireto(ref, snap);
+
+      console.info('[Backup] ✓ Snapshot incremental de fiado salvo:', snap.qtdClientes, 'cliente(s)');
+    } catch (e) {
+      console.warn('[Backup] Snapshot incremental de fiado falhou:', e.message);
+    }
+  }
+
+  // Helper: grava direto no ref sem passar pelo _fb interno do FirebaseService
+  // (fiado_backups não precisa do batch/merge usado em outras coleções)
+  async function _setDocDireto(ref, data) {
+    const batch = FirebaseService.getBatch();
+    batch.set(ref, data);
+    await batch.commit();
+  }
+
+  function _agendarBackupFiado() {
+    EventBus.on('store:fiado', () => {
+      clearTimeout(_fiadoDebounceTimer);
+      // espera 4s de silêncio antes de gravar — evita gravar um snapshot
+      // por campo alterado numa mesma edição/lote
+      _fiadoDebounceTimer = setTimeout(_backupFiadoIncremental, 4000);
+    });
+  }
+
   // ── Agendar verificação ───────────────────────────────────────────
   function _agendar() {
     // Verifica imediatamente ao logar
@@ -241,6 +290,7 @@
   }
 
   _agendar();
+  _agendarBackupFiado();
 
   // ── Status ────────────────────────────────────────────────────────
   function getStatus() {
