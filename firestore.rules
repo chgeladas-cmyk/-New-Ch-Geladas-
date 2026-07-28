@@ -90,6 +90,36 @@ service cloud.firestore {
       allow write: if autenticado() && docValido(request.resource.data);
     }
 
+    // ─── /ch_dados/pedidos — qualquer autenticado pode escrever ─────
+    // FIX (jul/2026): pedidos (delivery) caía no bloqueio geral de
+    // temAdminToken() no match genérico /ch_dados/{colecao} abaixo.
+    // Aparelhos logados como 'entregador' nunca geram adminToken (só
+    // é gerado no login admin via PIN), então toda escrita de delivery
+    // feita por um entregador era rejeitada pelo Firestore — cada
+    // aparelho ficava só com os pedidos criados nele mesmo.
+    match /ch_dados/pedidos {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /pedidos_localizacao/{pedidoId} ─────────────────────────────
+    // Localização compartilhada pelo cliente via link enviado no
+    // delivery.html (delivery-cliente.html). O cliente nunca faz login
+    // no sistema — usa apenas auth anônima do Firebase (mesma que
+    // qualquer aparelho do sistema já usa), então basta estar
+    // autenticado. Documento pequeno e isolado por pedido, sem exigir
+    // adminToken.
+    function localizacaoValida(data) {
+      return data.keys().hasAll(['lat', 'lng', 'ts'])
+          && data.lat is number && data.lng is number
+          && data.ts is string;
+    }
+    match /pedidos_localizacao/{pedidoId} {
+      allow create, update: if autenticado() && localizacaoValida(request.resource.data);
+      allow read:   if autenticado();
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
     // ─── /ch_dados/perfis — qualquer autenticado pode ler, admin escreve ──
     match /ch_dados/perfis {
       allow read:  if autenticado();

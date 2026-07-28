@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Compartilhar localização — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;color:#f1f5f9;min-height:100vh;background-image:radial-gradient(ellipse at 70% 30%,rgba(249,115,22,.06) 0%,transparent 50%);}
+.btn{transition:all .15s;}
+.btn:active{transform:scale(.97);}
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+<div class="w-full max-w-sm bg-[rgba(13,17,23,.95)] border border-white/8 rounded-[2rem] p-7 text-center shadow-2xl">
+  <div class="text-5xl mb-3">🛵</div>
+  <h1 class="text-lg font-black uppercase tracking-tight mb-1">CH <span class="text-orange-400">GELADAS</span></h1>
+  <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Localização da entrega</p>
+
+  <div id="estadoInicial">
+    <p class="text-[12px] text-slate-300 mb-6 leading-relaxed">
+      Pra agilizar sua entrega, toque no botão abaixo e permita o acesso à localização do seu celular.
+    </p>
+    <button id="btnCompartilhar" onclick="compartilharLocalizacao()" class="btn w-full bg-orange-700 hover:bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest">
+      <i class="fas fa-location-crosshairs mr-2"></i>Compartilhar minha localização
+    </button>
+  </div>
+
+  <div id="estadoCarregando" class="hidden py-6">
+    <i class="fas fa-circle-notch fa-spin text-3xl text-orange-400 mb-3"></i>
+    <p class="text-[11px] text-slate-400 font-bold">Obtendo sua localização...</p>
+  </div>
+
+  <div id="estadoSucesso" class="hidden py-4">
+    <div class="text-5xl mb-3">✅</div>
+    <p class="text-[13px] font-black text-emerald-400 mb-1">Localização enviada!</p>
+    <p class="text-[11px] text-slate-400 font-bold">Obrigado — seu pedido vai chegar mais rápido.</p>
+  </div>
+
+  <div id="estadoErro" class="hidden py-4">
+    <div class="text-5xl mb-3">⚠️</div>
+    <p id="msgErro" class="text-[12px] font-bold text-red-400 mb-4 leading-relaxed">Não foi possível obter sua localização.</p>
+    <button onclick="compartilharLocalizacao()" class="btn w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-2xl font-black uppercase text-xs tracking-widest">
+      Tentar novamente
+    </button>
+  </div>
+
+  <p class="text-[8px] text-slate-700 font-bold uppercase tracking-widest mt-6">CH Geladas · Delivery</p>
+</div>
+
+<script type="module">
+const CONFIG = {
+  apiKey: 'AIzaSyDdFvTRQQmomMiLD0byrBwGZnitSC0zwus',
+  authDomain: 'new-ch-geladas.firebaseapp.com',
+  projectId: 'new-ch-geladas',
+  storageBucket: 'new-ch-geladas.firebasestorage.app',
+  messagingSenderId: '898297448757',
+  appId: '1:898297448757:web:d59cb5336d61d19ad9a47c',
+  measurementId: 'G-QYJRW9YEPW',
+};
+
+const params   = new URLSearchParams(location.search);
+const pedidoId = params.get('id');
+
+function _show(id) {
+  ['estadoInicial','estadoCarregando','estadoSucesso','estadoErro'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+window.compartilharLocalizacao = async function() {
+  if (!pedidoId) {
+    document.getElementById('msgErro').textContent = 'Link inválido — peça um novo link pra CH Geladas.';
+    _show('estadoErro');
+    return;
+  }
+  if (!navigator.geolocation) {
+    document.getElementById('msgErro').textContent = 'Seu navegador não suporta compartilhamento de localização.';
+    _show('estadoErro');
+    return;
+  }
+
+  _show('estadoCarregando');
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+        const { getFirestore, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const { getAuth, signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+
+        const app  = getApps().length ? getApp() : initializeApp(CONFIG);
+        const db   = getFirestore(app);
+        const auth = getAuth(app);
+        if (!auth.currentUser) await signInAnonymously(auth);
+
+        await setDoc(doc(db, 'pedidos_localizacao', pedidoId), {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          precisao: pos.coords.accuracy || null,
+          ts: new Date().toISOString(),
+        });
+
+        _show('estadoSucesso');
+      } catch (e) {
+        console.warn('Falha ao enviar localização:', e);
+        document.getElementById('msgErro').textContent = 'Não conseguimos enviar sua localização. Tente novamente.';
+        _show('estadoErro');
+      }
+    },
+    (err) => {
+      const msgs = {
+        1: 'Permissão de localização negada. Ative nas configurações do navegador e tente de novo.',
+        2: 'Não conseguimos determinar sua localização agora.',
+        3: 'Tempo esgotado ao tentar obter sua localização.',
+      };
+      document.getElementById('msgErro').textContent = msgs[err.code] || 'Erro ao obter localização.';
+      _show('estadoErro');
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+};
+</script>
+</body>
+</html>

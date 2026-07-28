@@ -801,9 +801,13 @@ const FirebaseService = (() => {
   // em tempo real, então nenhum aparelho recebia os lotes cadastrados em
   // outros aparelhos sem um reload manual (e mesmo assim dependia do
   // hydrateAsync/pull, que também não incluíam 'validade' antes desta correção).
+  // FIX (jul/2026): 'pedidos' adicionado à lista de papéis não-admin —
+  // aparelhos logados como 'entregador' (ou qualquer papel sem
+  // admin/adm) nunca recebiam tempo real da coleção de delivery, então
+  // cada aparelho só via os pedidos criados nele mesmo até um reload.
   const colsRT = (role === 'admin' || role === 'adm')
     ? ['estoque', 'validade', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
-    : ['estoque', 'validade', 'config', 'usuarios', 'sistemaUpdate'];
+    : ['estoque', 'validade', 'config', 'pedidos', 'usuarios', 'sistemaUpdate'];
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
@@ -1067,7 +1071,12 @@ const FirebaseService = (() => {
    console.info(`[Firebase] ✓ ${clientes.length} cliente(s) fiado sincronizados.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
-      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
+      // FIX (jul/2026): 'pedidos' adicionado — aparelhos logados como
+      // 'entregador' nunca tem adminToken (só é gerado no login admin),
+      // então toda escrita de delivery feita por um entregador caía no
+      // bloqueio de temAdminToken() do firestore.rules e nunca chegava
+      // ao Firestore, mesmo enfileirada com sucesso no SyncQueue local.
+      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto', 'pedidos']);
       const docData = { dados, ts: Utils.nowISO() };
       if (_adminToken && !_semAdminToken.has(colName)) docData.adminToken = _adminToken;
       await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);

@@ -165,6 +165,17 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <div class="col-span-2">
           <label class="label">Endereço</label>
           <input type="text" id="fEndereco" class="inp" placeholder="Rua, número, bairro...">
+          <input type="hidden" id="fLat">
+          <input type="hidden" id="fLng">
+          <div class="flex gap-2 mt-2">
+            <button type="button" onclick="capturarLocalizacaoForm()" class="flex-1 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/25 text-blue-300 rounded-xl font-black text-[9px] uppercase tracking-wide py-2 transition-all">
+              <i class="fas fa-location-crosshairs mr-1"></i>Capturar minha localização
+            </button>
+            <button type="button" onclick="enviarLinkLocalizacaoForm()" class="flex-1 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/25 text-emerald-300 rounded-xl font-black text-[9px] uppercase tracking-wide py-2 transition-all">
+              <i class="fab fa-whatsapp mr-1"></i>Pedir ao cliente
+            </button>
+          </div>
+          <p id="fLocStatus" class="text-[8px] text-slate-500 font-bold mt-1"></p>
         </div>
         <div>
           <label class="label">Telefone</label>
@@ -344,12 +355,54 @@ let _itensPedidoForm = []; // [{prodId, nome, preco, qtd}]
 // init() pode ser chamado múltiplas vezes (DOMContentLoaded + pós-login)
 // sem acumular listeners duplicados
 let _storeListenerOk = false;
+let _locListenerOk = false;
+const _FB_CONFIG_CLIENTE = {
+  apiKey: 'AIzaSyDdFvTRQQmomMiLD0byrBwGZnitSC0zwus',
+  authDomain: 'new-ch-geladas.firebaseapp.com',
+  projectId: 'new-ch-geladas',
+  storageBucket: 'new-ch-geladas.firebasestorage.app',
+  messagingSenderId: '898297448757',
+  appId: '1:898297448757:web:d59cb5336d61d19ad9a47c',
+  measurementId: 'G-QYJRW9YEPW',
+};
+async function _ouvirLocalizacoesCliente() {
+  if (_locListenerOk) return;
+  _locListenerOk = true;
+  try {
+    const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const app = getApps().length ? getApp() : initializeApp(_FB_CONFIG_CLIENTE);
+    const db  = fs.getFirestore(app);
+    fs.onSnapshot(fs.collection(db, 'pedidos_localizacao'), snap => {
+      snap.docChanges().forEach(ch => {
+        if (ch.type === 'removed') return;
+        const data = ch.doc.data();
+        const pedidoId = ch.doc.id;
+        const lat = data.lat, lng = data.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        const atual = Store.getPedidos().find(p => p.id === pedidoId);
+        if (!atual || (atual.lat === lat && atual.lng === lng)) return;
+        Store.mutatePedidos(pedidos => {
+          const p = pedidos.find(x => x.id === pedidoId);
+          if (p) { p.lat = lat; p.lng = lng; p.locOrigem = 'cliente'; p.atualizadoEm = new Date().toISOString(); }
+        });
+        if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('salvar', 'pedidos', Store.getPedidos());
+        UIService.showToast('📍 Cliente compartilhou localização', atual.cliente||'', 'success');
+      });
+    });
+  } catch (e) {
+    _locListenerOk = false;
+    console.warn('[Delivery] Falha ao ouvir localizações do cliente:', e.message);
+  }
+}
+
 function init() {
   UIService.startClock('clock');
   popularSelectProdutos();
   preencherEntregadores();
   atualizarKpis();
   renderPedidos();
+  _ouvirLocalizacoesCliente();
   if (!_storeListenerOk) {
     _storeListenerOk = true;
     EventBus.on('store:updated', () => { atualizarKpis(); renderPedidos(); popularSelectProdutos(); preencherEntregadores(); });
@@ -425,7 +478,7 @@ function renderPedidos() {
             <p class="text-[13px] font-black text-white">${p.cliente}</p>
             <span class="badge ${STATUS_BADGE[p.status]||'b-slate'}">${p.status}</span>
           </div>
-          <p class="text-[9px] text-slate-500 font-bold truncate">${p.endereco||'—'}</p>
+          <p class="text-[9px] text-slate-500 font-bold truncate">${p.endereco||'—'}${p.lat&&p.lng?` · <span class="text-blue-400 cursor-pointer" onclick="abrirNoMapa(${p.lat},${p.lng})"><i class="fas fa-map-marker-alt"></i> ver no mapa</span>`:''}</p>
           <p class="text-[8px] text-slate-600 font-bold truncate mt-0.5">${itensStr||'—'}</p>
         </div>
         <div class="text-right flex-shrink-0 ml-3">
@@ -455,9 +508,10 @@ function abrirFormNovo() {
   _itensPedidoForm = [];
   document.getElementById('fPedidoId').value = '';
   document.getElementById('formTitulo').innerHTML = '<i class="fas fa-plus-circle"></i> Novo Pedido';
-  ['fCliente','fEndereco','fTelefone','fEntregador','fObs'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  ['fCliente','fEndereco','fTelefone','fEntregador','fObs','fLat','fLng'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
   document.getElementById('fTaxa').value = '0';
   document.getElementById('fFormaPgto').value = 'Dinheiro';
+  _set('fLocStatus', '');
   renderItensPedidoForm();
   UIService.openModal('modalNovoPedido');
   setTimeout(() => document.getElementById('fCliente')?.focus(), 200);
@@ -476,6 +530,9 @@ function editarPedido(id) {
   document.getElementById('fObs').value          = p.obs||'';
   document.getElementById('fTaxa').value         = p.taxa||0;
   document.getElementById('fFormaPgto').value    = p.formaPgto||'Dinheiro';
+  document.getElementById('fLat').value          = p.lat||'';
+  document.getElementById('fLng').value          = p.lng||'';
+  _set('fLocStatus', (p.lat && p.lng) ? `📍 Localização salva (${p.locOrigem==='cliente'?'enviada pelo cliente':'capturada aqui'})` : '');
   renderItensPedidoForm();
   UIService.openModal('modalNovoPedido');
 }
@@ -525,6 +582,43 @@ function calcTotalPedido() {
   _set('totalPedidoForm', Utils.formatCurrency(sub+taxa));
 }
 
+/* ═══════════ GEOLOCALIZAÇÃO ═══════════ */
+function capturarLocalizacaoForm() {
+  if (!navigator.geolocation) { UIService.showToast('Geolocalização indisponível neste aparelho','','error'); return; }
+  _set('fLocStatus', '📡 Obtendo localização...');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('fLat').value = pos.coords.latitude;
+      document.getElementById('fLng').value = pos.coords.longitude;
+      window._locOrigemForm = 'entregador';
+      _set('fLocStatus', '📍 Localização capturada (deste aparelho)');
+      UIService.showToast('Localização capturada','','success');
+    },
+    err => {
+      _set('fLocStatus', '');
+      const msgs = { 1:'Permissão de localização negada', 2:'Localização indisponível', 3:'Tempo esgotado ao obter localização' };
+      UIService.showToast(msgs[err.code]||'Erro ao obter localização','','error');
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+function enviarLinkLocalizacaoForm() {
+  const id       = document.getElementById('fPedidoId').value || Utils.generateId();
+  const cliente  = (document.getElementById('fCliente')?.value||'').trim();
+  const telefone = (document.getElementById('fTelefone')?.value||'').trim();
+  if (!document.getElementById('fPedidoId').value) document.getElementById('fPedidoId').value = id;
+  if (!telefone) { UIService.showToast('Informe o telefone do cliente','','error'); return; }
+  const link = new URL(`delivery-cliente.html?id=${id}`, location.href).href;
+  const msg  = `Olá${cliente?', '+cliente:''}! Aqui é da CH Geladas 🛵\nPra agilizar sua entrega, toque no link abaixo e compartilhe sua localização:\n${link}`;
+  Utils.openWhatsApp(telefone, msg);
+}
+
+function abrirNoMapa(lat, lng) {
+  window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+}
+
+/* ═══════════ PEDIDO ═══════════ */
 function salvarPedido() {
   const cliente = (document.getElementById('fCliente')?.value||'').trim();
   if (!cliente) { UIService.showToast('Nome do cliente obrigatório','','error'); return; }
@@ -544,6 +638,9 @@ function salvarPedido() {
     formaPgto:  document.getElementById('fFormaPgto')?.value||'Dinheiro',
     itens:      [..._itensPedidoForm],
     taxa, subtotal: sub, total: sub+taxa,
+    lat:        parseFloat(document.getElementById('fLat')?.value) || (_pedExistente?.lat ?? null),
+    lng:        parseFloat(document.getElementById('fLng')?.value) || (_pedExistente?.lng ?? null),
+    locOrigem:  document.getElementById('fLat')?.value ? (window._locOrigemForm || _pedExistente?.locOrigem || 'entregador') : (_pedExistente?.locOrigem ?? null),
     // Bug 3 fix: hora e origem preservados/definidos corretamente
     origem:     'DELIVERY',
     hora:       isEdicao ? (_pedExistente?.hora || Utils.nowTime()) : Utils.nowTime(),
