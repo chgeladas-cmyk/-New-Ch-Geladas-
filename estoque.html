@@ -203,10 +203,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
           <button onclick="ajusteDir(+1)" class="sk-btn sk-p w-10 h-10">+</button>
         </div>
         <label class="label !text-emerald-400">Entrada Rápida</label>
-        <div class="flex gap-2">
+        <div class="flex gap-2 mb-2">
           <input type="number" id="meEntrada" class="inp" placeholder="Qtd a adicionar" min="1">
+          <input type="number" id="meCustoEntrada" class="inp" placeholder="Custo R$/un desta compra" step="0.01">
           <button onclick="entradaRapida()" class="bg-emerald-600 hover:bg-emerald-500 px-4 rounded-xl font-black text-xs text-white flex-shrink-0 transition-all">+ADD</button>
         </div>
+        <p id="meCustoMedioPreview" class="text-[9px] text-slate-500 font-bold"></p>
       </div>
       <div id="motivoWrap" class="hidden bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
         <label class="label !text-amber-400"><i class="fas fa-exclamation-triangle mr-1"></i>Motivo do Ajuste *</label>
@@ -321,11 +323,11 @@ function salvarProduto(){const nome=document.getElementById('fNome').value.trim(
   });
   Store.mutateAuditoria(audit=>{audit.unshift({prodNome:nome,antes:eid?'?':0,depois:q,delta:q,motivo:eid?'Edição':'Cadastro inicial',criadoEm:new Date().toISOString(),data:Utils.today()});});UIService.showToast(eid?'Atualizado!':'Cadastrado!',nome,'success');resetForm();switchTab('lista');}
 
-function abrirEdicao(id){const p=Store.getEstoque().find(x=>x.id===id);if(!p)return;_packsEdit=[...(p.packs||[])];_qtdOrig=p.qtdUn||0;document.getElementById('meId').value=p.id;document.getElementById('meNome').value=p.nome;document.getElementById('meCusto').value=p.custoUn||0;document.getElementById('mePreco').value=p.precoUn||0;document.getElementById('meQtd').value=p.qtdUn||0;document.getElementById('meCat').value=p.categoria||'';document.getElementById('meMotivo').value='';document.getElementById('motivoWrap').classList.add('hidden');document.getElementById('meEntrada').value='';renderPacksEdit();UIService.openModal('modalEditar');}
+function abrirEdicao(id){const p=Store.getEstoque().find(x=>x.id===id);if(!p)return;_packsEdit=[...(p.packs||[])];_qtdOrig=p.qtdUn||0;document.getElementById('meId').value=p.id;document.getElementById('meNome').value=p.nome;document.getElementById('meCusto').value=p.custoUn||0;document.getElementById('mePreco').value=p.precoUn||0;document.getElementById('meQtd').value=p.qtdUn||0;document.getElementById('meCat').value=p.categoria||'';document.getElementById('meMotivo').value='';document.getElementById('motivoWrap').classList.add('hidden');document.getElementById('meEntrada').value='';document.getElementById('meCustoEntrada').value=p.custoUn||0;document.getElementById('meCustoMedioPreview').textContent='';renderPacksEdit();UIService.openModal('modalEditar');}
 
 function checkMotivoVis(){const q=parseInt(document.getElementById('meQtd').value)||0;document.getElementById('motivoWrap').classList.toggle('hidden',q===_qtdOrig);}
 function ajusteDir(d){const inp=document.getElementById('meQtd');inp.value=Math.max(0,(parseInt(inp.value)||0)+d);checkMotivoVis();}
-function entradaRapida(){const e=parseInt(document.getElementById('meEntrada')?.value)||0;if(e<=0){UIService.showToast('Informe a quantidade','','error');return;}document.getElementById('meQtd').value=_qtdOrig+e;document.getElementById('motivoWrap').classList.remove('hidden');document.getElementById('meMotivo').value='Entrada de stock — '+e+' un';document.getElementById('meEntrada').value='';}
+function entradaRapida(){const e=parseInt(document.getElementById('meEntrada')?.value)||0;if(e<=0){UIService.showToast('Informe a quantidade','','error');return;}const custoEntrada=parseFloat(document.getElementById('meCustoEntrada')?.value);if(isNaN(custoEntrada)||custoEntrada<0){UIService.showToast('Informe o custo de compra desta entrada','','error');document.getElementById('meCustoEntrada').focus();return;}const custoAtual=parseFloat(document.getElementById('meCusto').value)||0;const novaQtd=_qtdOrig+e;const custoMedio=_qtdOrig>0?(((_qtdOrig*custoAtual)+(e*custoEntrada))/novaQtd):custoEntrada;document.getElementById('meQtd').value=novaQtd;document.getElementById('meCusto').value=custoMedio.toFixed(2);document.getElementById('motivoWrap').classList.remove('hidden');document.getElementById('meMotivo').value='Entrada de stock — '+e+' un a R$'+custoEntrada.toFixed(2)+'/un';document.getElementById('meCustoMedioPreview').textContent='📊 Custo médio: '+_qtdOrig+' un × R$'+custoAtual.toFixed(2)+' + '+e+' un × R$'+custoEntrada.toFixed(2)+' = R$'+custoMedio.toFixed(2)+'/un';document.getElementById('meEntrada').value='';}
 function addPackModal(){const q=parseInt(document.getElementById('mePkQtd')?.value);const p=parseFloat(document.getElementById('mePkPreco')?.value);if(!q||q<2||!p){UIService.showToast('Preencha qtd e preço','','error');return;}_packsEdit.push({qtd:q,label:q+'x',preco:p});renderPacksEdit();document.getElementById('mePkQtd').value='';document.getElementById('mePkPreco').value='';}
 function renderPacksEdit(){const el=document.getElementById('mePkList');if(!el)return;el.innerHTML=_packsEdit.map((pk,i)=>`<div class="pack-row"><span class="flex-1 text-[10px] font-black text-amber-300">${pk.label}(${pk.qtd}un)—${Utils.formatCurrency(pk.preco)}</span><button onclick="_packsEdit.splice(${i},1);renderPacksEdit();" class="text-red-400 text-xs"><i class="fas fa-times"></i></button></div>`).join('');}
 
