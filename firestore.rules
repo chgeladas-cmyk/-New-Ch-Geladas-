@@ -53,6 +53,13 @@ service cloud.firestore {
           && data.id.size() > 0;
     }
 
+    function financeiroValido(data) {
+      return data.keys().hasAll(['id', 'tipo', 'valor'])
+          && data.id is string
+          && data.id.size() > 0
+          && data.valor is number;
+    }
+
     function movimentacaoValida(data) {
       return data.keys().hasAll(['produtoId', 'tipo', 'quantidade', 'timestamp'])
           && data.quantidade is number;
@@ -134,6 +141,27 @@ service cloud.firestore {
     match /fiado/{clienteId} {
       allow create, update: if autenticado() && fiadoValido(request.resource.data);
       allow read:   if autenticado();
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /financeiro/{lancId} ────────────────────────────────────────
+    // FIX (jul/30 2026): regra que faltava desde a migração de
+    // ch_dados/financeiro (doc único) para este modelo por-lançamento
+    // (core.js grava direto em financeiro/{lanc.id}). Sem esta regra,
+    // toda escrita em 'financeiro' caía no bloqueio geral do fim do
+    // arquivo (match /{document=**} { allow read, write: if false; }) e
+    // era recusada com permission-denied — mesmo bug já corrigido antes
+    // para 'fiado'.
+    // create: qualquer autenticado (lançamento é gerado por venda/estorno/
+    // despesa em vários pontos do app, sem exigir adminToken).
+    // update: mantido restrito a admin — 'financeiro' é log append-only,
+    // igual 'vendas' e 'movimentacoes'; a única escrita esperada pós-criação
+    // é a própria migração (que roda como admin) ou correções manuais.
+    // delete: apenas admin.
+    match /financeiro/{lancId} {
+      allow create: if autenticado() && financeiroValido(request.resource.data);
+      allow read:   if autenticado();
+      allow update: if autenticado() && temAdminToken(request.resource.data);
       allow delete: if autenticado() && temAdminToken(request.resource.data);
     }
 
