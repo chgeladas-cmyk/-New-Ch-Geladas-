@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Documentos • CH Geladas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#6b7280;--line:#e5e7eb;--primary:#2563eb;--success:#059669;--warn:#d97706;--danger:#dc2626}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}.wrap{max-width:1200px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.brand h1{margin:0;font-size:24px;font-weight:900}.brand p{margin:5px 0 0;color:var(--muted);font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}.btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}.tabs{display:flex;gap:8px;margin-bottom:16px;overflow:auto}.tab{white-space:nowrap;border:0;background:#e9edf5;color:#4b5563;padding:11px 16px;border-radius:999px;font-weight:900;cursor:pointer}.tab.active{background:var(--text);color:#fff}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 4px 18px #1111}.card h2{font-size:16px;margin:0 0 14px}.fields{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.field label{display:block;font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;font:inherit}.field textarea{min-height:82px;resize:vertical}.full{grid-column:1/-1}.products{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:10px}.prod{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}.prod:last-child{border:0}.prod small{display:block;color:var(--muted);margin-top:3px}.qty{width:72px!important;text-align:center}.total{display:flex;justify-content:space-between;align-items:end;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}.total strong{font-size:24px}.hint{color:var(--muted);font-size:12px;line-height:1.5}.hidden{display:none!important}.list{display:grid;gap:8px}.doc{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;gap:12px;align-items:center}.doc b{font-size:13px}.doc small{color:var(--muted)}.empty{padding:28px;text-align:center;color:var(--muted)}.preview{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;min-height:260px;padding:22px}.preview h3{margin:0 0 5px}.preview table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}.preview th,.preview td{text-align:left;padding:7px;border-bottom:1px solid #e5e7eb}.preview .right{text-align:right}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:10px;font-weight:900}.encarte{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.enc-card{border:2px solid #111;border-radius:12px;padding:16px;text-align:center}.enc-card .price{font-size:27px;font-weight:900;margin-top:10px}.enc-card .name{font-weight:900}.enc-card small{color:var(--muted)}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.encarte{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}}@media print{body{background:#fff}.no-print{display:none!important}.wrap{max-width:none;padding:0}.card{box-shadow:none;border:0}.print-area{display:block!important}.preview{border:0}.encarte{grid-template-columns:repeat(3,1fr)} }
+</style></head>
+<body>
+<div class="wrap">
+  <header class="top no-print"><div class="brand"><h1>Documentos comerciais</h1><p>Encarte • Orçamento • Recibo — módulo isolado do CH Geladas</p></div><div class="actions"><button class="btn" onclick="location.href='index.html'">← Voltar ao sistema</button><button class="btn" onclick="documentosService.print()">Imprimir</button></div></header>
+  <nav class="tabs no-print"><button class="tab active" data-tab="encarte">Encarte</button><button class="tab" data-tab="orcamento">Orçamento</button><button class="tab" data-tab="recibo">Recibo</button><button class="tab" data-tab="historico">Histórico</button></nav>
+
+  <section id="tab-encarte" class="tabpane">
+    <div class="grid">
+      <div class="card no-print"><h2>Montar encarte</h2><div class="fields">
+        <div class="field"><label>Título</label><input id="encTitulo" value="OFERTAS CH GELADAS"></div>
+        <div class="field"><label>Validade</label><input id="encValidade" type="date"></div>
+        <div class="field full"><label>Mensagem</label><input id="encMensagem" value="Preços especiais por tempo limitado!"></div>
+      </div><h2 style="margin-top:18px">Produtos</h2><div id="encProdutos" class="products"></div><div class="actions" style="margin-top:12px"><button class="btn primary" onclick="documentosService.gerarEncarte()">Gerar encarte</button></div></div>
+      <div class="card"><div id="encPreview" class="preview"><div class="empty">Selecione os produtos e clique em “Gerar encarte”.</div></div></div>
+    </div>
+  </section>
+
+  <section id="tab-orcamento" class="tabpane hidden">
+    <div class="grid">
+      <div class="card no-print"><h2>Novo orçamento</h2><div class="fields">
+        <div class="field"><label>Cliente</label><input id="orcCliente" placeholder="Nome do cliente"></div>
+        <div class="field"><label>Validade</label><input id="orcValidade" type="date"></div>
+        <div class="field full"><label>Observações / condições</label><textarea id="orcObs" placeholder="Prazo, entrega, condições de pagamento..."></textarea></div>
+      </div><h2 style="margin-top:18px">Itens</h2><div id="orcProdutos" class="products"></div><div class="fields" style="margin-top:12px"><div class="field"><label>Desconto (R$)</label><input id="orcDesconto" type="number" min="0" step="0.01" value="0" oninput="documentosService.calcOrc()"></div></div><div class="total"><span>Total</span><strong id="orcTotal">R$ 0,00</strong></div><div class="actions" style="margin-top:12px"><button class="btn primary" onclick="documentosService.salvarOrcamento()">Salvar e gerar</button></div></div>
+      <div class="card"><div id="orcPreview" class="preview"><div class="empty">O orçamento será exibido aqui.</div></div></div>
+    </div>
+  </section>
+
+  <section id="tab-recibo" class="tabpane hidden">
+    <div class="grid">
+      <div class="card no-print"><h2>Selecionar venda</h2><p class="hint">O recibo usa somente vendas já registradas. Não altera estoque, financeiro ou a venda original.</p><div id="vendasLista" class="list"></div></div>
+      <div class="card"><div id="recPreview" class="preview"><div class="empty">Escolha uma venda para visualizar o recibo.</div></div></div>
+    </div>
+  </section>
+
+  <section id="tab-historico" class="tabpane hidden"><div class="card"><h2>Documentos gerados</h2><div id="historico" class="list"></div></div></section>
+</div>
+<script src="core.js"></script>
+<script src="./services/storeService.js"></script>
+<script src="./services/documentosService.js"></script>
+</body></html>
