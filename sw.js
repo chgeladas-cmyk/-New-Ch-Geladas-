@@ -1,7 +1,7 @@
 // FIX [ALTO]: Service Worker restaurado com cache offline.
 // Estava desativado ("temporariamente para testes") — PWA sem cache = quebrado offline.
 
-const CACHE_NAME = 'ch-geladas-v43';
+const CACHE_NAME = 'ch-geladas-v44';
 
 const ASSETS_STATIC = [
   './',
