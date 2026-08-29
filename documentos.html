@@ -556,7 +556,7 @@ function _novoDocumento(tipo) {
     document.getElementById('recDesconto').value = '';
     document.getElementById('recFormaPgto').value = 'Dinheiro';
     document.getElementById('recObs').value = '';
-    renderRecibo();
+    _renderItensRecibo(); renderRecibo();
   } else if (tipo === 'orcamento') {
     _orcItens = []; _orcNumero = null;
     document.getElementById('orcCliente').value   = '';
@@ -564,14 +564,14 @@ function _novoDocumento(tipo) {
     document.getElementById('orcDesconto').value  = '';
     document.getElementById('orcValidadeDias').value = '7';
     document.getElementById('orcCondicoes').value = '';
-    renderOrcamento();
+    _renderItensOrcamento(); renderOrcamento();
   } else if (tipo === 'encarte') {
     _encItens = [];
     document.getElementById('encTitulo').value    = '';
     document.getElementById('encSubtitulo').value = '';
     document.getElementById('encRibbon').value    = 'OFERTA';
     document.getElementById('encRodape').value    = '';
-    renderEncarte();
+    _renderItensEncarte(); renderEncarte();
   }
   UIService.showToast('Pronto', 'Documento reiniciado', 'info');
 }
@@ -611,30 +611,36 @@ function _selecionarProduto(id, label, preco) {
   if (!p) return;
   const nomeItem = (label === 'UNID') ? p.nome : `${p.nome} (${label})`;
   const item = { id: Utils.generateId(), nome: nomeItem, qtd: 1, preco: Number(preco || 0), precoDe: 0, produtoId: p.id };
-  if (_buscaAlvo === 'recibo')    { _recItens.push(item); renderRecibo(); }
-  if (_buscaAlvo === 'orcamento') { _orcItens.push(item); renderOrcamento(); }
-  if (_buscaAlvo === 'encarte')   { _encItens.push(item); renderEncarte(); }
+  if (_buscaAlvo === 'recibo')    { _recItens.push(item); _renderItensRecibo();    renderRecibo(); }
+  if (_buscaAlvo === 'orcamento') { _orcItens.push(item); _renderItensOrcamento(); renderOrcamento(); }
+  if (_buscaAlvo === 'encarte')   { _encItens.push(item); _renderItensEncarte();   renderEncarte(); }
   UIService.closeModal('modalBuscaProduto');
 }
 function _addItemManual(alvo) {
   const item = { id: Utils.generateId(), nome: 'Item', qtd: 1, preco: 0, precoDe: 0, produtoId: null };
-  if (alvo === 'recibo')    { _recItens.push(item); renderRecibo(); }
-  if (alvo === 'orcamento') { _orcItens.push(item); renderOrcamento(); }
+  if (alvo === 'recibo')    { _recItens.push(item); _renderItensRecibo();    renderRecibo(); }
+  if (alvo === 'orcamento') { _orcItens.push(item); _renderItensOrcamento(); renderOrcamento(); }
 }
 function _removerItem(alvo, id) {
-  if (alvo === 'recibo')    { _recItens = _recItens.filter(i => i.id !== id); renderRecibo(); }
-  if (alvo === 'orcamento') { _orcItens = _orcItens.filter(i => i.id !== id); renderOrcamento(); }
-  if (alvo === 'encarte')   { _encItens = _encItens.filter(i => i.id !== id); renderEncarte(); }
+  if (alvo === 'recibo')    { _recItens = _recItens.filter(i => i.id !== id); _renderItensRecibo();    renderRecibo(); }
+  if (alvo === 'orcamento') { _orcItens = _orcItens.filter(i => i.id !== id); _renderItensOrcamento(); renderOrcamento(); }
+  if (alvo === 'encarte')   { _encItens = _encItens.filter(i => i.id !== id); _renderItensEncarte();   renderEncarte(); }
 }
 function _atualizarItem(alvo, id, campo, valor) {
   const arr = alvo === 'recibo' ? _recItens : (alvo === 'orcamento' ? _orcItens : _encItens);
   const it = arr.find(i => i.id === id);
   if (!it) return;
   it[campo] = (campo === 'qtd' || campo === 'preco' || campo === 'precoDe') ? Number(valor) || 0 : valor;
+  // Só atualiza a prévia (folha impressa) — NÃO reconstrói os inputs da lista,
+  // senão o campo perde o foco a cada tecla digitada.
   if (alvo === 'recibo') renderRecibo();
   if (alvo === 'orcamento') renderOrcamento();
   if (alvo === 'encarte') renderEncarte();
 }
+
+function _renderItensRecibo()    { _renderListaItens('recibo', 'recItensLista', _recItens); }
+function _renderItensOrcamento() { _renderListaItens('orcamento', 'orcItensLista', _orcItens); }
+function _renderItensEncarte()   { _renderListaItensEncarte(); }
 
 function _renderListaItens(alvo, containerId, itens) {
   const el = document.getElementById(containerId);
@@ -661,7 +667,6 @@ function _renderListaItensEncarte() {
 
 /* ══ RECIBO ══ */
 function renderRecibo() {
-  _renderListaItens('recibo', 'recItensLista', _recItens);
   const cliente  = document.getElementById('recCliente')?.value.trim();
   const desconto = Number(document.getElementById('recDesconto')?.value || 0);
   const forma    = document.getElementById('recFormaPgto')?.value || 'Dinheiro';
@@ -734,7 +739,6 @@ function enviarWhatsappRecibo() {
 
 /* ══ ORÇAMENTO ══ */
 function renderOrcamento() {
-  _renderListaItens('orcamento', 'orcItensLista', _orcItens);
   const cliente    = document.getElementById('orcCliente')?.value.trim();
   const telCliente = document.getElementById('orcTelefone')?.value.trim();
   const desconto   = Number(document.getElementById('orcDesconto')?.value || 0);
@@ -853,8 +857,6 @@ function _renderTemas() {
 function _setTema(id) { _encTema = id; _renderTemas(); renderEncarte(); }
 
 function renderEncarte() {
-  _renderListaItensEncarte();
-
   const titulo    = document.getElementById('encTitulo')?.value.trim() || 'PROMOÇÃO';
   const subtitulo = document.getElementById('encSubtitulo')?.value.trim() || '';
   const ribbon    = document.getElementById('encRibbon')?.value.trim();
@@ -919,9 +921,9 @@ async function compartilharEncarteWhatsapp() {
 function init() {
   UIService.startClock('clock');
   _renderTemas();
-  renderRecibo();
-  renderOrcamento();
-  renderEncarte();
+  _renderItensRecibo();    renderRecibo();
+  _renderItensOrcamento(); renderOrcamento();
+  _renderItensEncarte();   renderEncarte();
 }
 
 /* ══ LOGIN ══ */
