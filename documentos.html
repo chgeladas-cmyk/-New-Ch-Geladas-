@@ -58,10 +58,13 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
 .btn-ghost{background:rgba(255,255,255,.04);border:1.5px solid var(--border);color:#cbd5e1;}
 .btn-ghost:active{background:rgba(255,255,255,.08);}
 
-.prod-pick{max-height:260px;overflow-y:auto;}
-.prod-pick-item{display:flex;align-items:center;justify-content:between;gap:.5rem;padding:.6rem .7rem;border-radius:.85rem;background:rgba(255,255,255,.02);border:1px solid var(--border);margin-bottom:.4rem;cursor:pointer;transition:all .12s;}
-.prod-pick-item:active{background:rgba(56,189,248,.08);}
-.prod-pick-item.sel{border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.08);}
+.prod-pick{max-height:320px;overflow-y:auto;}
+.prod-pick-item2{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.85rem;padding:.6rem .7rem;margin-bottom:.5rem;}
+.btn-variante{font-size:.58rem;font-weight:800;padding:.4rem .6rem;border-radius:.6rem;display:inline-flex;align-items:center;gap:.35rem;white-space:nowrap;transition:all .12s;}
+.btn-un{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:#7dd3fc;}
+.btn-un:active{background:rgba(56,189,248,.24);}
+.btn-pk{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;}
+.btn-pk:active{background:rgba(245,158,11,.24);}
 
 /* ══ RECIBO — comprovante estilo térmico ══ */
 #folhaDoc{background:#fff;color:#111;border-radius:1rem;padding:1.1rem 1rem;font-family:'Courier New',monospace;width:100%;max-width:360px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.5);}
@@ -580,6 +583,7 @@ function abrirBuscaProduto(alvo) {
   _renderBuscaProduto();
   UIService.openModal('modalBuscaProduto');
 }
+function _esc(s) { return String(s ?? '').replace(/"/g,'&quot;'); }
 function _renderBuscaProduto() {
   const termo = (document.getElementById('buscaProdInput').value || '').toLowerCase();
   const prods = (window.CH?.EstoqueService?.getProdutos?.() || [])
@@ -588,18 +592,25 @@ function _renderBuscaProduto() {
   const lista = document.getElementById('buscaProdLista');
   if (!prods.length) { lista.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhum produto encontrado</p>`; return; }
   lista.innerHTML = prods.map(p => `
-    <div class="prod-pick-item" onclick="_selecionarProduto('${p.id}')">
-      <div style="flex:1;min-width:0;">
-        <p class="text-[11px] font-bold text-white truncate">${p.nome}</p>
-        <p class="text-[9px] text-slate-500">${Utils.formatCurrency(p.precoUn)} · estoque ${p.estoqueAtual ?? 0}</p>
+    <div class="prod-pick-item2">
+      <div class="flex items-center justify-between mb-1.5">
+        <p class="text-[11px] font-bold text-white truncate flex-1 mr-2">${p.nome}</p>
+        <span class="text-[9px] text-slate-500 font-bold flex-shrink-0">estoque ${p.estoqueAtual ?? 0}</span>
       </div>
-      <i class="fas fa-plus text-sky-400 text-xs"></i>
+      <div class="flex flex-wrap gap-1.5">
+        <button class="btn-variante btn-un" data-id="${p.id}" data-label="UNID" data-preco="${Number(p.precoUn||0)}"><i class="fas fa-cube"></i>Avulso · ${Utils.formatCurrency(p.precoUn)}</button>
+        ${(p.packs||[]).map(pk => `<button class="btn-variante btn-pk" data-id="${p.id}" data-label="${_esc(pk.label || pk.qtd+'x')}" data-preco="${Number(pk.preco||0)}"><i class="fas fa-boxes"></i>${_esc(pk.label || pk.qtd+'x')} · ${Utils.formatCurrency(pk.preco)}</button>`).join('')}
+      </div>
     </div>`).join('');
+  lista.querySelectorAll('.btn-variante').forEach(btn => {
+    btn.addEventListener('click', () => _selecionarProduto(btn.dataset.id, btn.dataset.label, Number(btn.dataset.preco)));
+  });
 }
-function _selecionarProduto(id) {
+function _selecionarProduto(id, label, preco) {
   const p = window.CH?.EstoqueService?.getProduto?.(id);
   if (!p) return;
-  const item = { id: Utils.generateId(), nome: p.nome, qtd: 1, preco: Number(p.precoUn || 0), precoDe: 0, produtoId: p.id };
+  const nomeItem = (label === 'UNID') ? p.nome : `${p.nome} (${label})`;
+  const item = { id: Utils.generateId(), nome: nomeItem, qtd: 1, preco: Number(preco || 0), precoDe: 0, produtoId: p.id };
   if (_buscaAlvo === 'recibo')    { _recItens.push(item); renderRecibo(); }
   if (_buscaAlvo === 'orcamento') { _orcItens.push(item); renderOrcamento(); }
   if (_buscaAlvo === 'encarte')   { _encItens.push(item); renderEncarte(); }
