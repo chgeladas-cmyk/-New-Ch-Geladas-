@@ -1,50 +1,972 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Documentos • CH Geladas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#04060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CH Geladas">
+<title>Documentos — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-:root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#6b7280;--line:#e5e7eb;--primary:#2563eb;--success:#059669;--warn:#d97706;--danger:#dc2626}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}.wrap{max-width:1200px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.brand h1{margin:0;font-size:24px;font-weight:900}.brand p{margin:5px 0 0;color:var(--muted);font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}.btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}.tabs{display:flex;gap:8px;margin-bottom:16px;overflow:auto}.tab{white-space:nowrap;border:0;background:#e9edf5;color:#4b5563;padding:11px 16px;border-radius:999px;font-weight:900;cursor:pointer}.tab.active{background:var(--text);color:#fff}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 4px 18px #1111}.card h2{font-size:16px;margin:0 0 14px}.fields{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.field label{display:block;font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;font:inherit}.field textarea{min-height:82px;resize:vertical}.full{grid-column:1/-1}.products{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:10px}.prod{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}.prod:last-child{border:0}.prod small{display:block;color:var(--muted);margin-top:3px}.qty{width:72px!important;text-align:center}.total{display:flex;justify-content:space-between;align-items:end;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}.total strong{font-size:24px}.hint{color:var(--muted);font-size:12px;line-height:1.5}.hidden{display:none!important}.list{display:grid;gap:8px}.doc{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;gap:12px;align-items:center}.doc b{font-size:13px}.doc small{color:var(--muted)}.empty{padding:28px;text-align:center;color:var(--muted)}.preview{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;min-height:260px;padding:22px}.preview h3{margin:0 0 5px}.preview table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}.preview th,.preview td{text-align:left;padding:7px;border-bottom:1px solid #e5e7eb}.preview .right{text-align:right}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:10px;font-weight:900}.encarte{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.enc-card{border:2px solid #111;border-radius:12px;padding:16px;text-align:center}.enc-card .price{font-size:27px;font-weight:900;margin-top:10px}.enc-card .name{font-weight:900}.enc-card small{color:var(--muted)}
-@media(max-width:800px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.encarte{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}}@media print{body{background:#fff}.no-print{display:none!important}.wrap{max-width:none;padding:0}.card{box-shadow:none;border:0}.print-area{display:block!important}.preview{border:0}.encarte{grid-template-columns:repeat(3,1fr)} }
-</style></head>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+:root{--bg:#060810;--border:rgba(255,255,255,0.06);}
+*{box-sizing:border-box;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:#f1f5f9;min-height:100vh;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%,transparent 50%);}
+
+#lock{position:fixed;inset:0;z-index:9999;background:radial-gradient(ellipse at 50% 40%,#0f1a2e 0%,#060810 70%);display:flex;align-items:center;justify-content:center;}
+#lock.hidden{display:none;}
+
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.8);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;}
+.modal.open{opacity:1;visibility:visible;pointer-events:auto;}
+.modal.open>.modal-box{animation:mIn .22s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes mIn{from{opacity:0;transform:scale(.93) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.modal-box{background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:2rem;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 32px 64px rgba(0,0,0,.6);}
+
+.inp{font-size:16px!important;padding:12px 14px;color:#fff;background:#1e293b;border:2px solid #334155;border-radius:.75rem;width:100%;outline:none;transition:all .2s;font-family:inherit;}
+.inp:focus{border-color:#38bdf8!important;box-shadow:0 0 0 4px rgba(56,189,248,.15)!important;}
+.inp::placeholder{color:#64748b;}
+.label{color:#7dd3fc;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
+
+.tab-bar{display:flex;gap:.4rem;padding:.6rem .75rem;background:rgba(6,8,16,.9);border-bottom:1px solid var(--border);position:sticky;top:48px;z-index:30;}
+.tab-btn{flex:1;padding:.6rem .4rem;border-radius:.9rem;text-align:center;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#64748b;background:rgba(255,255,255,.02);border:1.5px solid transparent;transition:all .15s;cursor:pointer;}
+.tab-btn.active{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.35);color:#7dd3fc;}
+.vista-doc{display:none;}
+.vista-doc.ativa{display:block;}
+
+.btn-novo{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#64748b;transition:color .15s;display:flex;align-items:center;gap:.3rem;}
+.btn-novo:hover,.btn-novo:active{color:#7dd3fc;}
+
+.legenda-itens{display:grid;grid-template-columns:1fr auto auto auto;gap:.4rem;padding:0 .65rem;margin-bottom:.3rem;}
+.legenda-itens span{font-size:.5rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#475569;text-align:right;}
+.legenda-itens span:first-child{text-align:left;}
+
+.item-row{display:grid;grid-template-columns:1fr auto auto auto;gap:.4rem;align-items:center;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.9rem;padding:.55rem .65rem;}
+.item-row input{background:#1e293b;border:1.5px solid #334155;border-radius:.5rem;color:#fff;font-size:12px;padding:.4rem .5rem;outline:none;}
+.item-row input:focus{border-color:#38bdf8;}
+.qtd-inp{width:44px;text-align:center;}
+.preco-inp{width:72px;text-align:right;}
+
+.btn-pill{padding:.7rem .9rem;border-radius:.9rem;font-weight:900;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;justify-content:center;gap:.4rem;transition:all .15s;}
+.btn-primary{background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;}
+.btn-ghost{background:rgba(255,255,255,.04);border:1.5px solid var(--border);color:#cbd5e1;}
+.btn-ghost:active{background:rgba(255,255,255,.08);}
+
+.prod-pick{max-height:260px;overflow-y:auto;}
+.prod-pick-item{display:flex;align-items:center;justify-content:between;gap:.5rem;padding:.6rem .7rem;border-radius:.85rem;background:rgba(255,255,255,.02);border:1px solid var(--border);margin-bottom:.4rem;cursor:pointer;transition:all .12s;}
+.prod-pick-item:active{background:rgba(56,189,248,.08);}
+.prod-pick-item.sel{border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.08);}
+
+/* ══ RECIBO — comprovante estilo térmico ══ */
+#folhaDoc{background:#fff;color:#111;border-radius:1rem;padding:1.1rem 1rem;font-family:'Courier New',monospace;width:100%;max-width:360px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+#folhaDoc .doc-logo-wrap{display:flex;justify-content:center;margin-bottom:.45rem;}
+#folhaDoc .doc-logo{width:54px;height:54px;border-radius:9999px;object-fit:cover;border:2px solid #111;}
+#folhaDoc h2{font-size:.95rem;font-weight:900;text-align:center;text-transform:uppercase;margin:0 0 .1rem;letter-spacing:.02em;}
+#folhaDoc .sub{text-align:center;font-size:.6rem;color:#444;margin-bottom:.25rem;line-height:1.35;}
+#folhaDoc .sep{border-top:1px dashed #999;margin:.5rem 0;}
+#folhaDoc .linha{display:flex;justify-content:space-between;font-size:.68rem;margin:.15rem 0;}
+#folhaDoc .item-linha{font-size:.68rem;margin:.32rem 0;}
+#folhaDoc .item-linha .nomeqtd{display:flex;justify-content:space-between;font-weight:700;}
+#folhaDoc .item-linha .detalhe{font-size:.58rem;color:#666;margin-top:1px;}
+#folhaDoc .total{font-size:.92rem;font-weight:900;}
+#folhaDoc .tag{display:inline-block;font-size:.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;background:#111;color:#fff;padding:.18rem .55rem;border-radius:.3rem;}
+#folhaDoc .rodape-nota{text-align:center;font-size:.52rem;color:#999;margin-top:.35rem;font-style:italic;}
+
+/* ══ ORÇAMENTO — documento comercial estilo A4 ══ */
+#folhaDocOrc{background:#fff;color:#1e293b;border-radius:.6rem;padding:1.3rem 1.2rem;font-family:'Plus Jakarta Sans',sans-serif;width:100%;max-width:420px;margin:0 auto;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+#folhaDocOrc .doc-header{display:flex;align-items:flex-start;gap:.65rem;padding-bottom:.75rem;border-bottom:2.5px solid #0369a1;margin-bottom:.75rem;}
+#folhaDocOrc .doc-logo{width:42px;height:42px;border-radius:.55rem;object-fit:cover;flex-shrink:0;border:1px solid #e2e8f0;}
+#folhaDocOrc .doc-empresa{flex:1;min-width:0;}
+#folhaDocOrc .doc-empresa .nome{font-weight:900;font-size:.8rem;text-transform:uppercase;color:#0f172a;letter-spacing:-.01em;line-height:1.2;}
+#folhaDocOrc .doc-empresa .meta{font-size:.53rem;color:#64748b;line-height:1.4;margin-top:.15rem;}
+#folhaDocOrc .doc-tagbox{text-align:right;flex-shrink:0;}
+#folhaDocOrc .doc-tagbox .tag{background:#0369a1;color:#fff;font-size:.52rem;font-weight:900;letter-spacing:.05em;padding:.2rem .5rem;border-radius:.3rem;display:inline-block;}
+#folhaDocOrc .doc-tagbox .num{font-size:.62rem;font-weight:800;color:#0f172a;margin-top:.28rem;}
+#folhaDocOrc .doc-tagbox .data{font-size:.53rem;color:#64748b;}
+#folhaDocOrc .doc-cliente{background:#f1f5f9;border-radius:.5rem;padding:.5rem .65rem;margin-bottom:.7rem;}
+#folhaDocOrc .doc-cliente .lbl{font-size:.5rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#0369a1;}
+#folhaDocOrc .doc-cliente .val{font-size:.68rem;font-weight:700;color:#0f172a;margin-top:.05rem;}
+#folhaDocOrc table{width:100%;border-collapse:collapse;font-size:.6rem;}
+#folhaDocOrc thead th{background:#0f172a;color:#fff;font-size:.5rem;text-transform:uppercase;letter-spacing:.04em;padding:.35rem .4rem;text-align:left;font-weight:800;}
+#folhaDocOrc thead th.num{text-align:right;}
+#folhaDocOrc tbody td{padding:.32rem .4rem;border-bottom:1px solid #e2e8f0;color:#1e293b;}
+#folhaDocOrc tbody td.num{text-align:right;white-space:nowrap;}
+#folhaDocOrc tbody tr:nth-child(even){background:#f8fafc;}
+#folhaDocOrc .doc-totais{margin-top:.65rem;margin-left:auto;width:62%;min-width:175px;}
+#folhaDocOrc .doc-totais .linha{display:flex;justify-content:space-between;font-size:.63rem;padding:.18rem 0;color:#334155;}
+#folhaDocOrc .doc-totais .linha.total{border-top:2px solid #0f172a;margin-top:.2rem;padding-top:.35rem;font-size:.8rem;font-weight:900;color:#0f172a;}
+#folhaDocOrc .doc-footer-box{margin-top:1rem;padding-top:.7rem;border-top:1px dashed #cbd5e1;font-size:.56rem;color:#475569;line-height:1.5;}
+#folhaDocOrc .doc-footer-box strong{color:#0f172a;}
+#folhaDocOrc .doc-assinatura{margin-top:1.6rem;border-top:1px solid #94a3b8;padding-top:.3rem;font-size:.53rem;color:#64748b;text-align:center;max-width:210px;margin-left:auto;margin-right:auto;}
+
+/* ══ ENCARTE — cartaz vertical estilo social ══ */
+#folhaEncarte{width:100%;max-width:360px;aspect-ratio:4/5;margin:0 auto;border-radius:1.3rem;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;}
+#folhaEncarte .enc-head{padding:1.1rem 1rem .5rem;position:relative;}
+#folhaEncarte .enc-brand{display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem;}
+#folhaEncarte .enc-logo{width:24px;height:24px;border-radius:9999px;object-fit:cover;border:1.5px solid rgba(255,255,255,.75);}
+#folhaEncarte .enc-brand span{font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;opacity:.92;text-shadow:0 1px 3px rgba(0,0,0,.4);}
+#folhaEncarte .enc-titulo{font-weight:900;font-size:1.35rem;line-height:1.05;text-transform:uppercase;letter-spacing:-.01em;text-shadow:0 2px 6px rgba(0,0,0,.3);}
+#folhaEncarte .enc-sub{font-weight:700;font-size:.7rem;opacity:.9;margin-top:.2rem;text-shadow:0 1px 3px rgba(0,0,0,.3);}
+#folhaEncarte .enc-ribbon{position:absolute;top:16px;right:-34px;background:#fff;color:#111;font-size:.56rem;font-weight:900;letter-spacing:.05em;padding:.3rem 2.4rem;transform:rotate(38deg);box-shadow:0 4px 12px rgba(0,0,0,.3);text-transform:uppercase;}
+#folhaEncarte .enc-lista{flex:1;padding:.2rem 1rem 0;display:flex;flex-direction:column;gap:.4rem;overflow:hidden;}
+#folhaEncarte .enc-prod{background:rgba(255,255,255,.15);backdrop-filter:blur(2px);border-radius:.75rem;padding:.45rem .65rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;}
+#folhaEncarte .enc-prod .nome{font-weight:800;font-size:.72rem;min-width:0;}
+#folhaEncarte .enc-prod .precos{display:flex;flex-direction:column;align-items:flex-end;line-height:1.05;flex-shrink:0;}
+#folhaEncarte .enc-prod .de{font-size:.58rem;text-decoration:line-through;opacity:.75;}
+#folhaEncarte .enc-prod .preco{font-weight:900;font-size:.87rem;white-space:nowrap;}
+#folhaEncarte .enc-rodape{padding:.75rem 1rem 1.05rem;font-size:.58rem;font-weight:700;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.3);}
+#folhaEncarte.compacta .enc-lista{gap:.28rem;}
+#folhaEncarte.compacta .enc-prod{padding:.32rem .55rem;}
+#folhaEncarte.compacta .enc-prod .nome{font-size:.64rem;}
+#folhaEncarte.compacta .enc-prod .preco{font-size:.76rem;}
+#folhaEncarte.compacta .enc-prod .de{font-size:.53rem;}
+#folhaEncarte.compacta .enc-titulo{font-size:1.15rem;}
+
+.tema-swatch{width:26px;height:26px;border-radius:9999px;border:2px solid rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;}
+.tema-swatch.sel{border-color:#fff;box-shadow:0 0 0 2px #38bdf8;}
+
+@media print{
+  body *{visibility:hidden;}
+  #areaImpressao,#areaImpressao *{visibility:visible;}
+  #areaImpressao{position:absolute;top:0;left:0;width:100%;}
+  #folhaDoc,#folhaDocOrc{box-shadow:none;border-radius:0;max-width:100%;}
+}
+</style>
+</head>
 <body>
-<div class="wrap">
-  <header class="top no-print"><div class="brand"><h1>Documentos comerciais</h1><p>Encarte • Orçamento • Recibo — módulo isolado do CH Geladas</p></div><div class="actions"><button class="btn" onclick="location.href='index.html'">← Voltar ao sistema</button><button class="btn" onclick="documentosService.print()">Imprimir</button></div></header>
-  <nav class="tabs no-print"><button class="tab active" data-tab="encarte">Encarte</button><button class="tab" data-tab="orcamento">Orçamento</button><button class="tab" data-tab="recibo">Recibo</button><button class="tab" data-tab="historico">Histórico</button></nav>
 
-  <section id="tab-encarte" class="tabpane">
-    <div class="grid">
-      <div class="card no-print"><h2>Montar encarte</h2><div class="fields">
-        <div class="field"><label>Título</label><input id="encTitulo" value="OFERTAS CH GELADAS"></div>
-        <div class="field"><label>Validade</label><input id="encValidade" type="date"></div>
-        <div class="field full"><label>Mensagem</label><input id="encMensagem" value="Preços especiais por tempo limitado!"></div>
-      </div><h2 style="margin-top:18px">Produtos</h2><div id="encProdutos" class="products"></div><div class="actions" style="margin-top:12px"><button class="btn primary" onclick="documentosService.gerarEncarte()">Gerar encarte</button></div></div>
-      <div class="card"><div id="encPreview" class="preview"><div class="empty">Selecione os produtos e clique em “Gerar encarte”.</div></div></div>
-    </div>
-  </section>
-
-  <section id="tab-orcamento" class="tabpane hidden">
-    <div class="grid">
-      <div class="card no-print"><h2>Novo orçamento</h2><div class="fields">
-        <div class="field"><label>Cliente</label><input id="orcCliente" placeholder="Nome do cliente"></div>
-        <div class="field"><label>Validade</label><input id="orcValidade" type="date"></div>
-        <div class="field full"><label>Observações / condições</label><textarea id="orcObs" placeholder="Prazo, entrega, condições de pagamento..."></textarea></div>
-      </div><h2 style="margin-top:18px">Itens</h2><div id="orcProdutos" class="products"></div><div class="fields" style="margin-top:12px"><div class="field"><label>Desconto (R$)</label><input id="orcDesconto" type="number" min="0" step="0.01" value="0" oninput="documentosService.calcOrc()"></div></div><div class="total"><span>Total</span><strong id="orcTotal">R$ 0,00</strong></div><div class="actions" style="margin-top:12px"><button class="btn primary" onclick="documentosService.salvarOrcamento()">Salvar e gerar</button></div></div>
-      <div class="card"><div id="orcPreview" class="preview"><div class="empty">O orçamento será exibido aqui.</div></div></div>
-    </div>
-  </section>
-
-  <section id="tab-recibo" class="tabpane hidden">
-    <div class="grid">
-      <div class="card no-print"><h2>Selecionar venda</h2><p class="hint">O recibo usa somente vendas já registradas. Não altera estoque, financeiro ou a venda original.</p><div id="vendasLista" class="list"></div></div>
-      <div class="card"><div id="recPreview" class="preview"><div class="empty">Escolha uma venda para visualizar o recibo.</div></div></div>
-    </div>
-  </section>
-
-  <section id="tab-historico" class="tabpane hidden"><div class="card"><h2>Documentos gerados</h2><div id="historico" class="list"></div></div></section>
+<!-- LOCK -->
+<div id="lock">
+  <div style="background:rgba(13,17,23,.95);border:1px solid rgba(255,255,255,.08);border-radius:2.5rem;padding:2.5rem;width:100%;max-width:360px;margin:0 1rem;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,.8);">
+    <div class="text-5xl mb-4">🧾</div>
+    <h1 class="text-2xl font-black mb-1 uppercase tracking-tight">CH <span class="text-sky-400">GELADAS</span></h1>
+    <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Recibos · Orçamentos · Encartes</p>
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-sky-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-sky-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
+    <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
+    <button onclick="doLogin()" class="w-full bg-sky-700 hover:bg-sky-600 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
+      <i class="fas fa-unlock-alt mr-2"></i>Entrar
+    </button>
+    <div class="mt-6"><a href="index.html" class="text-[9px] text-slate-700 hover:text-slate-500 font-bold uppercase tracking-widest transition-colors">← Hub Principal</a></div>
+  </div>
 </div>
+
+<!-- APP -->
+<div id="app" class="hidden flex flex-col min-h-screen">
+
+  <header class="sticky top-0 z-40 px-4 py-3 flex justify-between items-center" style="background:rgba(6,8,16,.96);border-bottom:1px solid rgba(255,255,255,.04);">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🧾</span>
+      <div>
+        <h1 class="text-[10px] font-black uppercase tracking-widest text-sky-400">Documentos</h1>
+        <p id="clock" class="text-[9px] font-mono text-slate-600 mt-0.5">00:00:00</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="roleTag" class="hidden text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 text-slate-400"></span>
+      <button onclick="abrirConfigLoja()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-sky-400 transition-all">
+        <i class="fas fa-store text-xs"></i>
+      </button>
+      <button onclick="logout()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-red-400 transition-all">
+        <i class="fas fa-power-off text-xs"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="tab-bar">
+    <div class="tab-btn active" data-tab="recibo" onclick="mudarAba('recibo')"><i class="fas fa-receipt mr-1"></i>Recibo</div>
+    <div class="tab-btn" data-tab="orcamento" onclick="mudarAba('orcamento')"><i class="fas fa-file-invoice mr-1"></i>Orçamento</div>
+    <div class="tab-btn" data-tab="encarte" onclick="mudarAba('encarte')"><i class="fas fa-bullhorn mr-1"></i>Encarte</div>
+  </div>
+
+  <div class="flex-1 p-3 pb-28">
+
+    <!-- ══════════ ABA RECIBO ══════════ -->
+    <div id="vistaRecibo" class="vista-doc ativa">
+      <div class="flex items-center justify-end mb-2">
+        <button onclick="_novoDocumento('recibo')" class="btn-novo"><i class="fas fa-rotate-right"></i>Novo documento</button>
+      </div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="label">Cliente (opcional)</label>
+            <input id="recCliente" class="inp" placeholder="Nome do cliente" oninput="renderRecibo()">
+          </div>
+          <div>
+            <label class="label">WhatsApp do cliente</label>
+            <input id="recTelefone" class="inp" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="label mb-0">Itens</label>
+            <button onclick="abrirBuscaProduto('recibo')" class="btn-pill btn-ghost" style="padding:.4rem .7rem;"><i class="fas fa-plus"></i>Produto</button>
+          </div>
+          <div id="recItensLista" class="space-y-2"></div>
+          <button onclick="_addItemManual('recibo')" class="w-full mt-2 text-[10px] font-bold text-slate-500 hover:text-sky-400 transition-all"><i class="fas fa-pen mr-1"></i>+ item avulso (digitar manual)</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="label">Desconto R$</label>
+            <input id="recDesconto" type="number" step="0.01" min="0" class="inp" placeholder="0,00" oninput="renderRecibo()">
+          </div>
+          <div>
+            <label class="label">Forma de Pgto</label>
+            <select id="recFormaPgto" class="inp" onchange="renderRecibo()">
+              <option>Dinheiro</option><option>Pix</option><option>Cartão Débito</option><option>Cartão Crédito</option><option>Fiado</option><option>Outro</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Observação (opcional)</label>
+          <input id="recObs" class="inp" placeholder="Ex: Entrega, garantia..." oninput="renderRecibo()">
+        </div>
+      </div>
+
+      <div class="mt-5" id="areaImpressaoWrapRecibo">
+        <div id="areaImpressao">
+          <div id="folhaDoc"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button class="btn-pill btn-primary" onclick="imprimirDocAtivo()"><i class="fas fa-print"></i>Imprimir</button>
+        <button class="btn-pill btn-ghost" onclick="baixarPdfDocAtivo()"><i class="fas fa-file-pdf"></i>Baixar PDF</button>
+        <button class="btn-pill btn-ghost" style="grid-column:span 2;color:#25D366;" onclick="enviarWhatsappRecibo()"><i class="fab fa-whatsapp"></i>Enviar no WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- ══════════ ABA ORÇAMENTO ══════════ -->
+    <div id="vistaOrcamento" class="vista-doc">
+      <div class="flex items-center justify-end mb-2">
+        <button onclick="_novoDocumento('orcamento')" class="btn-novo"><i class="fas fa-rotate-right"></i>Novo documento</button>
+      </div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="label">Cliente</label>
+            <input id="orcCliente" class="inp" placeholder="Nome do cliente" oninput="renderOrcamento()">
+          </div>
+          <div>
+            <label class="label">WhatsApp (opcional)</label>
+            <input id="orcTelefone" class="inp" placeholder="(00) 00000-0000" oninput="renderOrcamento()">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="label mb-0">Itens</label>
+            <button onclick="abrirBuscaProduto('orcamento')" class="btn-pill btn-ghost" style="padding:.4rem .7rem;"><i class="fas fa-plus"></i>Produto</button>
+          </div>
+          <div id="orcItensLista" class="space-y-2"></div>
+          <button onclick="_addItemManual('orcamento')" class="w-full mt-2 text-[10px] font-bold text-slate-500 hover:text-sky-400 transition-all"><i class="fas fa-pen mr-1"></i>+ item avulso (digitar manual)</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="label">Desconto R$</label>
+            <input id="orcDesconto" type="number" step="0.01" min="0" class="inp" placeholder="0,00" oninput="renderOrcamento()">
+          </div>
+          <div>
+            <label class="label">Validade (dias)</label>
+            <input id="orcValidadeDias" type="number" min="1" class="inp" value="7" oninput="renderOrcamento()">
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Condições / Observações</label>
+          <input id="orcCondicoes" class="inp" placeholder="Ex: Pagamento na entrega, frete não incluso..." oninput="renderOrcamento()">
+        </div>
+      </div>
+
+      <div class="mt-5" id="areaImpressaoWrapOrcamento">
+        <div id="areaImpressaoOrc">
+          <div id="folhaDocOrc"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button class="btn-pill btn-primary" onclick="imprimirDocAtivo()"><i class="fas fa-print"></i>Imprimir</button>
+        <button class="btn-pill btn-ghost" onclick="baixarPdfDocAtivo()"><i class="fas fa-file-pdf"></i>Baixar PDF</button>
+        <button class="btn-pill btn-ghost" style="grid-column:span 2;color:#25D366;" onclick="enviarWhatsappOrcamento()"><i class="fab fa-whatsapp"></i>Enviar no WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- ══════════ ABA ENCARTE ══════════ -->
+    <div id="vistaEncarte" class="vista-doc">
+      <div class="flex items-center justify-end mb-2">
+        <button onclick="_novoDocumento('encarte')" class="btn-novo"><i class="fas fa-rotate-right"></i>Novo encarte</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="label">Título do encarte</label>
+          <input id="encTitulo" class="inp" placeholder="Ex: PROMOÇÃO DA SEMANA" oninput="renderEncarte()">
+        </div>
+        <div>
+          <label class="label">Chamada / subtítulo</label>
+          <input id="encSubtitulo" class="inp" placeholder="Ex: Só até domingo, aproveite!" oninput="renderEncarte()">
+        </div>
+        <div>
+          <label class="label">Selo (opcional)</label>
+          <input id="encRibbon" class="inp" placeholder="Ex: OFERTA, NOVIDADE, IMPERDÍVEL" value="OFERTA" oninput="renderEncarte()">
+        </div>
+
+        <div>
+          <label class="label mb-2">Tema de cor</label>
+          <div class="flex gap-2" id="temaSwatches"></div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="label mb-0">Produtos em destaque</label>
+            <button onclick="abrirBuscaProduto('encarte')" class="btn-pill btn-ghost" style="padding:.4rem .7rem;"><i class="fas fa-plus"></i>Produto</button>
+          </div>
+          <div class="legenda-itens"><span>Produto</span><span>De (opc.)</span><span>Por</span><span></span></div>
+          <div id="encItensLista" class="space-y-2"></div>
+        </div>
+
+        <div>
+          <label class="label">Rodapé (endereço / validade da promoção)</label>
+          <input id="encRodape" class="inp" placeholder="Ex: Válido até 30/08 · Rua X, 123" oninput="renderEncarte()">
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <div id="folhaEncarte"></div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-2 mt-4">
+        <button class="btn-pill btn-primary" onclick="baixarImagemEncarte()"><i class="fas fa-image"></i>Baixar Imagem</button>
+        <button class="btn-pill btn-ghost" style="color:#25D366;" onclick="compartilharEncarteWhatsapp()"><i class="fab fa-whatsapp"></i>Compartilhar no WhatsApp</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL BUSCA PRODUTO -->
+<div class="modal" id="modalBuscaProduto">
+  <div class="modal-box" style="max-width:420px;padding:1.25rem;">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400">Selecionar produto</h3>
+      <button onclick="UIService.closeModal('modalBuscaProduto')" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <input id="buscaProdInput" class="inp mb-3" placeholder="🔍 Buscar produto no estoque..." oninput="_renderBuscaProduto()">
+    <div id="buscaProdLista" class="prod-pick"></div>
+  </div>
+</div>
+
+<!-- MODAL CONFIG LOJA -->
+<div class="modal" id="modalConfigLoja">
+  <div class="modal-box" style="max-width:400px;padding:1.5rem;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400">Dados da loja p/ documentos</h3>
+      <button onclick="UIService.closeModal('modalConfigLoja')" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="label">Logo da marca</label>
+        <div class="flex items-center gap-3">
+          <img id="cfgLojaLogoPreview" src="./icon-512.png" style="width:52px;height:52px;border-radius:14px;object-fit:cover;border:2px solid #334155;flex-shrink:0;">
+          <div class="flex-1 flex flex-col gap-1.5">
+            <button type="button" onclick="document.getElementById('cfgLojaLogoFile').click()" class="btn-pill btn-ghost" style="padding:.5rem .7rem;font-size:.58rem;"><i class="fas fa-upload"></i>Enviar imagem</button>
+            <button type="button" onclick="_removerLogoPersonalizado()" class="text-[9px] text-slate-500 hover:text-red-400 font-bold uppercase text-left">Usar ícone padrão do app</button>
+          </div>
+          <input type="file" id="cfgLojaLogoFile" accept="image/*" class="hidden" onchange="_lerLogoArquivo(event)">
+        </div>
+      </div>
+      <div>
+        <label class="label">Nome da loja</label>
+        <input id="cfgLojaNome" class="inp" placeholder="CH Geladas">
+      </div>
+      <div>
+        <label class="label">Endereço</label>
+        <input id="cfgLojaEndereco" class="inp" placeholder="Rua, número, bairro">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="label">WhatsApp / Telefone</label>
+          <input id="cfgLojaWhats" class="inp" placeholder="(00) 00000-0000">
+        </div>
+        <div>
+          <label class="label">CNPJ/CPF (opcional)</label>
+          <input id="cfgLojaCnpj" class="inp" placeholder="00.000.000/0001-00">
+        </div>
+      </div>
+      <div>
+        <label class="label">Instagram (opcional)</label>
+        <input id="cfgLojaInsta" class="inp" placeholder="@chgeladas">
+      </div>
+    </div>
+    <button onclick="salvarConfigLoja()" class="btn-pill btn-primary w-full mt-5"><i class="fas fa-check"></i>Salvar</button>
+  </div>
+</div>
+
+<div id="toast" style="min-width:200px;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(2rem);opacity:0;pointer-events:none;z-index:200;transition:opacity .2s,transform .2s;background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:1rem;padding:.75rem 1rem;display:flex;align-items:center;gap:.6rem;box-shadow:0 16px 32px rgba(0,0,0,.5);">
+  <div id="toastIcon" style="width:22px;height:22px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;"></div>
+  <div><p id="toastMsg" class="text-[11px] font-bold text-white"></p><p id="toastSub" class="text-[9px] text-slate-400"></p></div>
+</div>
+
 <script src="core.js"></script>
-<script src="./services/documentosService.js"></script>
-</body></html>
+  <script src="./services/permissoesService.js"></script>
+  <script src="./services/userService.js"></script>
+  <script src="./services/syncService.js"></script>
+  <script src="./services/auditService.js"></script>
+  <script src="./services/syncMonitor.js"></script>
+  <script src="./services/backupService.js"></script>
+  <script src="./services/estoqueService.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   documentos.html — Recibo / Orçamento / Encarte
+   Não introduz coleções novas: usa EstoqueService (leitura) e
+   Store.mutateConfig() para persistir dados extras da loja
+   (logo/endereco/instagram/cnpj/numeração) no mesmo doc `config`
+   já existente.
+══════════════════════════════════════════════════════════════ */
+
+const TEMAS = [
+  { id:'marca',   bg:'linear-gradient(160deg,#8a0e04 0%,#3a0602 55%,#0a0000 100%)', txt:'#ffd166' },
+  { id:'laranja', bg:'linear-gradient(155deg,#f97316,#ea580c 55%,#7c2d12)',          txt:'#fff' },
+  { id:'azul',    bg:'linear-gradient(155deg,#0ea5e9,#0369a1 55%,#0c2340)',          txt:'#fff' },
+  { id:'verde',   bg:'linear-gradient(155deg,#22c55e,#15803d 55%,#052e12)',          txt:'#fff' },
+  { id:'rosa',    bg:'linear-gradient(155deg,#ec4899,#be185d 55%,#4a0a29)',          txt:'#fff' },
+  { id:'roxo',    bg:'linear-gradient(155deg,#8b5cf6,#5b21b6 55%,#1e0a4a)',          txt:'#fff' },
+];
+
+let _abaAtiva  = 'recibo';
+let _recItens  = [];
+let _orcItens  = [];
+let _encItens  = [];
+let _encTema   = 'marca';
+let _buscaAlvo = null; // 'recibo' | 'orcamento' | 'encarte'
+let _recNumero = null;
+let _orcNumero = null;
+let _logoBase64Pendente = undefined; // undefined = sem alteração; null = remover; string = nova imagem
+
+/* ══ TABS ══ */
+function mudarAba(tab) {
+  _abaAtiva = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('vistaRecibo').classList.toggle('ativa', tab === 'recibo');
+  document.getElementById('vistaOrcamento').classList.toggle('ativa', tab === 'orcamento');
+  document.getElementById('vistaEncarte').classList.toggle('ativa', tab === 'encarte');
+}
+
+/* ══ CONFIG DA LOJA (persistida no mesmo doc `config`) ══ */
+function _cfgDocumentos() {
+  const cfg = Store.getConfig() || {};
+  return cfg.documentos || {};
+}
+function _logoUrl() {
+  return _cfgDocumentos().logoUrl || './icon-512.png';
+}
+function abrirConfigLoja() {
+  const cfg = Store.getConfig() || {};
+  const d   = cfg.documentos || {};
+  _logoBase64Pendente = undefined;
+  document.getElementById('cfgLojaLogoPreview').src = d.logoUrl || './icon-512.png';
+  document.getElementById('cfgLojaNome').value     = d.nome     || cfg.nome || '';
+  document.getElementById('cfgLojaEndereco').value = d.endereco || '';
+  document.getElementById('cfgLojaWhats').value    = d.whatsapp || cfg.whatsapp || '';
+  document.getElementById('cfgLojaCnpj').value     = d.cnpj     || '';
+  document.getElementById('cfgLojaInsta').value    = d.instagram|| '';
+  UIService.openModal('modalConfigLoja');
+}
+function _lerLogoArquivo(ev) {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 256;
+      let w = img.width, h = img.height;
+      if (w > h && w > max)      { h = Math.round(h * max / w); w = max; }
+      else if (h >= w && h > max){ w = Math.round(w * max / h); h = max; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/png', .9);
+      _logoBase64Pendente = dataUrl;
+      document.getElementById('cfgLojaLogoPreview').src = dataUrl;
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+function _removerLogoPersonalizado() {
+  _logoBase64Pendente = null;
+  document.getElementById('cfgLojaLogoPreview').src = './icon-512.png';
+}
+function salvarConfigLoja() {
+  const nome     = document.getElementById('cfgLojaNome').value.trim();
+  const endereco = document.getElementById('cfgLojaEndereco').value.trim();
+  const whatsapp = document.getElementById('cfgLojaWhats').value.trim();
+  const cnpj     = document.getElementById('cfgLojaCnpj').value.trim();
+  const instagram= document.getElementById('cfgLojaInsta').value.trim();
+  Store.mutateConfig(cfg => {
+    const doc = { ...(cfg.documentos || {}), nome, endereco, whatsapp, cnpj, instagram };
+    if (_logoBase64Pendente === null) delete doc.logoUrl;
+    else if (typeof _logoBase64Pendente === 'string') doc.logoUrl = _logoBase64Pendente;
+    cfg.documentos = doc;
+  });
+  UIService.closeModal('modalConfigLoja');
+  UIService.showToast('Dados salvos', 'Usados nos próximos documentos', 'success');
+  renderRecibo(); renderOrcamento(); renderEncarte();
+}
+
+/* ══ CONTADOR SEQUENCIAL (nº do recibo/orçamento) ══ */
+function _proximoNumero(tipo) {
+  const cfg = Store.getConfig() || {};
+  const cont = cfg.docCounters || {};
+  const n = (cont[tipo] || 0) + 1;
+  Store.mutateConfig(c => { c.docCounters = { ...(c.docCounters||{}), [tipo]: n }; });
+  return n;
+}
+function _numeroRecibo()    { if (_recNumero == null) _recNumero = _proximoNumero('recibo');    return _recNumero; }
+function _numeroOrcamento() { if (_orcNumero == null) _orcNumero = _proximoNumero('orcamento');  return _orcNumero; }
+
+/* ══ NOVO DOCUMENTO (reinicia aba) ══ */
+function _novoDocumento(tipo) {
+  if (tipo === 'recibo' && (_recItens.length || document.getElementById('recCliente').value)) {
+    if (!confirm('Iniciar um novo recibo? Os dados atuais serão apagados.')) return;
+  }
+  if (tipo === 'orcamento' && (_orcItens.length || document.getElementById('orcCliente').value)) {
+    if (!confirm('Iniciar um novo orçamento? Os dados atuais serão apagados.')) return;
+  }
+  if (tipo === 'encarte' && _encItens.length) {
+    if (!confirm('Limpar o encarte atual?')) return;
+  }
+  if (tipo === 'recibo') {
+    _recItens = []; _recNumero = null;
+    document.getElementById('recCliente').value  = '';
+    document.getElementById('recTelefone').value = '';
+    document.getElementById('recDesconto').value = '';
+    document.getElementById('recFormaPgto').value = 'Dinheiro';
+    document.getElementById('recObs').value = '';
+    renderRecibo();
+  } else if (tipo === 'orcamento') {
+    _orcItens = []; _orcNumero = null;
+    document.getElementById('orcCliente').value   = '';
+    document.getElementById('orcTelefone').value  = '';
+    document.getElementById('orcDesconto').value  = '';
+    document.getElementById('orcValidadeDias').value = '7';
+    document.getElementById('orcCondicoes').value = '';
+    renderOrcamento();
+  } else if (tipo === 'encarte') {
+    _encItens = [];
+    document.getElementById('encTitulo').value    = '';
+    document.getElementById('encSubtitulo').value = '';
+    document.getElementById('encRibbon').value    = 'OFERTA';
+    document.getElementById('encRodape').value    = '';
+    renderEncarte();
+  }
+  UIService.showToast('Pronto', 'Documento reiniciado', 'info');
+}
+
+/* ══ BUSCA DE PRODUTO (estoque) ══ */
+function abrirBuscaProduto(alvo) {
+  _buscaAlvo = alvo;
+  document.getElementById('buscaProdInput').value = '';
+  _renderBuscaProduto();
+  UIService.openModal('modalBuscaProduto');
+}
+function _renderBuscaProduto() {
+  const termo = (document.getElementById('buscaProdInput').value || '').toLowerCase();
+  const prods = (window.CH?.EstoqueService?.getProdutos?.() || [])
+    .filter(p => p.ativo !== false)
+    .filter(p => !termo || p.nome.toLowerCase().includes(termo));
+  const lista = document.getElementById('buscaProdLista');
+  if (!prods.length) { lista.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhum produto encontrado</p>`; return; }
+  lista.innerHTML = prods.map(p => `
+    <div class="prod-pick-item" onclick="_selecionarProduto('${p.id}')">
+      <div style="flex:1;min-width:0;">
+        <p class="text-[11px] font-bold text-white truncate">${p.nome}</p>
+        <p class="text-[9px] text-slate-500">${Utils.formatCurrency(p.precoUn)} · estoque ${p.estoqueAtual ?? 0}</p>
+      </div>
+      <i class="fas fa-plus text-sky-400 text-xs"></i>
+    </div>`).join('');
+}
+function _selecionarProduto(id) {
+  const p = window.CH?.EstoqueService?.getProduto?.(id);
+  if (!p) return;
+  const item = { id: Utils.generateId(), nome: p.nome, qtd: 1, preco: Number(p.precoUn || 0), precoDe: 0, produtoId: p.id };
+  if (_buscaAlvo === 'recibo')    { _recItens.push(item); renderRecibo(); }
+  if (_buscaAlvo === 'orcamento') { _orcItens.push(item); renderOrcamento(); }
+  if (_buscaAlvo === 'encarte')   { _encItens.push(item); renderEncarte(); }
+  UIService.closeModal('modalBuscaProduto');
+}
+function _addItemManual(alvo) {
+  const item = { id: Utils.generateId(), nome: 'Item', qtd: 1, preco: 0, precoDe: 0, produtoId: null };
+  if (alvo === 'recibo')    { _recItens.push(item); renderRecibo(); }
+  if (alvo === 'orcamento') { _orcItens.push(item); renderOrcamento(); }
+}
+function _removerItem(alvo, id) {
+  if (alvo === 'recibo')    { _recItens = _recItens.filter(i => i.id !== id); renderRecibo(); }
+  if (alvo === 'orcamento') { _orcItens = _orcItens.filter(i => i.id !== id); renderOrcamento(); }
+  if (alvo === 'encarte')   { _encItens = _encItens.filter(i => i.id !== id); renderEncarte(); }
+}
+function _atualizarItem(alvo, id, campo, valor) {
+  const arr = alvo === 'recibo' ? _recItens : (alvo === 'orcamento' ? _orcItens : _encItens);
+  const it = arr.find(i => i.id === id);
+  if (!it) return;
+  it[campo] = (campo === 'qtd' || campo === 'preco' || campo === 'precoDe') ? Number(valor) || 0 : valor;
+  if (alvo === 'recibo') renderRecibo();
+  if (alvo === 'orcamento') renderOrcamento();
+  if (alvo === 'encarte') renderEncarte();
+}
+
+function _renderListaItens(alvo, containerId, itens) {
+  const el = document.getElementById(containerId);
+  if (!itens.length) { el.innerHTML = `<p class="text-[10px] text-slate-600 text-center py-3">Nenhum item adicionado</p>`; return; }
+  el.innerHTML = itens.map(i => `
+    <div class="item-row">
+      <input value="${(i.nome||'').replace(/"/g,'&quot;')}" oninput="_atualizarItem('${alvo}','${i.id}','nome',this.value)" placeholder="Descrição">
+      <input type="number" min="1" class="qtd-inp" value="${i.qtd}" oninput="_atualizarItem('${alvo}','${i.id}','qtd',this.value)">
+      <input type="number" step="0.01" min="0" class="preco-inp" value="${i.preco}" oninput="_atualizarItem('${alvo}','${i.id}','preco',this.value)">
+      <button onclick="_removerItem('${alvo}','${i.id}')" class="text-red-400 px-1"><i class="fas fa-trash text-[11px]"></i></button>
+    </div>`).join('');
+}
+function _renderListaItensEncarte() {
+  const el = document.getElementById('encItensLista');
+  if (!_encItens.length) { el.innerHTML = `<p class="text-[10px] text-slate-600 text-center py-3">Adicione produtos em destaque</p>`; return; }
+  el.innerHTML = _encItens.map(i => `
+    <div class="item-row">
+      <input value="${(i.nome||'').replace(/"/g,'&quot;')}" oninput="_atualizarItem('encarte','${i.id}','nome',this.value)" placeholder="Produto">
+      <input type="number" step="0.01" min="0" class="preco-inp" value="${i.precoDe||''}" placeholder="—" oninput="_atualizarItem('encarte','${i.id}','precoDe',this.value)">
+      <input type="number" step="0.01" min="0" class="preco-inp" value="${i.preco}" oninput="_atualizarItem('encarte','${i.id}','preco',this.value)">
+      <button onclick="_removerItem('encarte','${i.id}')" class="text-red-400 px-1"><i class="fas fa-trash text-[11px]"></i></button>
+    </div>`).join('');
+}
+
+/* ══ RECIBO ══ */
+function renderRecibo() {
+  _renderListaItens('recibo', 'recItensLista', _recItens);
+  const cliente  = document.getElementById('recCliente')?.value.trim();
+  const desconto = Number(document.getElementById('recDesconto')?.value || 0);
+  const forma    = document.getElementById('recFormaPgto')?.value || 'Dinheiro';
+  const obs      = document.getElementById('recObs')?.value.trim();
+  const cfgD     = _cfgDocumentos();
+  const cfg      = Store.getConfig() || {};
+  const nomeLoja = cfgD.nome || cfg.nome || 'CH Geladas';
+  const metaLinhas = [cfgD.endereco, cfgD.cnpj ? 'CNPJ '+cfgD.cnpj : ''].filter(Boolean).join(' · ');
+
+  const subtotal = _recItens.reduce((s,i) => s + (i.qtd * i.preco), 0);
+  const total    = Math.max(0, subtotal - desconto);
+
+  const html = `
+    <div class="doc-logo-wrap"><img class="doc-logo" src="${_logoUrl()}" onerror="this.style.display='none'"></div>
+    <h2>${nomeLoja}</h2>
+    ${metaLinhas ? `<p class="sub">${metaLinhas}</p>` : ''}
+    <p class="sub">${Utils.today()} ${Utils.nowTime()} · Nº ${String(_numeroRecibo()).padStart(6,'0')}</p>
+    <div class="sep"></div>
+    <p style="text-align:center;"><span class="tag">COMPROVANTE DE VENDA</span></p>
+    ${cliente ? `<p class="linha"><span>Cliente:</span><span>${cliente}</span></p>` : ''}
+    <div class="sep"></div>
+    ${_recItens.map(i => `
+      <div class="item-linha">
+        <div class="nomeqtd"><span>${i.nome}</span><span>${Utils.formatCurrency(i.qtd*i.preco)}</span></div>
+        <div class="detalhe">${i.qtd} × ${Utils.formatCurrency(i.preco)}</div>
+      </div>`).join('') || '<p class="sub">Nenhum item</p>'}
+    <div class="sep"></div>
+    <p class="linha"><span>Subtotal</span><span>${Utils.formatCurrency(subtotal)}</span></p>
+    ${desconto > 0 ? `<p class="linha"><span>Desconto</span><span>-${Utils.formatCurrency(desconto)}</span></p>` : ''}
+    <p class="linha total"><span>TOTAL</span><span>${Utils.formatCurrency(total)}</span></p>
+    <p class="linha"><span>Pagamento</span><span>${forma}</span></p>
+    ${obs ? `<div class="sep"></div><p class="sub">${obs}</p>` : ''}
+    <div class="sep"></div>
+    <p class="sub" style="text-align:center;">Obrigado pela preferência!</p>
+    <p class="rodape-nota">Documento gerado eletronicamente</p>`;
+  document.getElementById('folhaDoc').innerHTML = html;
+}
+
+function _gerarTextoRecibo() {
+  const cliente  = document.getElementById('recCliente')?.value.trim();
+  const desconto = Number(document.getElementById('recDesconto')?.value || 0);
+  const forma    = document.getElementById('recFormaPgto')?.value || 'Dinheiro';
+  const obs      = document.getElementById('recObs')?.value.trim();
+  const cfgD     = _cfgDocumentos();
+  const cfg      = Store.getConfig() || {};
+  const nomeLoja = cfgD.nome || cfg.nome || 'CH Geladas';
+  const subtotal = _recItens.reduce((s,i) => s + (i.qtd * i.preco), 0);
+  const total    = Math.max(0, subtotal - desconto);
+  const sep = '─'.repeat(28);
+  let txt = `*${nomeLoja}*\nCOMPROVANTE DE VENDA · Nº ${String(_numeroRecibo()).padStart(6,'0')}\n${sep}\n`;
+  if (cliente) txt += `Cliente: ${cliente}\n`;
+  txt += `Data: ${Utils.today()} ${Utils.nowTime()}\n${sep}\n`;
+  _recItens.forEach(i => { txt += `${i.nome} — ${i.qtd}×${Utils.formatCurrency(i.preco)} = ${Utils.formatCurrency(i.qtd*i.preco)}\n`; });
+  txt += `${sep}\n`;
+  if (desconto > 0) txt += `Desconto: -${Utils.formatCurrency(desconto)}\n`;
+  txt += `*TOTAL: ${Utils.formatCurrency(total)}*\nPagamento: ${forma}\n`;
+  if (obs) txt += `${sep}\n${obs}\n`;
+  txt += `${sep}\nObrigado pela preferência!`;
+  return txt;
+}
+function enviarWhatsappRecibo() {
+  if (!_recItens.length) { UIService.showToast('Adicione ao menos 1 item','', 'warning'); return; }
+  const cfg = Store.getConfig() || {};
+  const telCliente = (document.getElementById('recTelefone')?.value || '').replace(/\D/g,'');
+  const num = telCliente || (cfg.whatsapp || '').replace(/\D/g,'');
+  const txt = _gerarTextoRecibo();
+  if (num) Utils.openWhatsApp(num, txt);
+  else window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+}
+
+/* ══ ORÇAMENTO ══ */
+function renderOrcamento() {
+  _renderListaItens('orcamento', 'orcItensLista', _orcItens);
+  const cliente    = document.getElementById('orcCliente')?.value.trim();
+  const telCliente = document.getElementById('orcTelefone')?.value.trim();
+  const desconto   = Number(document.getElementById('orcDesconto')?.value || 0);
+  const diasVal    = Number(document.getElementById('orcValidadeDias')?.value || 7);
+  const condicoes  = document.getElementById('orcCondicoes')?.value.trim();
+  const cfgD       = _cfgDocumentos();
+  const cfg        = Store.getConfig() || {};
+  const nomeLoja   = cfgD.nome || cfg.nome || 'CH Geladas';
+  const metaLinhas = [cfgD.endereco, cfgD.whatsapp||cfg.whatsapp, cfgD.cnpj ? 'CNPJ '+cfgD.cnpj : ''].filter(Boolean).join(' · ');
+
+  const subtotal = _orcItens.reduce((s,i) => s + (i.qtd * i.preco), 0);
+  const total    = Math.max(0, subtotal - desconto);
+  const validadeData = new Date(Date.now() + diasVal*86400000).toLocaleDateString('pt-BR');
+
+  const linhasTabela = _orcItens.map(i => `
+    <tr><td>${i.nome}</td><td class="num">${i.qtd}</td><td class="num">${Utils.formatCurrency(i.preco)}</td><td class="num">${Utils.formatCurrency(i.qtd*i.preco)}</td></tr>`).join('')
+    || `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:.6rem;">Nenhum item adicionado</td></tr>`;
+
+  const html = `
+    <div class="doc-header">
+      <img class="doc-logo" src="${_logoUrl()}" onerror="this.style.display='none'">
+      <div class="doc-empresa">
+        <div class="nome">${nomeLoja}</div>
+        <div class="meta">${metaLinhas}</div>
+      </div>
+      <div class="doc-tagbox">
+        <span class="tag">ORÇAMENTO</span>
+        <div class="num">Nº ${String(_numeroOrcamento()).padStart(6,'0')}</div>
+        <div class="data">${Utils.today()}</div>
+      </div>
+    </div>
+    <div class="doc-cliente">
+      <div class="lbl">Preparado para</div>
+      <div class="val">${cliente || '—'}${telCliente ? ' · '+telCliente : ''}</div>
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Qtd</th><th class="num">Vl. Unit.</th><th class="num">Vl. Total</th></tr></thead>
+      <tbody>${linhasTabela}</tbody>
+    </table>
+    <div class="doc-totais">
+      <div class="linha"><span>Subtotal</span><span>${Utils.formatCurrency(subtotal)}</span></div>
+      ${desconto > 0 ? `<div class="linha"><span>Desconto</span><span>-${Utils.formatCurrency(desconto)}</span></div>` : ''}
+      <div class="linha total"><span>TOTAL</span><span>${Utils.formatCurrency(total)}</span></div>
+    </div>
+    <div class="doc-footer-box">
+      <p><strong>Validade da proposta:</strong> até ${validadeData}</p>
+      ${condicoes ? `<p style="margin-top:.3rem;">${condicoes}</p>` : ''}
+      <p style="margin-top:.3rem;opacity:.85;">Este documento é um orçamento e não substitui nota fiscal. Valores sujeitos a alteração após o vencimento da validade.</p>
+    </div>
+    <div class="doc-assinatura">Assinatura / Aprovação do cliente</div>`;
+  document.getElementById('folhaDocOrc').innerHTML = html;
+}
+
+function _gerarTextoOrcamento() {
+  const cliente   = document.getElementById('orcCliente')?.value.trim();
+  const desconto  = Number(document.getElementById('orcDesconto')?.value || 0);
+  const diasVal   = Number(document.getElementById('orcValidadeDias')?.value || 7);
+  const condicoes = document.getElementById('orcCondicoes')?.value.trim();
+  const cfgD      = _cfgDocumentos();
+  const cfg       = Store.getConfig() || {};
+  const nomeLoja  = cfgD.nome || cfg.nome || 'CH Geladas';
+  const subtotal  = _orcItens.reduce((s,i) => s + (i.qtd * i.preco), 0);
+  const total     = Math.max(0, subtotal - desconto);
+  const validadeData = new Date(Date.now() + diasVal*86400000).toLocaleDateString('pt-BR');
+  const sep = '─'.repeat(28);
+  let txt = `*ORÇAMENTO — ${nomeLoja}* · Nº ${String(_numeroOrcamento()).padStart(6,'0')}\n${sep}\n`;
+  if (cliente) txt += `Cliente: ${cliente}\n`;
+  txt += `Data: ${Utils.today()}\n${sep}\n`;
+  _orcItens.forEach(i => { txt += `${i.nome} — ${i.qtd}×${Utils.formatCurrency(i.preco)} = ${Utils.formatCurrency(i.qtd*i.preco)}\n`; });
+  txt += `${sep}\n`;
+  if (desconto > 0) txt += `Desconto: -${Utils.formatCurrency(desconto)}\n`;
+  txt += `*TOTAL: ${Utils.formatCurrency(total)}*\nVálido até: ${validadeData}\n`;
+  if (condicoes) txt += `${sep}\n${condicoes}\n`;
+  return txt;
+}
+function enviarWhatsappOrcamento() {
+  if (!_orcItens.length) { UIService.showToast('Adicione ao menos 1 item','', 'warning'); return; }
+  const tel = (document.getElementById('orcTelefone')?.value || '').replace(/\D/g,'');
+  const txt = _gerarTextoOrcamento();
+  if (tel) Utils.openWhatsApp(tel, txt);
+  else window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+}
+
+/* ══ IMPRIMIR / PDF (recibo e orçamento) ══ */
+function imprimirDocAtivo() {
+  const areaId = _abaAtiva === 'orcamento' ? 'areaImpressaoOrc' : 'areaImpressao';
+  const alvo   = document.getElementById('areaImpressao');
+  const origem = document.getElementById(areaId);
+  if (_abaAtiva === 'orcamento') alvo.innerHTML = origem.innerHTML;
+  window.print();
+}
+async function baixarPdfDocAtivo() {
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    UIService.showToast('Sem conexão', 'Não foi possível carregar o gerador de PDF', 'error'); return;
+  }
+  const orc = _abaAtiva === 'orcamento';
+  const folhaId  = orc ? 'folhaDocOrc' : 'folhaDoc';
+  const larguraMm = orc ? 210 : 80;
+  const el = document.getElementById(folhaId);
+  const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
+  const { jsPDF } = window.jspdf;
+  const img = canvas.toDataURL('image/png');
+  const alturaMm = canvas.height * larguraMm / canvas.width;
+  const pdf = new jsPDF({ unit:'mm', format:[larguraMm, alturaMm] });
+  pdf.addImage(img, 'PNG', 0, 0, larguraMm, alturaMm);
+  const tipo = orc ? 'orcamento' : 'recibo';
+  pdf.save(`${tipo}_${Utils.todayISO()}.pdf`);
+}
+
+/* ══ ENCARTE ══ */
+function _renderTemas() {
+  const el = document.getElementById('temaSwatches');
+  el.innerHTML = TEMAS.map(t => `
+    <div class="tema-swatch ${t.id===_encTema?'sel':''}" style="background:${t.bg}" onclick="_setTema('${t.id}')"></div>`).join('');
+}
+function _setTema(id) { _encTema = id; _renderTemas(); renderEncarte(); }
+
+function renderEncarte() {
+  _renderListaItensEncarte();
+
+  const titulo    = document.getElementById('encTitulo')?.value.trim() || 'PROMOÇÃO';
+  const subtitulo = document.getElementById('encSubtitulo')?.value.trim() || '';
+  const ribbon    = document.getElementById('encRibbon')?.value.trim();
+  const rodape    = document.getElementById('encRodape')?.value.trim();
+  const cfgD      = _cfgDocumentos();
+  const cfg       = Store.getConfig() || {};
+  const nomeLoja  = cfgD.nome || cfg.nome || 'CH Geladas';
+  const tema      = TEMAS.find(t => t.id === _encTema) || TEMAS[0];
+  const rodapeFinal = rodape || [cfgD.whatsapp||cfg.whatsapp, cfgD.instagram].filter(Boolean).join(' · ');
+
+  const folha = document.getElementById('folhaEncarte');
+  folha.style.background = tema.bg;
+  folha.style.color = tema.txt;
+  folha.classList.toggle('compacta', _encItens.length > 5);
+  folha.innerHTML = `
+    <div class="enc-head">
+      <div class="enc-brand"><img class="enc-logo" src="${_logoUrl()}" onerror="this.style.display='none'"><span>${nomeLoja}</span></div>
+      ${ribbon ? `<div class="enc-ribbon">${ribbon}</div>` : ''}
+      <div class="enc-titulo">${titulo}</div>
+      ${subtitulo ? `<div class="enc-sub">${subtitulo}</div>` : ''}
+    </div>
+    <div class="enc-lista">
+      ${_encItens.map(i => `
+        <div class="enc-prod">
+          <span class="nome">${i.nome}</span>
+          <span class="precos">
+            ${i.precoDe > 0 ? `<span class="de">${Utils.formatCurrency(i.precoDe)}</span>` : ''}
+            <span class="preco">${Utils.formatCurrency(i.preco)}</span>
+          </span>
+        </div>`).join('') || `<p style="opacity:.75;font-size:.7rem;text-align:center;margin-top:1rem;">Adicione produtos ao encarte</p>`}
+    </div>
+    <div class="enc-rodape">${rodapeFinal || nomeLoja}</div>`;
+}
+
+async function baixarImagemEncarte() {
+  if (typeof html2canvas === 'undefined') { UIService.showToast('Sem conexão', 'Não foi possível carregar o gerador de imagem', 'error'); return; }
+  const el = document.getElementById('folhaEncarte');
+  const canvas = await html2canvas(el, { scale: 3, useCORS: true });
+  const url = canvas.toDataURL('image/png');
+  const a = Object.assign(document.createElement('a'), { href: url, download: `encarte_${Utils.todayISO()}.png` });
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function compartilharEncarteWhatsapp() {
+  if (typeof html2canvas === 'undefined') { UIService.showToast('Sem conexão', 'Não foi possível carregar o gerador de imagem', 'error'); return; }
+  const el = document.getElementById('folhaEncarte');
+  const canvas = await html2canvas(el, { scale: 3, useCORS: true });
+  canvas.toBlob(async (blob) => {
+    const file = new File([blob], `encarte_${Utils.todayISO()}.png`, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Encarte' }); return; } catch(e) { /* usuário cancelou */ }
+    }
+    // fallback: baixa a imagem e abre o WhatsApp Web pra anexar manualmente
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: `encarte_${Utils.todayISO()}.png` });
+    document.body.appendChild(a); a.click(); a.remove();
+    UIService.showToast('Imagem baixada', 'Anexe no WhatsApp manualmente', 'info');
+    window.open('https://wa.me/', '_blank');
+  }, 'image/png');
+}
+
+/* ══ INIT ══ */
+function init() {
+  UIService.startClock('clock');
+  _renderTemas();
+  renderRecibo();
+  renderOrcamento();
+  renderEncarte();
+}
+
+/* ══ LOGIN ══ */
+async function doLogin() {
+  const nome  = document.getElementById('loginNome')?.value.trim();
+  const senha = document.getElementById('loginSenha')?.value.trim();
+  const err   = document.getElementById('lockError');
+  err.textContent = '';
+  err.classList.add('hidden');
+  if (!nome || !senha) {
+    err.textContent = 'Preencha usuario e senha.';
+    err.classList.remove('hidden');
+    return;
+  }
+  let ok = false;
+  if (window.CH && window.CH.UserService) {
+    const user = await window.CH.UserService.login(nome, senha);
+    ok = !!user;
+  } else {
+    ok = await AuthService.login(senha);
+  }
+  if (ok) {
+    document.getElementById('lock').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    const _r = AuthService.getRole();
+    const rt = document.getElementById('roleTag');
+    if (rt) {
+      const _pi = window.CH && window.CH.PermissoesService && window.CH.PermissoesService.getPerfil && window.CH.PermissoesService.getPerfil(_r);
+      rt.textContent = (_pi && _pi.label) || _r || 'PDV';
+      rt.classList.remove('hidden');
+    }
+    init();
+  } else {
+    err.textContent = 'Usuario ou senha incorretos.';
+    err.classList.remove('hidden');
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
+  }
+}
+document.getElementById('loginSenha').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
+function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const _role = AuthService.getRole();
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(_role);
+    rt.textContent = _info?.label || _role || 'PDV';
+    rt.classList.remove('hidden');
+  }
+  init();
+});
+</script>
+</body>
+</html>
