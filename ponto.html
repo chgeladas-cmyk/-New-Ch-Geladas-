@@ -460,7 +460,7 @@ function init() {
     document.getElementById('secaoColabsAdmin')?.classList.remove('hidden');
     renderColabsHoje();
   }
-  EventBus.on('store:updated', ()=>{ atualizarKpis(); renderLista(); preencherSugestoes(); atualizarUICaixa(); if(AuthService.isAdmin()) renderColabsHoje(); });
+  EventBus.on('store:updated', ()=>{ _sincronizarCaixaComServidor(); atualizarKpis(); renderLista(); preencherSugestoes(); atualizarUICaixa(); if(AuthService.isAdmin()) renderColabsHoje(); });
   EventBus.on('store:ponto',   ()=>{ atualizarKpis(); renderLista(); if(AuthService.isAdmin()) renderColabsHoje(); });
 }
 
@@ -830,7 +830,12 @@ let _caixaAberto=false, _caixaAtual=null, _ultimoStatusCaixaPublicado=null;
 /* Publica o status do caixa (aberto/fechado) na coleção 'ponto' para que
    o ADM acompanhe em outros dispositivos sem depender do localStorage
    do colaborador que abriu o caixa. Um único registro CAIXA_STATUS por
-   operador é mantido (substitui o anterior, não acumula). */
+   operador é mantido (substitui o anterior, não acumula).
+   Também carrega o snapshot COMPLETO do caixa (caixaCompleto) — não só o
+   resumo — para que iniciarCaixa() consiga reconstruir o turno inteiro
+   (retiradas/sangrias/obs) a partir do servidor caso o localStorage deste
+   aparelho seja perdido (comum em PWA no iOS após dias sem uso) ou o
+   colaborador troque de aparelho no meio do turno. */
 function _publicarStatusCaixa(operadorOverride) {
   const operador=operadorOverride||_caixaAtual?.operador||AuthService.getNome();
   const aberto=!!(_caixaAberto&&_caixaAtual);
@@ -844,6 +849,7 @@ function _publicarStatusCaixa(operadorOverride) {
     totalRetiradas: resumo.totalRetiradas,
     totalSangrias:  resumo.totalSangrias,
     esperado:       resumo.esperado,
+    caixaCompleto:  aberto?_caixaAtual:null,
   };
   // Evita writes redundantes ao Firestore (ex.: F5 repetido, rajadas
   // de sangria que resultem no mesmo resumo já publicado).
@@ -871,14 +877,64 @@ function _calcularEsperado() {
   const totalRetiradas =(_caixaAtual.retiradas||[]).filter(r=>!r.cancelado).reduce((s,r)=>s+(r.valor||0),0);
   const totalSangrias  =(_caixaAtual.sangrias||[]).filter(r=>!r.cancelado).reduce((s,r)=>s+(r.valor||0),0);
   const abertoEm       =new Date(_caixaAtual.abertoEm);
-  const vendas         =Store.getVendas().filter(v=>v.status!=='cancelada'&&(()=>{const ts=v.criadoEm||v.timestamp||'';return ts?new Date(ts)>=abertoEm:v.dataCurta===Utils.todayISO();})());
-  const dinheiro       =vendas.filter(v=>(v.formaPgto||'').toLowerCase().includes('dinheiro')).reduce((s,v)=>s+v.total,0);
+  // Só conta vendas efetivamente concluídas/validadas — 'pendente' (aguardando
+  // aprovação, pode ser rejeitada) e 'rejeitada' ficam de fora. O filtro antigo
+  // (`status!=='cancelada'`) deixava essas duas passarem, inflando o esperado.
+  const vendas         =Store.getVendas().filter(v=>['concluida','validada'].includes(v.status)&&(()=>{const ts=v.criadoEm||v.timestamp||'';return ts?new Date(ts)>=abertoEm:v.dataCurta===Utils.todayISO();})());
+  // Pagamento misto (ex.: "Dinheiro+Pix") só entra no caixa físico pela parcela
+  // em dinheiro (v._parcelaDinheiro) — o resto (Pix/Débito/Crédito) não é
+  // dinheiro físico. Contar v.total inteiro (como era antes) inflava o
+  // esperado pela parte não-dinheiro de toda venda mista, causando "falta"
+  // no fechamento. Mesma regra já usada no fechamento por forma de pagamento
+  // do vendas.html (linha "Dinheiro+" ali).
+  const dinheiro       =vendas.reduce((s,v)=>{
+    const forma=v.formaPgto||'';
+    if(forma.startsWith('Dinheiro+')) return s+(v._parcelaDinheiro||0);
+    if(forma.toLowerCase().includes('dinheiro')) return s+(v.total||0);
+    return s;
+  },0);
   const esperado       =trocoInicial+dinheiro-totalRetiradas-totalSangrias;
   return {trocoInicial,dinheiro,totalRetiradas,totalSangrias,esperado,vendas};
 }
 
+/* Reconcilia o estado local do caixa com o último status sincronizado
+   (Firestore). É a correção do bug "abre o caixa e depois aparece
+   fechado": antes, o estado 'aberto' só existia no localStorage deste
+   aparelho — se o navegador limpasse os dados (comum em PWA no iOS após
+   alguns dias sem uso, pouco espaço em disco, ou troca de aparelho no
+   meio do turno), o app perdia a memória de que o caixa estava aberto.
+   Agora, se o servidor disser que o caixa deste operador está aberto,
+   isso vale como fonte de verdade e reconstrói _caixaAtual inteiro
+   (com retiradas/sangrias) a partir do snapshot publicado. Da mesma
+   forma, se o caixa foi fechado em outro aparelho, este aparelho
+   também se atualiza em vez de continuar operando um caixa já encerrado. */
+function _sincronizarCaixaComServidor() {
+  const operador=_caixaAtual?.operador||AuthService.getNome();
+  const statusSync=Store.getPonto()
+    .filter(p=>p.tipo==='CAIXA_STATUS'&&p.nome===operador)
+    .sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''))[0];
+  if(!statusSync) return; // ainda não sincronizou (ex.: 1ª carga antes do pull) — mantém o que já tem local
+
+  const remotoAberto=!!statusSync.dados?.aberto;
+  const remotoCompleto=statusSync.dados?.caixaCompleto||null;
+
+  if(remotoAberto&&remotoCompleto){
+    if(!_caixaAberto||_caixaAtual?.id!==remotoCompleto.id||JSON.stringify(_caixaAtual)!==JSON.stringify(remotoCompleto)){
+      _caixaAtual=remotoCompleto;
+      _caixaAberto=true;
+      try{localStorage.setItem('CH_CAIXA_ATUAL',JSON.stringify(_caixaAtual));}catch(_){}
+      atualizarUICaixa();
+    }
+  } else if(!remotoAberto&&_caixaAberto){
+    _caixaAberto=false; _caixaAtual=null;
+    try{localStorage.removeItem('CH_CAIXA_ATUAL');}catch(_){}
+    atualizarUICaixa();
+  }
+}
+
 function iniciarCaixa() {
   try { const raw=localStorage.getItem('CH_CAIXA_ATUAL'); if(raw){_caixaAtual=JSON.parse(raw);_caixaAberto=true;} } catch(_){}
+  _sincronizarCaixaComServidor();
   if(!_caixaAberto) {
     const ult=Store.getPonto().filter(p=>p.tipo==='CAIXA_FECHAMENTO').sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''))[0];
     if(ult?.dados?.totalCaixa!=null){
