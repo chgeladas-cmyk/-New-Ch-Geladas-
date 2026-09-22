@@ -164,16 +164,18 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
       <h3 id="entProdNome" class="text-sm font-black text-white">Produto</h3>
       <p id="entProdEstoque" class="text-[10px] text-slate-500 font-bold mt-0.5">Estoque atual: —</p>
     </div>
+    <div id="entPackAviso" class="hidden text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 mb-3 text-center"></div>
     <div class="grid grid-cols-2 gap-2 mb-3">
       <div>
-        <label class="label">Quantidade</label>
-        <input id="entQuantidade" type="number" min="0.001" step="0.001" class="inp" placeholder="0">
+        <label class="label" id="entQuantidadeLabel">Quantidade</label>
+        <input id="entQuantidade" type="number" min="0.001" step="0.001" class="inp" placeholder="0" oninput="_atualizarTotalUnidadesEntrada()">
       </div>
       <div>
         <label class="label">Custo unitário</label>
         <input id="entCusto" type="number" min="0" step="0.01" class="inp" placeholder="0,00">
       </div>
     </div>
+    <p id="entTotalUnidades" class="hidden text-[9px] text-sky-300 font-bold mb-2"></p>
     <p id="entCustoDica" class="text-[8px] text-slate-600 font-bold mb-3"></p>
     <div class="grid grid-cols-2 gap-2">
       <button onclick="cancelarModalEntrada()" class="btn-pill btn-ghost">Cancelar</button>
@@ -189,7 +191,8 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
     <h3 class="text-sm font-black text-white mb-1">Código não encontrado</h3>
     <p id="naoEncontradoCodigo" class="text-[10px] text-slate-500 font-mono mb-5"></p>
     <div class="space-y-2">
-      <button onclick="abrirAssociarProduto()" class="btn-pill btn-ghost w-full" style="padding:.8rem;"><i class="fas fa-link"></i> Associar a produto já cadastrado</button>
+      <button onclick="abrirAssociarProduto()" class="btn-pill btn-ghost w-full" style="padding:.8rem;"><i class="fas fa-link"></i> Associar como código da unidade</button>
+      <button onclick="abrirAssociarPack()" class="btn-pill btn-ghost w-full" style="padding:.8rem;"><i class="fas fa-boxes-stacked"></i> Associar como CAIXA/FARDO</button>
       <button onclick="abrirCadastrarProduto()" class="btn-pill btn-primary w-full" style="padding:.8rem;"><i class="fas fa-plus"></i> Cadastrar novo produto</button>
       <button onclick="fecharNaoEncontrado()" class="text-[9px] text-slate-600 hover:text-slate-400 font-bold uppercase pt-1">Cancelar e continuar lendo</button>
     </div>
@@ -206,6 +209,47 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
     <p id="associarCodigo" class="text-[9px] text-slate-500 font-mono mb-3"></p>
     <input id="associarBusca" class="inp mb-3" placeholder="🔍 Buscar produto..." oninput="renderListaAssociar()">
     <div id="associarLista" class="space-y-1.5 max-h-64 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- MODAL: ASSOCIAR CÓDIGO COMO CAIXA/FARDO DE PRODUTO EXISTENTE -->
+<div class="modal" id="modalAssociarPack">
+  <div class="modal-box max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400">Associar como caixa/fardo</h3>
+      <button onclick="UIService.closeModal('modalAssociarPack')" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <p id="associarPackCodigo" class="text-[9px] text-slate-500 font-mono mb-3"></p>
+
+    <div id="associarPackEtapaBusca">
+      <p class="text-[9px] text-slate-500 font-bold mb-2">1. Escolha o produto (a caixa é sempre de um produto já cadastrado):</p>
+      <input id="associarPackBusca" class="inp mb-3" placeholder="🔍 Buscar produto..." oninput="renderListaAssociarPack()">
+      <div id="associarPackLista" class="space-y-1.5 max-h-56 overflow-y-auto"></div>
+    </div>
+
+    <div id="associarPackEtapaForm" class="hidden">
+      <p class="text-[10px] text-sky-300 font-bold mb-3"><i class="fas fa-check-circle"></i> <span id="associarPackProdutoNome"></span></p>
+      <div class="space-y-3">
+        <div>
+          <label class="label">Rótulo da caixa/fardo</label>
+          <input id="packLabel" class="inp" placeholder="Ex: Caixa 12un">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="label">Unidades por caixa</label>
+            <input id="packQtd" type="number" min="1" step="1" class="inp" placeholder="Ex: 12">
+          </div>
+          <div>
+            <label class="label">Preço de venda da caixa</label>
+            <input id="packPreco" type="number" min="0" step="0.01" class="inp" placeholder="0,00">
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button onclick="_voltarBuscaPack()" class="btn-pill btn-ghost">Voltar</button>
+        <button onclick="confirmarAssociacaoPack()" class="btn-pill btn-primary"><i class="fas fa-check"></i> Salvar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -339,16 +383,46 @@ async function iniciarScanner() {
       formatsToSupport: [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
         Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.ITF,
       ],
       verbose: false,
     });
-    await _scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      _onScanSuccess,
-      () => {} // erro de leitura por frame (sem código no quadro) — ignora, é o normal
-    );
+    const _videoConstraints = {
+      facingMode: 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      advanced: [{ focusMode: 'continuous' }],
+    };
+    // qrbox como função: nunca ultrapassa o tamanho real do vídeo (causa mais
+    // comum de falha silenciosa/tela preta em telas pequenas com valor fixo em px)
+    const _qrboxFn = (viewW, viewH) => {
+      const lado = Math.floor(Math.min(viewW, viewH) * 0.7);
+      return { width: lado, height: lado };
+    };
+    try {
+      await _scanner.start(
+        _videoConstraints,
+        { fps: 10, qrbox: _qrboxFn, aspectRatio: 1.0 },
+        _onScanSuccess,
+        () => {} // erro de leitura por frame (sem código no quadro) — ignora, é o normal
+      );
+    } catch (eQrbox) {
+      // Fallback: alguns aparelhos ainda rejeitam a config acima (ex: câmera
+      // muito lenta pra reportar as capabilities a tempo) — tenta sem qrbox,
+      // usando o quadro inteiro do vídeo pra leitura.
+      console.warn('[Scanner] start com qrbox falhou, tentando fallback:', eQrbox);
+      await _scanner.start(
+        _videoConstraints,
+        { fps: 10 },
+        _onScanSuccess,
+        () => {}
+      );
+    }
     _scannerAtivo = true;
     document.getElementById('cameraParada').classList.add('hidden');
     document.getElementById('btnPararScanner').classList.remove('hidden');
@@ -438,11 +512,26 @@ function _onScanSuccess(codigoLido) {
 }
 
 /* ══ MODO ENTRADA ══ */
+let _packAtualEntrada = null; // pack detectado (código de CAIXA/FARDO), null = código de unidade
+
 function _abrirModalEntrada(produto) {
   _produtoAtual = produto;
+  _packAtualEntrada = produto._packEncontrado || null;
   document.getElementById('entProdNome').textContent = produto.nome;
   document.getElementById('entProdEstoque').textContent = `Estoque atual: ${produto.estoqueAtual} ${produto.unidade}`;
   document.getElementById('entQuantidade').value = '';
+
+  const aviso = document.getElementById('entPackAviso');
+  const rotuloQtd = document.getElementById('entQuantidadeLabel');
+  if (_packAtualEntrada) {
+    aviso.textContent = `📦 Código de CAIXA detectado: ${_packAtualEntrada.label} (${_packAtualEntrada.qtd} un/caixa)`;
+    aviso.classList.remove('hidden');
+    rotuloQtd.textContent = `Quantidade em CAIXAS (${_packAtualEntrada.label})`;
+  } else {
+    aviso.classList.add('hidden');
+    rotuloQtd.textContent = 'Quantidade (unidades)';
+  }
+  _atualizarTotalUnidadesEntrada();
 
   // Pré-preenche o custo com o do lote mais recente desse produto, se existir
   const lotes = window.CH.LoteService?.getLotesProduto?.(produto.id) || [];
@@ -451,25 +540,45 @@ function _abrirModalEntrada(produto) {
   document.getElementById('entCustoDica').textContent = custoSugerido != null
     ? `Sugerido a partir da última compra (${new Date(lotes[0].dataCompra).toLocaleDateString('pt-BR')})`
     : 'Sem histórico de compra — confirme o valor';
+  document.getElementById('entCustoDica').textContent += _packAtualEntrada ? ' · custo por UNIDADE, não pela caixa' : '';
 
   UIService.openModal('modalEntrada');
+}
+
+function _atualizarTotalUnidadesEntrada() {
+  const el = document.getElementById('entTotalUnidades');
+  if (!_packAtualEntrada) { el.classList.add('hidden'); return; }
+  const qtd = parseFloat(document.getElementById('entQuantidade').value);
+  if (!(qtd > 0)) { el.classList.add('hidden'); return; }
+  const totalUn = qtd * _packAtualEntrada.qtd;
+  el.textContent = `= ${totalUn} ${_produtoAtual?.unidade || 'un'} no estoque`;
+  el.classList.remove('hidden');
 }
 
 function cancelarModalEntrada() {
   UIService.closeModal('modalEntrada');
   _produtoAtual = null;
+  _packAtualEntrada = null;
   _retomarScanner();
 }
 
 async function confirmarEntrada() {
-  const qtd   = parseFloat(document.getElementById('entQuantidade').value);
-  const custo = parseFloat(document.getElementById('entCusto').value);
-  if (!(qtd > 0)) { UIService.showToast('Quantidade inválida', '', 'warning'); return; }
+  const qtdDigitada = parseFloat(document.getElementById('entQuantidade').value);
+  const custo       = parseFloat(document.getElementById('entCusto').value);
+  if (!(qtdDigitada > 0)) { UIService.showToast('Quantidade inválida', '', 'warning'); return; }
   if (!(custo >= 0)) { UIService.showToast('Informe o custo unitário', '', 'warning'); return; }
 
+  // Se o código lido era de uma CAIXA/FARDO, a quantidade digitada é em
+  // caixas — converte pra unidades reais antes de mandar pro estoque, que
+  // só entende unidade do produto.
+  const qtdUnidades = _packAtualEntrada ? qtdDigitada * _packAtualEntrada.qtd : qtdDigitada;
+
   try {
-    await window.CH.EstoqueService.entradaEstoque(_produtoAtual.id, qtd, { custo });
-    UIService.showToast('Entrada registrada!', `+${qtd} ${_produtoAtual.unidade} · ${_produtoAtual.nome}`, 'success');
+    await window.CH.EstoqueService.entradaEstoque(_produtoAtual.id, qtdUnidades, { custo });
+    const rotulo = _packAtualEntrada
+      ? `+${qtdDigitada} ${_packAtualEntrada.label} (${qtdUnidades} ${_produtoAtual.unidade})`
+      : `+${qtdUnidades} ${_produtoAtual.unidade}`;
+    UIService.showToast('Entrada registrada!', `${rotulo} · ${_produtoAtual.nome}`, 'success');
     window.CH.SoundService?.play('venda');
   } catch (e) {
     UIService.showToast('Não foi possível registrar', e.message, 'error');
@@ -477,16 +586,39 @@ async function confirmarEntrada() {
   }
   UIService.closeModal('modalEntrada');
   _produtoAtual = null;
+  _packAtualEntrada = null;
   _retomarScanner();
 }
 
 /* ══ MODO SAÍDA (carrinho → venda de verdade via VendasService) ══ */
 function _adicionarAoCarrinho(produto) {
-  const existente = _carrinho.find(i => i.produtoId === produto.id);
-  if (existente) existente.qtd += 1;
-  else _carrinho.push({ produtoId: produto.id, nome: produto.nome, qtd: 1, preco: produto.precoVenda, custo: produto.precoCusto, unidade: produto.unidade });
+  const pack = produto._packEncontrado || null;
+  // Cada combinação produto+variante (unidade avulsa OU um pack específico)
+  // é uma linha própria no carrinho — não podem se misturar na mesma linha,
+  // senão a baixa de estoque (que multiplica por pack.qtd conforme o label)
+  // fica errada.
+  const label      = pack ? pack.label : 'UNID';
+  const existente   = _carrinho.find(i => i.produtoId === produto.id && i.label === label);
+  if (existente) {
+    existente.qtd += 1;
+  } else if (pack) {
+    _carrinho.push({
+      produtoId: produto.id,
+      nome:      `${produto.nome} (${pack.label})`,
+      qtd:       1,
+      // preco/custo são POR CAIXA aqui (não por unidade), porque qtd conta
+      // caixas — se o pack não tem preço próprio cadastrado, calcula pela
+      // unidade × quantas unidades tem o pack.
+      preco:     pack.precoVenda != null ? pack.precoVenda : produto.precoVenda * pack.qtd,
+      custo:     produto.precoCusto * pack.qtd,
+      unidade:   pack.label,
+      label:     pack.label,
+    });
+  } else {
+    _carrinho.push({ produtoId: produto.id, nome: produto.nome, qtd: 1, preco: produto.precoVenda, custo: produto.precoCusto, unidade: produto.unidade, label: 'UNID' });
+  }
   _renderCarrinho();
-  UIService.showToast(produto.nome, 'Adicionado ao carrinho', 'success');
+  UIService.showToast(pack ? `${produto.nome} (${pack.label})` : produto.nome, 'Adicionado ao carrinho', 'success');
   setTimeout(_retomarScanner, 400); // pequeno respiro antes de voltar a escanear
 }
 
@@ -534,7 +666,7 @@ function abrirPagamento() {
 }
 
 async function finalizarVendaScanner(formaPgto) {
-  const itens = _carrinho.map(i => ({ prodId: i.produtoId, nome: i.nome, qtd: i.qtd, preco: i.preco, custo: i.custo, label: 'UNID' }));
+  const itens = _carrinho.map(i => ({ prodId: i.produtoId, nome: i.nome, qtd: i.qtd, preco: i.preco, custo: i.custo, label: i.label || 'UNID' }));
   const total = itens.reduce((s, i) => s + i.qtd * i.preco, 0);
   const cart = { itens, total, subtotal: total, desconto: 0 };
 
@@ -589,6 +721,75 @@ function confirmarAssociacao(produtoId) {
   window.CH.EstoqueService.atualizarProduto(produtoId, { codigoBarras: _codigoAtual });
   UIService.showToast('Código associado!', '', 'success');
   UIService.closeModal('modalAssociar');
+  _codigoAtual = null;
+  _retomarScanner();
+}
+
+let _produtoParaPack = null;
+
+function abrirAssociarPack() {
+  UIService.closeModal('modalNaoEncontrado');
+  document.getElementById('associarPackCodigo').textContent = `Código: ${_codigoAtual}`;
+  document.getElementById('associarPackBusca').value = '';
+  _produtoParaPack = null;
+  document.getElementById('associarPackEtapaBusca').classList.remove('hidden');
+  document.getElementById('associarPackEtapaForm').classList.add('hidden');
+  renderListaAssociarPack();
+  UIService.openModal('modalAssociarPack');
+}
+
+function renderListaAssociarPack() {
+  const termo = (document.getElementById('associarPackBusca').value || '').toLowerCase();
+  const produtos = (window.CH.EstoqueService.getProdutos() || [])
+    .filter(p => p.ativo !== false)
+    .filter(p => !termo || p.nome.toLowerCase().includes(termo));
+  const el = document.getElementById('associarPackLista');
+  if (!produtos.length) { el.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhum produto encontrado</p>`; return; }
+  el.innerHTML = produtos.map(p => `
+    <div class="prod-pick-item" onclick="selecionarProdutoParaPack('${p.id}')">
+      <div style="flex:1;min-width:0;"><p class="text-[11px] font-bold text-white truncate">${p.nome}</p><p class="text-[9px] text-slate-500">${(p.packs||[]).length} caixa(s)/fardo(s) já cadastrado(s)</p></div>
+      <i class="fas fa-chevron-right text-sky-400 text-xs"></i>
+    </div>`).join('');
+}
+
+function selecionarProdutoParaPack(produtoId) {
+  const prod = window.CH.EstoqueService.getProduto(produtoId);
+  if (!prod) return;
+  _produtoParaPack = prod;
+  document.getElementById('associarPackProdutoNome').textContent = prod.nome;
+  document.getElementById('packLabel').value = '';
+  document.getElementById('packQtd').value = '';
+  document.getElementById('packPreco').value = '';
+  document.getElementById('associarPackEtapaBusca').classList.add('hidden');
+  document.getElementById('associarPackEtapaForm').classList.remove('hidden');
+}
+
+function _voltarBuscaPack() {
+  _produtoParaPack = null;
+  document.getElementById('associarPackEtapaBusca').classList.remove('hidden');
+  document.getElementById('associarPackEtapaForm').classList.add('hidden');
+}
+
+function confirmarAssociacaoPack() {
+  if (!_produtoParaPack) return;
+  const label  = document.getElementById('packLabel').value.trim();
+  const qtd    = parseFloat(document.getElementById('packQtd').value);
+  const preco  = document.getElementById('packPreco').value;
+  if (!label) { UIService.showToast('Informe o rótulo da caixa', '', 'warning'); return; }
+  if (!(qtd > 0)) { UIService.showToast('Informe quantas unidades tem a caixa', '', 'warning'); return; }
+
+  try {
+    window.CH.EstoqueService.adicionarOuAtualizarPack(_produtoParaPack.id, {
+      label, qtd, precoVenda: preco === '' ? null : parseFloat(preco), codigoBarras: _codigoAtual,
+    });
+    UIService.showToast('Caixa/fardo associado!', `${label} · ${_produtoParaPack.nome}`, 'success');
+    window.CH.SoundService?.play('venda');
+  } catch (e) {
+    UIService.showToast('Não foi possível associar', e.message, 'error');
+    window.CH.SoundService?.play('erro');
+  }
+  UIService.closeModal('modalAssociarPack');
+  _produtoParaPack = null;
   _codigoAtual = null;
   _retomarScanner();
 }
