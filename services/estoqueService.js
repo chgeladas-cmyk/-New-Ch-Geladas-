@@ -162,12 +162,61 @@
    * Usado pelo módulo de leitura via câmera (scanner.html). Compara o
    * código exato após aparar espaços — nunca faz correspondência parcial
    * (evita achar o produto errado por coincidência de prefixo).
+   *
+   * Também reconhece código de barras de CAIXA/FARDO (pack), cadastrado em
+   * produto.packs[].codigoBarras — comum em bebidas onde a caixa fechada
+   * tem um código diferente da unidade avulsa. Quando o código bate com um
+   * pack, o produto retornado ganha o campo extra `_packEncontrado` com o
+   * pack correspondente ({ label, qtd, precoVenda, codigoBarras }), para
+   * quem chamar saber que a leitura corresponde a N unidades, não a 1.
    */
   function getProdutoPorCodigoBarras(codigo) {
     const alvo = String(codigo || '').trim();
     if (!alvo) return null;
-    const p = Store.getEstoque().find(p => p.codigoBarras && String(p.codigoBarras).trim() === alvo);
-    return p ? _normalizarProduto(p) : null;
+
+    const estoque = Store.getEstoque();
+
+    const direto = estoque.find(p => p.codigoBarras && String(p.codigoBarras).trim() === alvo);
+    if (direto) return { ..._normalizarProduto(direto), _packEncontrado: null };
+
+    for (const p of estoque) {
+      const pack = (p.packs || []).find(pk => pk.codigoBarras && String(pk.codigoBarras).trim() === alvo);
+      if (pack) return { ..._normalizarProduto(p), _packEncontrado: pack };
+    }
+
+    return null;
+  }
+
+  /**
+   * Adiciona (ou atualiza, se já existir um pack com o mesmo label) um
+   * pack/fardo/caixa a um produto já cadastrado — usado para associar um
+   * código de barras de CAIXA a um produto cujo código de UNIDADE já existe
+   * (ex: "Império Caixa 12un" tem código de barras diferente da lata avulsa).
+   */
+  function adicionarOuAtualizarPack(produtoId, { label, qtd, precoVenda, codigoBarras } = {}) {
+    const prod = Store.getEstoque().find(p => p.id === produtoId);
+    if (!prod) throw new Error('Produto não encontrado.');
+    const rotulo = String(label || '').trim();
+    if (!rotulo) throw new Error('Informe o rótulo do pack (ex: Caixa 12un).');
+    if (!(Number(qtd) > 0)) throw new Error('Informe quantas unidades tem esse pack.');
+
+    const codigo = codigoBarras ? String(codigoBarras).trim() : null;
+    if (codigo) {
+      const conflito = (prod.packs || []).find(pk => pk.label !== rotulo && pk.codigoBarras && String(pk.codigoBarras).trim() === codigo);
+      if (conflito) throw new Error(`Esse código já está associado ao pack "${conflito.label}" deste produto.`);
+    }
+
+    const packs = Array.isArray(prod.packs) ? prod.packs.map(pk => ({ ...pk })) : [];
+    const idx = packs.findIndex(pk => pk.label === rotulo);
+    const novoPack = {
+      label: rotulo,
+      qtd: Number(qtd),
+      precoVenda: precoVenda != null && precoVenda !== '' ? Number(precoVenda) : (packs[idx]?.precoVenda ?? null),
+      codigoBarras: codigo ?? (packs[idx]?.codigoBarras ?? null),
+    };
+    if (idx >= 0) packs[idx] = novoPack; else packs.push(novoPack);
+
+    return atualizarProduto(produtoId, { packs });
   }
 
   /** Cria um novo produto */
@@ -981,6 +1030,7 @@
     getProdutoPorCodigoBarras,
     adicionarProduto,
     atualizarProduto,
+    adicionarOuAtualizarPack,
     removerProduto,
 
     // Movimentações
