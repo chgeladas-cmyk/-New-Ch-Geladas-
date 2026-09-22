@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#04060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CH Geladas">
+<title>Scanner — CH Geladas</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+:root{--bg:#060810;--border:rgba(255,255,255,0.06);}
+*{box-sizing:border-box;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:#f1f5f9;min-height:100vh;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%,transparent 50%);}
+
+#lock{position:fixed;inset:0;z-index:9999;background:radial-gradient(ellipse at 50% 40%,#0f1a2e 0%,#060810 70%);display:flex;align-items:center;justify-content:center;}
+#lock.hidden{display:none;}
+
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.82);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;}
+.modal.open{opacity:1;visibility:visible;pointer-events:auto;}
+.modal.open>.modal-box{animation:mIn .22s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes mIn{from{opacity:0;transform:scale(.93) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.modal-box{background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:2rem;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 32px 64px rgba(0,0,0,.6);}
+
+.inp{font-size:16px!important;padding:12px 14px;color:#fff;background:#1e293b;border:2px solid #334155;border-radius:.75rem;width:100%;outline:none;transition:all .2s;font-family:inherit;}
+.inp:focus{border-color:#38bdf8!important;box-shadow:0 0 0 4px rgba(56,189,248,.15)!important;}
+.inp::placeholder{color:#64748b;}
+.label{color:#7dd3fc;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
+
+.tab-bar{display:flex;gap:.4rem;padding:.6rem .75rem;background:rgba(6,8,16,.9);border-bottom:1px solid var(--border);}
+.tab-btn{flex:1;padding:.7rem .4rem;border-radius:.9rem;text-align:center;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#64748b;background:rgba(255,255,255,.02);border:1.5px solid transparent;transition:all .15s;cursor:pointer;}
+.tab-btn.active{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.35);color:#7dd3fc;}
+.tab-btn.saida.active{background:rgba(249,115,22,.12);border-color:rgba(249,115,22,.35);color:#fdba74;}
+
+/* ══ Câmera ══ */
+#cameraWrap{position:relative;width:100%;max-width:420px;margin:0 auto;border-radius:1.3rem;overflow:hidden;background:#000;box-shadow:0 20px 50px rgba(0,0,0,.5);aspect-ratio:1/1;}
+#reader{width:100%;height:100%;}
+#reader video{width:100%!important;height:100%!important;object-fit:cover;}
+#cameraOverlay{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;}
+#cameraOverlay .quadro{width:72%;height:45%;border:3px solid rgba(56,189,248,.85);border-radius:1rem;box-shadow:0 0 0 999px rgba(0,0,0,.35);}
+.tab-btn.saida ~ * #cameraOverlay .quadro,
+#cameraOverlay.saida .quadro{border-color:rgba(249,115,22,.85);}
+#cameraParada{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;background:rgba(6,8,16,.92);}
+
+.status-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;border-radius:9999px;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;}
+.status-parado{background:rgba(100,116,139,.15);color:#94a3b8;}
+.status-escaneando{background:rgba(56,189,248,.15);color:#7dd3fc;}
+.status-buscando{background:rgba(245,158,11,.15);color:#fbbf24;}
+.status-sucesso{background:rgba(16,185,129,.15);color:#34d399;}
+.status-erro{background:rgba(239,68,68,.15);color:#f87171;}
+.status-dot{width:7px;height:7px;border-radius:9999px;background:currentColor;animation:pulse-dot 1.4s ease-in-out infinite;}
+@keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+.btn-pill{padding:.7rem .9rem;border-radius:.9rem;font-weight:900;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;justify-content:center;gap:.4rem;transition:all .15s;}
+.btn-primary{background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;}
+.btn-laranja{background:linear-gradient(135deg,#f97316,#c2410c);color:#fff;}
+.btn-ghost{background:rgba(255,255,255,.04);border:1.5px solid var(--border);color:#cbd5e1;}
+.btn-ghost:active{background:rgba(255,255,255,.08);}
+.btn-ghost.ativo{background:rgba(56,189,248,.18);border-color:rgba(56,189,248,.4);color:#7dd3fc;}
+
+.prod-pick-item{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.6rem .7rem;border-radius:.85rem;background:rgba(255,255,255,.02);border:1px solid var(--border);margin-bottom:.4rem;cursor:pointer;transition:all .12s;}
+.prod-pick-item:active{background:rgba(56,189,248,.08);}
+
+.cart-item{display:flex;align-items:center;justify-content:space-between;gap:.6rem;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:.9rem;padding:.6rem .7rem;}
+.stepper{display:flex;align-items:center;gap:.5rem;background:#1e293b;border-radius:.6rem;padding:.2rem;}
+.stepper button{width:26px;height:26px;border-radius:.4rem;background:rgba(255,255,255,.06);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;}
+</style>
+</head>
+<body>
+
+<!-- LOCK -->
+<div id="lock">
+  <div style="background:rgba(13,17,23,.95);border:1px solid rgba(255,255,255,.08);border-radius:2.5rem;padding:2.5rem;width:100%;max-width:360px;margin:0 1rem;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,.8);">
+    <div class="text-5xl mb-4">📷</div>
+    <h1 class="text-2xl font-black mb-1 uppercase tracking-tight">CH <span class="text-sky-400">GELADAS</span></h1>
+    <p class="text-[9px] text-slate-600 font-bold uppercase tracking-widest mb-8">Scanner de Código de Barras</p>
+    <input type="text" id="loginNome" autocomplete="username" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-sky-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-3" placeholder="👤 Usuário">
+    <input type="password" id="loginSenha" autocomplete="current-password" class="w-full bg-slate-950 border-2 border-slate-800 focus:border-sky-500 p-4 rounded-2xl text-left outline-none text-white transition-all font-sans mb-4" placeholder="🔒 Senha">
+    <div id="lockError" class="hidden text-[10px] text-red-400 font-bold mb-3"></div>
+    <button onclick="doLogin()" class="w-full bg-sky-700 hover:bg-sky-600 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
+      <i class="fas fa-unlock-alt mr-2"></i>Entrar
+    </button>
+    <div class="mt-6"><a href="index.html" class="text-[9px] text-slate-700 hover:text-slate-500 font-bold uppercase tracking-widest transition-colors">← Hub Principal</a></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden flex flex-col min-h-screen">
+
+  <header class="sticky top-0 z-40 px-4 py-3 flex justify-between items-center" style="background:rgba(6,8,16,.96);border-bottom:1px solid rgba(255,255,255,.04);">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">📷</span>
+      <div>
+        <h1 class="text-[10px] font-black uppercase tracking-widest text-sky-400">Scanner</h1>
+        <p id="clock" class="text-[9px] font-mono text-slate-600 mt-0.5">00:00:00</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="roleTag" class="hidden text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 text-slate-400"></span>
+      <button onclick="logout()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-red-400 transition-all">
+        <i class="fas fa-power-off text-xs"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="tab-bar">
+    <div class="tab-btn active" data-modo="entrada" onclick="mudarModo('entrada')"><i class="fas fa-box-open mr-1"></i>Entrada</div>
+    <div class="tab-btn saida" data-modo="saida" onclick="mudarModo('saida')"><i class="fas fa-cash-register mr-1"></i>Saída</div>
+  </div>
+
+  <div class="flex-1 p-3 pb-6 space-y-4">
+
+    <div id="cameraWrap">
+      <div id="reader"></div>
+      <div id="cameraOverlay"><div class="quadro"></div></div>
+      <div id="cameraParada">
+        <i class="fas fa-camera text-4xl text-slate-600"></i>
+        <p class="text-[10px] font-black uppercase text-slate-500">Câmera parada</p>
+        <button onclick="iniciarScanner()" class="btn-pill btn-primary" style="padding:.6rem 1.2rem;"><i class="fas fa-play"></i> Iniciar leitura</button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <span id="statusBadge" class="status-badge status-parado"><span class="status-dot"></span>Parado</span>
+      <div class="flex items-center gap-2">
+        <button id="btnLanterna" onclick="alternarLanterna()" class="btn-pill btn-ghost hidden" style="padding:.5rem .7rem;"><i class="fas fa-bolt"></i></button>
+        <button id="btnPararScanner" onclick="pararScanner()" class="btn-pill btn-ghost hidden" style="padding:.5rem .8rem;"><i class="fas fa-stop"></i> Parar</button>
+      </div>
+    </div>
+
+    <!-- ═══ MODO ENTRADA: último produto lido ═══ -->
+    <div id="painelEntrada">
+      <p class="text-[9px] text-slate-600 text-center font-bold uppercase tracking-wide">Aponte a câmera pro código de barras do produto pra dar entrada no estoque</p>
+    </div>
+
+    <!-- ═══ MODO SAÍDA: carrinho ═══ -->
+    <div id="painelSaida" class="hidden space-y-2">
+      <div class="flex items-center justify-between">
+        <p class="label !mb-0">Carrinho</p>
+        <button onclick="limparCarrinho()" class="text-[9px] font-bold text-slate-600 hover:text-red-400 uppercase">Limpar</button>
+      </div>
+      <div id="carrinhoLista" class="space-y-2"></div>
+      <div class="flex items-center justify-between px-1 pt-2 border-t border-white/5">
+        <span class="text-[10px] font-black uppercase text-slate-500">Total</span>
+        <span id="carrinhoTotal" class="text-lg font-black text-white">R$ 0,00</span>
+      </div>
+      <button id="btnFinalizarVenda" onclick="abrirPagamento()" disabled class="btn-pill btn-laranja w-full opacity-40" style="padding:.9rem;"><i class="fas fa-check"></i> Finalizar Venda</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: ENTRADA DE ESTOQUE -->
+<div class="modal" id="modalEntrada">
+  <div class="modal-box max-w-sm p-5">
+    <div class="text-center mb-4">
+      <div class="w-14 h-14 rounded-2xl bg-sky-500/15 flex items-center justify-center mx-auto mb-2"><i class="fas fa-box-open text-sky-400 text-xl"></i></div>
+      <h3 id="entProdNome" class="text-sm font-black text-white">Produto</h3>
+      <p id="entProdEstoque" class="text-[10px] text-slate-500 font-bold mt-0.5">Estoque atual: —</p>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      <div>
+        <label class="label">Quantidade</label>
+        <input id="entQuantidade" type="number" min="0.001" step="0.001" class="inp" placeholder="0">
+      </div>
+      <div>
+        <label class="label">Custo unitário</label>
+        <input id="entCusto" type="number" min="0" step="0.01" class="inp" placeholder="0,00">
+      </div>
+    </div>
+    <p id="entCustoDica" class="text-[8px] text-slate-600 font-bold mb-3"></p>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="cancelarModalEntrada()" class="btn-pill btn-ghost">Cancelar</button>
+      <button onclick="confirmarEntrada()" class="btn-pill btn-primary"><i class="fas fa-check"></i> Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CÓDIGO NÃO ENCONTRADO -->
+<div class="modal" id="modalNaoEncontrado">
+  <div class="modal-box max-w-sm p-5 text-center">
+    <div class="w-14 h-14 rounded-2xl bg-amber-500/15 flex items-center justify-center mx-auto mb-3"><i class="fas fa-barcode text-amber-400 text-xl"></i></div>
+    <h3 class="text-sm font-black text-white mb-1">Código não encontrado</h3>
+    <p id="naoEncontradoCodigo" class="text-[10px] text-slate-500 font-mono mb-5"></p>
+    <div class="space-y-2">
+      <button onclick="abrirAssociarProduto()" class="btn-pill btn-ghost w-full" style="padding:.8rem;"><i class="fas fa-link"></i> Associar a produto já cadastrado</button>
+      <button onclick="abrirCadastrarProduto()" class="btn-pill btn-primary w-full" style="padding:.8rem;"><i class="fas fa-plus"></i> Cadastrar novo produto</button>
+      <button onclick="fecharNaoEncontrado()" class="text-[9px] text-slate-600 hover:text-slate-400 font-bold uppercase pt-1">Cancelar e continuar lendo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ASSOCIAR A PRODUTO EXISTENTE -->
+<div class="modal" id="modalAssociar">
+  <div class="modal-box max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400">Associar código</h3>
+      <button onclick="UIService.closeModal('modalAssociar')" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <p id="associarCodigo" class="text-[9px] text-slate-500 font-mono mb-3"></p>
+    <input id="associarBusca" class="inp mb-3" placeholder="🔍 Buscar produto..." oninput="renderListaAssociar()">
+    <div id="associarLista" class="space-y-1.5 max-h-64 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- MODAL: CADASTRAR NOVO PRODUTO -->
+<div class="modal" id="modalCadastrar">
+  <div class="modal-box max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400">Cadastrar produto</h3>
+      <button onclick="UIService.closeModal('modalCadastrar')" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <p id="cadastrarCodigo" class="text-[9px] text-slate-500 font-mono mb-3"></p>
+    <div class="space-y-3">
+      <div>
+        <label class="label">Nome do produto</label>
+        <input id="cadNome" class="inp" placeholder="Ex: Skol Lata 350ml">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="label">Unidade</label>
+          <select id="cadUnidade" class="inp">
+            <option value="UN">UN</option><option value="KG">KG</option><option value="G">G</option>
+            <option value="L">L</option><option value="ML">ML</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Qtd. inicial</label>
+          <input id="cadQuantidade" type="number" min="0" step="0.001" class="inp" placeholder="0">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="label">Preço de venda</label>
+          <input id="cadPrecoVenda" type="number" min="0" step="0.01" class="inp" placeholder="0,00">
+        </div>
+        <div>
+          <label class="label">Custo unitário</label>
+          <input id="cadCusto" type="number" min="0" step="0.01" class="inp" placeholder="0,00">
+        </div>
+      </div>
+    </div>
+    <button onclick="confirmarCadastro()" class="btn-pill btn-primary w-full mt-4" style="padding:.8rem;"><i class="fas fa-check"></i> Cadastrar e dar entrada</button>
+  </div>
+</div>
+
+<!-- MODAL: FORMA DE PAGAMENTO (saída/venda) -->
+<div class="modal" id="modalPagamento">
+  <div class="modal-box max-w-sm p-5">
+    <h3 class="text-xs font-black uppercase tracking-widest text-orange-400 mb-4 text-center">Forma de pagamento</h3>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="finalizarVendaScanner('Dinheiro')" class="btn-pill btn-ghost" style="padding:.9rem;"><i class="fas fa-money-bill-wave"></i> Dinheiro</button>
+      <button onclick="finalizarVendaScanner('Pix')" class="btn-pill btn-ghost" style="padding:.9rem;"><i class="fas fa-qrcode"></i> Pix</button>
+      <button onclick="finalizarVendaScanner('Cartão Débito')" class="btn-pill btn-ghost" style="padding:.9rem;"><i class="fas fa-credit-card"></i> Débito</button>
+      <button onclick="finalizarVendaScanner('Cartão Crédito')" class="btn-pill btn-ghost" style="padding:.9rem;"><i class="fas fa-credit-card"></i> Crédito</button>
+    </div>
+    <button onclick="UIService.closeModal('modalPagamento')" class="text-[9px] text-slate-600 hover:text-slate-400 font-bold uppercase w-full text-center pt-4">Cancelar</button>
+  </div>
+</div>
+
+<div id="toast" style="min-width:200px;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(2rem);opacity:0;pointer-events:none;z-index:200;transition:opacity .2s,transform .2s;background:rgba(13,17,23,.98);border:1px solid rgba(255,255,255,.09);border-radius:1rem;padding:.75rem 1rem;display:flex;align-items:center;gap:.6rem;box-shadow:0 16px 32px rgba(0,0,0,.5);">
+  <div id="toastIcon" style="width:22px;height:22px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;"></div>
+  <div><p id="toastMsg" class="text-[11px] font-bold text-white"></p><p id="toastSub" class="text-[9px] text-slate-400"></p></div>
+</div>
+
+<script src="core.js"></script>
+  <script src="./services/permissoesService.js"></script>
+  <script src="./services/userService.js"></script>
+  <script src="./services/syncService.js"></script>
+  <script src="./services/auditService.js"></script>
+  <script src="./services/syncMonitor.js"></script>
+  <script src="./services/backupService.js"></script>
+  <script src="./services/soundService.js"></script>
+  <script src="./services/tenantService.js"></script>
+  <script src="./services/custoService.js"></script>
+  <script src="./services/loteService.js"></script>
+  <script src="./services/estoqueService.js"></script>
+  <script src="./services/rentabilidadeService.js"></script>
+  <script src="./services/reconciliationService.js"></script>
+  <script src="./services/vendasService.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   scanner.html — Leitura de código de barras via câmera
+   ─────────────────────────────────────────────────────────────
+   Integrado 100% aos serviços já existentes — não escreve direto
+   no Firestore em nenhum momento:
+     • Entrada → EstoqueService.entradaEstoque() (já cria o
+       CompraLote/FIFO automaticamente, mesma função usada em
+       qualquer outra entrada de estoque do sistema)
+     • Saída   → VendasService.finalizarVenda() (mesma função que
+       vendas.html usa — passa por aprovação se o perfil exigir,
+       gera financeiro, concilia no caixa do ponto.html, consome
+       FIFO/CMV normalmente)
+══════════════════════════════════════════════════════════════ */
+
+let _scanner = null;
+let _scannerAtivo = false;
+let _lanternaAtiva = false;
+let _modo = 'entrada'; // 'entrada' | 'saida'
+let _ultimoCodigo = null;
+let _ultimoTimestamp = 0;
+const DEBOUNCE_MS = 2000;
+
+let _produtoAtual = null;   // produto do último código lido (modo entrada)
+let _codigoAtual = null;    // código bruto do último scan (pra associar/cadastrar)
+let _carrinho = [];         // [{ produtoId, nome, qtd, preco, custo }]
+
+/* ══ TABS ══ */
+function mudarModo(modo) {
+  _modo = modo;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.modo === modo));
+  document.getElementById('painelEntrada').classList.toggle('hidden', modo !== 'entrada');
+  document.getElementById('painelSaida').classList.toggle('hidden', modo !== 'saida');
+  document.getElementById('cameraOverlay').classList.toggle('saida', modo === 'saida');
+}
+
+/* ══ STATUS VISUAL ══ */
+function _setStatus(tipo, texto) {
+  const el = document.getElementById('statusBadge');
+  el.className = 'status-badge status-' + tipo;
+  el.innerHTML = `<span class="status-dot"></span>${texto}`;
+}
+
+/* ══ CICLO DE VIDA DA CÂMERA ══ */
+async function iniciarScanner() {
+  if (_scannerAtivo) return;
+  if (typeof Html5Qrcode === 'undefined') {
+    UIService.showToast('Erro', 'Biblioteca do scanner não carregou (sem internet?)', 'error');
+    return;
+  }
+  try {
+    _scanner = new Html5Qrcode('reader', {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+      ],
+      verbose: false,
+    });
+    await _scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      _onScanSuccess,
+      () => {} // erro de leitura por frame (sem código no quadro) — ignora, é o normal
+    );
+    _scannerAtivo = true;
+    document.getElementById('cameraParada').classList.add('hidden');
+    document.getElementById('btnPararScanner').classList.remove('hidden');
+    _setStatus('escaneando', 'Escaneando');
+    _atualizarBotaoLanterna();
+  } catch (e) {
+    console.warn('[Scanner] Falha ao iniciar câmera:', e);
+    _tratarErroCamera(e);
+  }
+}
+
+async function pararScanner() {
+  if (!_scanner || !_scannerAtivo) return;
+  try { await _scanner.stop(); } catch (_) {}
+  _scannerAtivo = false;
+  document.getElementById('cameraParada').classList.remove('hidden');
+  document.getElementById('btnPararScanner').classList.add('hidden');
+  document.getElementById('btnLanterna').classList.add('hidden');
+  _setStatus('parado', 'Parado');
+}
+
+/** Pausa a câmera (sem desligar) enquanto um modal está aberto — economiza
+ *  bateria/CPU e evita ler o mesmo código de novo por trás do modal. */
+function _pausarScanner() {
+  if (_scanner && _scannerAtivo) { try { _scanner.pause(true); } catch (_) {} }
+}
+function _retomarScanner() {
+  if (_scanner && _scannerAtivo) { try { _scanner.resume(); _setStatus('escaneando', 'Escaneando'); } catch (_) {} }
+}
+
+function _tratarErroCamera(e) {
+  const nome = e?.name || '';
+  if (nome === 'NotAllowedError' || /permission/i.test(String(e))) {
+    UIService.showToast('Câmera bloqueada', 'Permita o acesso à câmera nas configurações do navegador', 'error');
+  } else if (nome === 'NotFoundError') {
+    UIService.showToast('Nenhuma câmera encontrada', '', 'error');
+  } else {
+    UIService.showToast('Não foi possível abrir a câmera', String(e?.message || e), 'error');
+  }
+  _setStatus('erro', 'Erro');
+}
+
+async function _atualizarBotaoLanterna() {
+  const btn = document.getElementById('btnLanterna');
+  try {
+    const capabilities = _scanner?.getRunningTrackCapabilities?.();
+    if (capabilities && 'torch' in capabilities) btn.classList.remove('hidden');
+    else btn.classList.add('hidden');
+  } catch (_) { btn.classList.add('hidden'); }
+}
+
+async function alternarLanterna() {
+  if (!_scanner || !_scannerAtivo) return;
+  try {
+    _lanternaAtiva = !_lanternaAtiva;
+    await _scanner.applyVideoConstraints({ advanced: [{ torch: _lanternaAtiva }] });
+    document.getElementById('btnLanterna').classList.toggle('ativo', _lanternaAtiva);
+  } catch (e) {
+    UIService.showToast('Lanterna indisponível', 'Este aparelho não permite controlar pelo navegador', 'warning');
+    _lanternaAtiva = false;
+  }
+}
+
+/* ══ LEITURA COM SUCESSO (debounce + roteamento por modo) ══ */
+function _onScanSuccess(codigoLido) {
+  const agora = Date.now();
+  if (codigoLido === _ultimoCodigo && (agora - _ultimoTimestamp) < DEBOUNCE_MS) return; // ignora repetição rápida
+  _ultimoCodigo = codigoLido;
+  _ultimoTimestamp = agora;
+
+  window.CH.SoundService?.beep();
+  _setStatus('buscando', 'Buscando...');
+  _pausarScanner();
+
+  const produto = window.CH.EstoqueService?.getProdutoPorCodigoBarras?.(codigoLido);
+  if (!produto) {
+    _setStatus('erro', 'Não encontrado');
+    _codigoAtual = codigoLido;
+    document.getElementById('naoEncontradoCodigo').textContent = codigoLido;
+    UIService.openModal('modalNaoEncontrado');
+    return;
+  }
+
+  _setStatus('sucesso', 'Encontrado');
+  if (_modo === 'entrada') _abrirModalEntrada(produto);
+  else _adicionarAoCarrinho(produto);
+}
+
+/* ══ MODO ENTRADA ══ */
+function _abrirModalEntrada(produto) {
+  _produtoAtual = produto;
+  document.getElementById('entProdNome').textContent = produto.nome;
+  document.getElementById('entProdEstoque').textContent = `Estoque atual: ${produto.estoqueAtual} ${produto.unidade}`;
+  document.getElementById('entQuantidade').value = '';
+
+  // Pré-preenche o custo com o do lote mais recente desse produto, se existir
+  const lotes = window.CH.LoteService?.getLotesProduto?.(produto.id) || [];
+  const custoSugerido = lotes[0]?.custoUnitario;
+  document.getElementById('entCusto').value = custoSugerido != null ? custoSugerido : (produto.precoCusto || '');
+  document.getElementById('entCustoDica').textContent = custoSugerido != null
+    ? `Sugerido a partir da última compra (${new Date(lotes[0].dataCompra).toLocaleDateString('pt-BR')})`
+    : 'Sem histórico de compra — confirme o valor';
+
+  UIService.openModal('modalEntrada');
+}
+
+function cancelarModalEntrada() {
+  UIService.closeModal('modalEntrada');
+  _produtoAtual = null;
+  _retomarScanner();
+}
+
+async function confirmarEntrada() {
+  const qtd   = parseFloat(document.getElementById('entQuantidade').value);
+  const custo = parseFloat(document.getElementById('entCusto').value);
+  if (!(qtd > 0)) { UIService.showToast('Quantidade inválida', '', 'warning'); return; }
+  if (!(custo >= 0)) { UIService.showToast('Informe o custo unitário', '', 'warning'); return; }
+
+  try {
+    await window.CH.EstoqueService.entradaEstoque(_produtoAtual.id, qtd, { custo });
+    UIService.showToast('Entrada registrada!', `+${qtd} ${_produtoAtual.unidade} · ${_produtoAtual.nome}`, 'success');
+    window.CH.SoundService?.play('venda');
+  } catch (e) {
+    UIService.showToast('Não foi possível registrar', e.message, 'error');
+    window.CH.SoundService?.play('erro');
+  }
+  UIService.closeModal('modalEntrada');
+  _produtoAtual = null;
+  _retomarScanner();
+}
+
+/* ══ MODO SAÍDA (carrinho → venda de verdade via VendasService) ══ */
+function _adicionarAoCarrinho(produto) {
+  const existente = _carrinho.find(i => i.produtoId === produto.id);
+  if (existente) existente.qtd += 1;
+  else _carrinho.push({ produtoId: produto.id, nome: produto.nome, qtd: 1, preco: produto.precoVenda, custo: produto.precoCusto, unidade: produto.unidade });
+  _renderCarrinho();
+  UIService.showToast(produto.nome, 'Adicionado ao carrinho', 'success');
+  setTimeout(_retomarScanner, 400); // pequeno respiro antes de voltar a escanear
+}
+
+function _renderCarrinho() {
+  const el = document.getElementById('carrinhoLista');
+  if (!_carrinho.length) {
+    el.innerHTML = `<p class="text-[10px] text-slate-600 text-center py-6 font-bold">Escaneie um produto pra começar</p>`;
+  } else {
+    el.innerHTML = _carrinho.map((i, idx) => `
+      <div class="cart-item">
+        <div class="flex-1 min-w-0">
+          <p class="text-[11px] font-bold text-white truncate">${i.nome}</p>
+          <p class="text-[9px] text-slate-500 font-bold">${Utils.formatCurrency(i.preco)} / ${i.unidade}</p>
+        </div>
+        <div class="stepper">
+          <button onclick="_alterarQtdCarrinho(${idx},-1)"><i class="fas fa-minus text-[9px]"></i></button>
+          <span class="text-[11px] font-black text-white w-8 text-center">${i.qtd}</span>
+          <button onclick="_alterarQtdCarrinho(${idx},1)"><i class="fas fa-plus text-[9px]"></i></button>
+        </div>
+      </div>`).join('');
+  }
+  const total = _carrinho.reduce((s, i) => s + i.qtd * i.preco, 0);
+  document.getElementById('carrinhoTotal').textContent = Utils.formatCurrency(total);
+  const btn = document.getElementById('btnFinalizarVenda');
+  btn.disabled = _carrinho.length === 0;
+  btn.classList.toggle('opacity-40', _carrinho.length === 0);
+}
+
+function _alterarQtdCarrinho(idx, delta) {
+  _carrinho[idx].qtd += delta;
+  if (_carrinho[idx].qtd <= 0) _carrinho.splice(idx, 1);
+  _renderCarrinho();
+}
+
+function limparCarrinho() {
+  if (_carrinho.length && !confirm('Limpar o carrinho?')) return;
+  _carrinho = [];
+  _renderCarrinho();
+}
+
+function abrirPagamento() {
+  if (!_carrinho.length) return;
+  _pausarScanner();
+  UIService.openModal('modalPagamento');
+}
+
+async function finalizarVendaScanner(formaPgto) {
+  const itens = _carrinho.map(i => ({ prodId: i.produtoId, nome: i.nome, qtd: i.qtd, preco: i.preco, custo: i.custo, label: 'UNID' }));
+  const total = itens.reduce((s, i) => s + i.qtd * i.preco, 0);
+  const cart = { itens, total, subtotal: total, desconto: 0 };
+
+  try {
+    const venda = window.CH.VendasService.finalizarVenda(cart, formaPgto, {});
+    window.CH.SoundService?.play('venda');
+    UIService.showToast(
+      venda.status === 'pendente' ? 'Venda enviada p/ aprovação' : 'Venda concluída!',
+      `${itens.length} item(ns) · ${Utils.formatCurrency(total)}`,
+      'success'
+    );
+    _carrinho = [];
+    _renderCarrinho();
+  } catch (e) {
+    UIService.showToast('Não foi possível finalizar', e.message, 'error');
+    window.CH.SoundService?.play('erro');
+  }
+  UIService.closeModal('modalPagamento');
+  _retomarScanner();
+}
+
+/* ══ CÓDIGO NÃO ENCONTRADO — associar ou cadastrar ══ */
+function fecharNaoEncontrado() {
+  UIService.closeModal('modalNaoEncontrado');
+  _codigoAtual = null;
+  _retomarScanner();
+}
+
+function abrirAssociarProduto() {
+  UIService.closeModal('modalNaoEncontrado');
+  document.getElementById('associarCodigo').textContent = `Código: ${_codigoAtual}`;
+  document.getElementById('associarBusca').value = '';
+  renderListaAssociar();
+  UIService.openModal('modalAssociar');
+}
+
+function renderListaAssociar() {
+  const termo = (document.getElementById('associarBusca').value || '').toLowerCase();
+  const produtos = (window.CH.EstoqueService.getProdutos() || [])
+    .filter(p => p.ativo !== false)
+    .filter(p => !termo || p.nome.toLowerCase().includes(termo));
+  const el = document.getElementById('associarLista');
+  if (!produtos.length) { el.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-6">Nenhum produto encontrado</p>`; return; }
+  el.innerHTML = produtos.map(p => `
+    <div class="prod-pick-item" onclick="confirmarAssociacao('${p.id}')">
+      <div style="flex:1;min-width:0;"><p class="text-[11px] font-bold text-white truncate">${p.nome}</p><p class="text-[9px] text-slate-500">${p.codigoBarras ? 'Já tem código: '+p.codigoBarras : 'Sem código associado'}</p></div>
+      <i class="fas fa-link text-sky-400 text-xs"></i>
+    </div>`).join('');
+}
+
+function confirmarAssociacao(produtoId) {
+  window.CH.EstoqueService.atualizarProduto(produtoId, { codigoBarras: _codigoAtual });
+  UIService.showToast('Código associado!', '', 'success');
+  UIService.closeModal('modalAssociar');
+  _codigoAtual = null;
+  _retomarScanner();
+}
+
+function abrirCadastrarProduto() {
+  UIService.closeModal('modalNaoEncontrado');
+  document.getElementById('cadastrarCodigo').textContent = `Código: ${_codigoAtual}`;
+  ['cadNome','cadQuantidade','cadPrecoVenda','cadCusto'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cadUnidade').value = 'UN';
+  UIService.openModal('modalCadastrar');
+}
+
+async function confirmarCadastro() {
+  const nome = document.getElementById('cadNome').value.trim();
+  const unidade = document.getElementById('cadUnidade').value;
+  const quantidade = parseFloat(document.getElementById('cadQuantidade').value) || 0;
+  const precoVenda = parseFloat(document.getElementById('cadPrecoVenda').value) || 0;
+  const custo = parseFloat(document.getElementById('cadCusto').value) || 0;
+  if (!nome) { UIService.showToast('Informe o nome do produto', '', 'warning'); return; }
+
+  try {
+    const prod = window.CH.EstoqueService.adicionarProduto({
+      nome, unidade, precoVenda, precoCusto: custo, codigoBarras: _codigoAtual, estoqueAtual: 0,
+    });
+    if (quantidade > 0) {
+      await window.CH.EstoqueService.entradaEstoque(prod.id, quantidade, { custo });
+    }
+    UIService.showToast('Produto cadastrado!', nome, 'success');
+    window.CH.SoundService?.play('venda');
+  } catch (e) {
+    UIService.showToast('Não foi possível cadastrar', e.message, 'error');
+  }
+  UIService.closeModal('modalCadastrar');
+  _codigoAtual = null;
+  _retomarScanner();
+}
+
+/* ══ INIT / LOGIN (mesmo padrão das demais páginas) ══ */
+function init() {
+  UIService.startClock('clock');
+  _renderCarrinho();
+}
+
+async function doLogin() {
+  const nome  = document.getElementById('loginNome')?.value.trim();
+  const senha = document.getElementById('loginSenha')?.value.trim();
+  const err   = document.getElementById('lockError');
+  err.textContent = '';
+  err.classList.add('hidden');
+  if (!nome || !senha) { err.textContent = 'Preencha usuario e senha.'; err.classList.remove('hidden'); return; }
+  let ok = false;
+  if (window.CH && window.CH.UserService) {
+    const user = await window.CH.UserService.login(nome, senha);
+    ok = !!user;
+  } else {
+    ok = await AuthService.login(senha);
+  }
+  if (ok) {
+    document.getElementById('lock').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    const _r = AuthService.getRole();
+    const rt = document.getElementById('roleTag');
+    if (rt) {
+      const _pi = window.CH?.PermissoesService?.getPerfil?.(_r);
+      rt.textContent = (_pi && _pi.label) || _r || 'PDV';
+      rt.classList.remove('hidden');
+    }
+    init();
+  } else {
+    err.textContent = 'Usuario ou senha incorretos.';
+    err.classList.remove('hidden');
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
+  }
+}
+document.getElementById('loginSenha').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginNome').addEventListener('keydown',  function(e) { if (e.key === 'Enter') document.getElementById('loginSenha').focus(); });
+function logout() { pararScanner(); if (!confirm('Encerrar sessão?')) return; AuthService.logout(); location.reload(); }
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const _role = AuthService.getRole();
+  const rt = document.getElementById('roleTag');
+  if (rt) {
+    const _info = window.CH?.PermissoesService?.getPerfil?.(_role);
+    rt.textContent = _info?.label || _role || 'PDV';
+    rt.classList.remove('hidden');
+  }
+  init();
+});
+window.addEventListener('beforeunload', () => { if (_scannerAtivo) pararScanner(); });
+</script>
+</body>
+</html>

@@ -240,6 +240,7 @@ body::before {
 .c-teal   { --accent: #14b8a6; }
 .c-amber  { --accent: #f59e0b; }
 .c-indigo { --accent: #6366f1; }
+.c-sky    { --accent: #0ea5e9; }
 
 .app-card::before { background: var(--accent, #3b82f6); }
 .app-card:hover   { border-color: color-mix(in srgb, var(--accent,#3b82f6) 30%, transparent); }
@@ -507,13 +508,6 @@ body.is-admin .valid-only { display: block; }
       <div class="app-desc">Venda rápida · Serviços</div>
     </a>
 
-    <!-- DOCUMENTOS -->
-    <a href="documentos.html" class="app-card c-indigo" style="animation-delay:.09s">
-      <div class="app-icon">📄</div>
-      <div class="app-name">Documentos</div>
-      <div class="app-desc">Encarte · Orçamento · Recibo</div>
-    </a>
-
     <!-- SAAS ADMIN -->
     <a href="saas-admin.html" class="app-card c-red" data-modulo="saas_admin" style="animation-delay:.10s">
       <div class="app-icon">🔐</div>
@@ -603,6 +597,20 @@ body.is-admin .valid-only { display: block; }
       <div class="app-icon">🍽️</div>
       <div class="app-name">Cardápio</div>
       <div class="app-desc">Delivery · Pedidos online</div>
+    </a>
+
+    <!-- DOCUMENTOS: Recibo · Orçamento · Encarte -->
+    <a href="documentos.html" class="app-card c-sky" data-modulo="documentos" style="animation-delay:.44s">
+      <div class="app-icon">🧾</div>
+      <div class="app-name">Documentos</div>
+      <div class="app-desc">Recibo · Orçamento · Encarte</div>
+    </a>
+
+    <!-- SCANNER: leitura de código de barras (entrada/saída) -->
+    <a href="scanner.html" class="app-card c-orange" data-modulo="scanner" style="animation-delay:.46s">
+      <div class="app-icon">📷</div>
+      <div class="app-name">Scanner</div>
+      <div class="app-desc">Código de barras · Entrada/Saída</div>
     </a>
 
     <!-- APROVAÇÃO (controlador + validador + admin) -->
@@ -837,7 +845,12 @@ body.is-admin .valid-only { display: block; }
   <script src="./services/syncMonitor.js"></script>
   <script src="./services/backupService.js"></script>
   <script src="./services/userService.js"></script>
+  <script src="./services/tenantService.js"></script>
+  <script src="./services/custoService.js"></script>
+  <script src="./services/loteService.js"></script>
   <script src="./services/estoqueService.js"></script>
+  <script src="./services/rentabilidadeService.js"></script>
+  <script src="./services/reconciliationService.js"></script>
   <script src="./services/financeiroService.js"></script>
   <!-- integrityService.js removido -->
 <script src="./services/vendasService.js"></script>
