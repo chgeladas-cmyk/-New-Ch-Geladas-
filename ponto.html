@@ -877,10 +877,13 @@ function _calcularEsperado() {
   const totalRetiradas =(_caixaAtual.retiradas||[]).filter(r=>!r.cancelado).reduce((s,r)=>s+(r.valor||0),0);
   const totalSangrias  =(_caixaAtual.sangrias||[]).filter(r=>!r.cancelado).reduce((s,r)=>s+(r.valor||0),0);
   const abertoEm       =new Date(_caixaAtual.abertoEm);
-  // Só conta vendas efetivamente concluídas/validadas — 'pendente' (aguardando
-  // aprovação, pode ser rejeitada) e 'rejeitada' ficam de fora. O filtro antigo
-  // (`status!=='cancelada'`) deixava essas duas passarem, inflando o esperado.
-  const vendas         =Store.getVendas().filter(v=>['concluida','validada'].includes(v.status)&&(()=>{const ts=v.criadoEm||v.timestamp||'';return ts?new Date(ts)>=abertoEm:v.dataCurta===Utils.todayISO();})());
+  // O dinheiro do cliente é recebido na hora da venda, independente do status
+  // de aprovação (a aprovação/validação é só controle interno posterior) —
+  // confirmado com a loja. Por isso só 'cancelada' e 'rejeitada' (vendas que
+  // de fato não se concretizaram) ficam de fora; 'pendente', 'aprovada',
+  // 'validada', 'concluida' e 'erro_validacao' contam normalmente, pois o
+  // dinheiro já está fisicamente na gaveta nesses casos.
+  const vendas         =Store.getVendas().filter(v=>!['cancelada','rejeitada'].includes(v.status)&&(()=>{const ts=v.criadoEm||v.timestamp||'';return ts?new Date(ts)>=abertoEm:v.dataCurta===Utils.todayISO();})());
   // Pagamento misto (ex.: "Dinheiro+Pix") só entra no caixa físico pela parcela
   // em dinheiro (v._parcelaDinheiro) — o resto (Pix/Débito/Crédito) não é
   // dinheiro físico. Contar v.total inteiro (como era antes) inflava o
@@ -1010,7 +1013,11 @@ function atualizarDiferenca() {
   }
 }
 
+let _fechandoCaixaEmAndamento=false;
 function confirmarFechamentoCaixa() {
+  if(_fechandoCaixaEmAndamento) return; // trava contra duplo-toque acidental
+  if(!window._fcTemp){UIService.showToast('Nada para fechar','','warning');return;}
+  _fechandoCaixaEmAndamento=true;
   UIService.closeModal('modalFecharCaixa');
   const {trocoInicial,dinheiro,totalRetiradas,totalSangrias,esperado,vendas}=window._fcTemp||{};
   const fisicoInput=parseFloat(document.getElementById('fcFisico')?.value);
@@ -1069,6 +1076,7 @@ function confirmarFechamentoCaixa() {
   atualizarUICaixa();
   _publicarStatusCaixa(_operadorFechado);
   UIService.showToast('Caixa fechado!',`Total: ${Utils.formatCurrency(esperado||0)}`,'success');
+  _fechandoCaixaEmAndamento=false;
 }
 
 /* ═══════════════════════════════════

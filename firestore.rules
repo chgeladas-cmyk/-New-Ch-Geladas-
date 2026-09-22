@@ -14,6 +14,8 @@ rules_version = '2';
  * │  ch_dados/*outros*  │  ADM               │  ADM (adminToken)            │
  * │  vendas/{id}        │  ADM               │  PDV + ADM                   │
  * │  movimentacoes/{id} │  ADM               │  ADM + sistema (transaction) │
+ * │  lotes/{id}         │  ADM               │  PDV + ADM (sem adminToken)  │
+ * │  movimentacoesLote/{id} │ ADM            │  PDV + ADM (sem adminToken)  │
  * │  categorias/{id}    │  PDV + ADM         │  ADM                         │
  * │  fornecedores/{id}  │  ADM               │  ADM                         │
  * │  backups/{data}/**  │  ADM               │  ADM (adminToken)            │
@@ -63,6 +65,19 @@ service cloud.firestore {
     function movimentacaoValida(data) {
       return data.keys().hasAll(['produtoId', 'tipo', 'quantidade', 'timestamp'])
           && data.quantidade is number;
+    }
+
+    function loteValido(data) {
+      return data.keys().hasAll(['id', 'produtoId', 'quantidadeInicial', 'custoTotalReal', 'custoUnitario'])
+          && data.produtoId is string
+          && data.quantidadeInicial is number
+          && data.custoTotalReal is number;
+    }
+
+    function movimentacaoLoteValida(data) {
+      return data.keys().hasAll(['id', 'loteId', 'produtoId', 'tipo', 'quantidade', 'timestamp'])
+          && data.quantidade is number
+          && data.tipo is string;
     }
 
     // Coleções abertas para leitura por qualquer autenticado (PDV + ADM)
@@ -179,6 +194,35 @@ service cloud.firestore {
     // ─── /movimentacoes/{movId} ──────────────────────────────────────
     match /movimentacoes/{movId} {
       allow create: if autenticado() && movimentacaoValida(request.resource.data);
+      allow read:   if autenticado();
+      allow update, delete: if autenticado()
+                             && temAdminToken(request.resource.data);
+    }
+
+    // ─── /lotes/{loteId} ──────────────────────────────────────────────
+    // Rastreabilidade de investimento/custo por lote de compra (FIFO).
+    // create: qualquer autenticado — o lote nasce numa entrada de estoque
+    // (compra), feita por colaborador/operador/gerente/admin, sem exigir
+    // adminToken (mesmo padrão de 'vendas'/'financeiro' abaixo).
+    // update: qualquer autenticado — diferente de 'vendas'/'financeiro',
+    // o PRÓPRIO documento do lote é atualizado a cada venda, estorno ou
+    // devolução (quantidadeDisponivel/status mudam), não é só um log
+    // append-only. Já é o mesmo nível de acesso que 'vendas' já usa pra
+    // status de aprovação (autenticado, sem adminToken).
+    // delete: apenas admin.
+    match /lotes/{loteId} {
+      allow create: if autenticado() && loteValido(request.resource.data);
+      allow read:   if autenticado();
+      allow update: if autenticado();
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /movimentacoesLote/{movId} ────────────────────────────────────
+    // Log imutável de cada consumo/estorno/devolução de lote — mesmo
+    // espírito de /movimentacoes: uma vez criado pelo app, nunca é
+    // editado, só novos registros são adicionados.
+    match /movimentacoesLote/{movId} {
+      allow create: if autenticado() && movimentacaoLoteValida(request.resource.data);
       allow read:   if autenticado();
       allow update, delete: if autenticado()
                              && temAdminToken(request.resource.data);

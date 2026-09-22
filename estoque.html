@@ -27,7 +27,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
 .inp::placeholder{color:#64748b;}
 .label{color:#34d399;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
 .badge{display:inline-flex;align-items:center;border-radius:9999px;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:.2rem .55rem;}
-.b-blue{background:rgba(59,130,246,.15);color:#60a5fa;}.b-green{background:rgba(16,185,129,.15);color:#34d399;}.b-amber{background:rgba(245,158,11,.15);color:#fbbf24;}.b-red{background:rgba(239,68,68,.15);color:#f87171;}.b-purple{background:rgba(139,92,246,.15);color:#a78bfa;}
+.b-blue{background:rgba(59,130,246,.15);color:#60a5fa;}.b-green{background:rgba(16,185,129,.15);color:#34d399;}.b-amber{background:rgba(245,158,11,.15);color:#fbbf24;}.b-red{background:rgba(239,68,68,.15);color:#f87171;}.b-purple{background:rgba(139,92,246,.15);color:#a78bfa;}.b-slate{background:rgba(100,116,139,.15);color:#94a3b8;}
 .prod-card{background:rgba(13,17,23,.85);border:1px solid rgba(255,255,255,.06);border-left:3px solid #10b981;border-radius:1.25rem;padding:1rem;transition:all .2s;}
 .prod-card:hover{border-color:rgba(16,185,129,.3);transform:translateY(-1px);}
 .prod-card.warning{border-left-color:#f59e0b;}.prod-card.esgotado{border-left-color:#374151;opacity:.55;}
@@ -85,6 +85,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
     <button id="tbLista" class="tab-btn active" onclick="switchTab('lista')">📋 Produtos</button>
     <button id="tbForm"  class="tab-btn adm-only" onclick="switchTab('form')">➕ Cadastrar</button>
     <button id="tbAudit" class="tab-btn" onclick="switchTab('audit')">🔍 Auditoria</button>
+    <button id="tbRentab" class="tab-btn" onclick="switchTab('rentab')">💰 Rentabilidade</button>
     <button id="tbCats"  class="tab-btn adm-only" onclick="switchTab('cats')">🏷️ Categorias</button>
   </div>
 
@@ -166,6 +167,29 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
       <div id="auditLista" class="space-y-2"></div>
     </div>
 
+    <!-- RENTABILIDADE (investimento/custo/receita/lucro por lote — FIFO) -->
+    <div id="tab-rentab" class="tab-pane space-y-4 pt-3">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="stat border-l-4 border-blue-500 text-center"><p class="text-[8px] text-slate-600 uppercase font-bold">Investido em Stock</p><p id="rtInvestido" class="text-lg font-black text-blue-400 mt-1">R$ 0</p></div>
+        <div class="stat border-l-4 border-emerald-500 text-center"><p class="text-[8px] text-slate-600 uppercase font-bold">Lucro Realizado</p><p id="rtLucro" class="text-lg font-black text-emerald-400 mt-1">R$ 0</p></div>
+        <div class="stat border-l-4 border-purple-500 text-center"><p class="text-[8px] text-slate-600 uppercase font-bold">Margem Média</p><p id="rtMargem" class="text-lg font-black text-purple-400 mt-1">0%</p></div>
+        <div class="stat border-l-4 border-amber-500 text-center"><p class="text-[8px] text-slate-600 uppercase font-bold">Lucro Potencial</p><p id="rtPotencial" class="text-lg font-black text-amber-400 mt-1">R$ 0</p></div>
+      </div>
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <button onclick="verificarConsistencia()" class="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all bg-purple-600/20 text-purple-300 border border-purple-500/25 flex items-center gap-1.5"><i class="fas fa-shield-halved"></i> Verificar Consistência</button>
+        <p id="rtSemLote" class="text-[9px] text-slate-600 font-bold"></p>
+        <select id="rtOrdenar" onchange="renderRentabilidade()" class="inp !w-auto !py-2 !text-xs !px-3">
+          <option value="roi">Ordenar por ROI</option>
+          <option value="lucro">Ordenar por Lucro</option>
+          <option value="margem">Ordenar por Margem</option>
+          <option value="investimento">Ordenar por Investimento</option>
+          <option value="estoqueParado">Ordenar por Estoque Parado</option>
+        </select>
+      </div>
+      <div id="rtAlertas" class="space-y-1.5"></div>
+      <div id="rentabLista" class="space-y-2"></div>
+    </div>
+
     <!-- CATEGORIAS -->
     <div id="tab-cats" class="tab-pane adm-only space-y-4 pt-3">
       <div class="bg-slate-900/40 p-5 rounded-[2rem] border border-white/5">
@@ -229,6 +253,58 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
   </div>
 </div>
 
+<!-- MODAL RECONCILIAÇÃO -->
+<div id="modalReconciliacao" class="modal">
+  <div class="modal-box max-w-md p-0 overflow-hidden max-h-[85vh] flex flex-col">
+    <div class="p-5 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <h3 class="text-sm font-black text-purple-400 flex items-center gap-2"><i class="fas fa-shield-halved"></i>Verificação de Consistência</h3>
+      <button onclick="UIService.closeModal('modalReconciliacao')" class="w-8 h-8 rounded-lg bg-white/5 text-slate-400 flex items-center justify-center flex-shrink-0"><i class="fas fa-times text-sm"></i></button>
+    </div>
+    <div class="p-5 space-y-3 overflow-y-auto scroll">
+      <div id="recResumo" class="grid grid-cols-3 gap-2 text-center"></div>
+      <div id="recLista" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RENTABILIDADE DO PRODUTO -->
+<div id="modalRentabilidade" class="modal">
+  <div class="modal-box max-w-md p-0 overflow-hidden max-h-[85vh] flex flex-col">
+    <div class="p-5 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+      <div>
+        <h3 id="rtdNome" class="text-sm font-black text-blue-400 flex items-center gap-2"><i class="fas fa-chart-line"></i>Produto</h3>
+        <p id="rtdStatus" class="text-[9px] text-slate-500 font-bold mt-0.5"></p>
+      </div>
+      <button onclick="UIService.closeModal('modalRentabilidade')" class="w-8 h-8 rounded-lg bg-white/5 text-slate-400 flex items-center justify-center flex-shrink-0"><i class="fas fa-times text-sm"></i></button>
+    </div>
+    <div class="p-5 space-y-4 overflow-y-auto scroll">
+      <div class="grid grid-cols-2 gap-2">
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">Investimento Inicial</p><p id="rtdInvestimento" class="text-sm font-black text-blue-400 mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">Capital Ainda Investido</p><p id="rtdInvestRestante" class="text-sm font-black text-slate-300 mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">Receita Bruta</p><p id="rtdReceita" class="text-sm font-black text-white mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">CMV</p><p id="rtdCmv" class="text-sm font-black text-slate-300 mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center border-l-4 border-emerald-500"><p class="text-[7px] text-slate-600 uppercase font-bold">Lucro Realizado</p><p id="rtdLucro" class="text-sm font-black text-emerald-400 mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center border-l-4 border-amber-500"><p class="text-[7px] text-slate-600 uppercase font-bold">Lucro Potencial</p><p id="rtdLucroPotencial" class="text-sm font-black text-amber-400 mt-1">R$ 0</p></div>
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">Margem</p><p id="rtdMargem" class="text-sm font-black text-purple-400 mt-1">0%</p></div>
+        <div class="stat !p-3 text-center"><p class="text-[7px] text-slate-600 uppercase font-bold">ROI</p><p id="rtdRoi" class="text-sm font-black text-purple-400 mt-1">0%</p></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Comprado</p><p id="rtdQtdComprada" class="text-[11px] font-black text-slate-300">0</p></div>
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Vendido</p><p id="rtdQtdVendida" class="text-[11px] font-black text-slate-300">0</p></div>
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Restante</p><p id="rtdQtdRestante" class="text-[11px] font-black text-slate-300">0</p></div>
+      </div>
+      <div>
+        <p class="label !mb-2">📦 Lotes de compra</p>
+        <div id="rtdLotes" class="space-y-1.5"></div>
+      </div>
+      <div>
+        <p class="label !mb-2">🧾 Vendas (consumo por lote)</p>
+        <div id="rtdVendas" class="space-y-1.5"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RELATÓRIO -->
 <div id="modalRelatorio" class="modal">
   <div class="modal-box max-w-sm p-0 overflow-hidden">
@@ -286,7 +362,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#060810;background-im
   <script src="./services/syncMonitor.js"></script>
   <script src="./services/backupService.js"></script>
 
+  <script src="./services/tenantService.js"></script>
+  <script src="./services/custoService.js"></script>
+  <script src="./services/loteService.js"></script>
   <script src="./services/estoqueService.js"></script>
+  <script src="./services/rentabilidadeService.js"></script>
+  <script src="./services/reconciliationService.js"></script>
 <script>
 'use strict';
 let _packsForm=[],_packsEdit=[],_qtdOrig=0;
@@ -295,9 +376,9 @@ async function doLogin(){const pin=document.getElementById('loginSenha').value.t
 document.getElementById('loginSenha').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 function logout(){if(confirm('Encerrar sessão?')){AuthService.logout();location.reload();}}
 
-function init(){UIService.startClock('clock');renderFiltros();renderLista();renderKPIs();renderAudit();EventBus.on('store:updated',()=>{renderFiltros();renderLista();renderKPIs();renderAudit();});}
+function init(){UIService.startClock('clock');renderFiltros();renderLista();renderKPIs();renderAudit();EventBus.on('store:updated',()=>{renderFiltros();renderLista();renderKPIs();renderAudit();if(document.getElementById('tab-rentab')?.classList.contains('active'))renderRentabilidade();});}
 
-function switchTab(id){['lista','form','audit','cats'].forEach(t=>{const btn=document.getElementById('tb'+t.charAt(0).toUpperCase()+t.slice(1));const pane=document.getElementById('tab-'+t);if(btn)btn.classList.toggle('active',t===id);if(pane)pane.classList.toggle('active',t===id);});if(id==='cats')renderCatsGerenciar();}
+function switchTab(id){['lista','form','audit','rentab','cats'].forEach(t=>{const btn=document.getElementById('tb'+t.charAt(0).toUpperCase()+t.slice(1));const pane=document.getElementById('tab-'+t);if(btn)btn.classList.toggle('active',t===id);if(pane)pane.classList.toggle('active',t===id);});if(id==='cats')renderCatsGerenciar();if(id==='rentab')renderRentabilidade();}
 
 function renderFiltros(){const estoque=Store.getEstoque();const cfg=Store.getConfig()||{};const catsCfg=Array.isArray(cfg.categorias)?cfg.categorias:[];const catsEstoque=[...new Set(estoque.map(p=>p.categoria||'').filter(Boolean))];const cats=[...new Set([...catsCfg,...catsEstoque])].filter(Boolean).sort();const selCat=document.getElementById('filtroCat');const fCat=document.getElementById('fCat');const meCat=document.getElementById('meCat');const val=selCat?.value;if(selCat)selCat.innerHTML=`<option value="">Todas cats</option>`+cats.map(c=>`<option value="${c}">${c}</option>`).join('');if(selCat&&val)selCat.value=val;[fCat,meCat].forEach(s=>{if(!s)return;s.innerHTML=`<option value="">— Sem categoria —</option>`+cats.map(c=>`<option value="${c}">${c}</option>`).join('');});}
 
@@ -383,6 +464,159 @@ function copiarRelatorio(){Utils.copyToClipboard(_gerarTextoRelatorio()).then(()
 function baixarRelatorio(){Utils.downloadBlob(_gerarTextoRelatorio(),'text/plain;charset=utf-8;',`relatorio_estoque_${Utils.todayISO()}.txt`);UIService.showToast('Relatório salvo!','','success');}
 
 function _setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+
+// ══════════════════════════════════════════════════════════════
+//  RENTABILIDADE (investimento/custo/receita/lucro por lote — FIFO)
+// ══════════════════════════════════════════════════════════════
+
+function renderRentabilidade() {
+  const RS = window.CH?.RentabilidadeService;
+  const el = document.getElementById('rentabLista');
+  if (!RS || !el) return;
+
+  const dash = RS.getDashboardConsolidado();
+  _setText('rtInvestido',  Utils.formatCurrency(dash.totalInvestidoEstoque));
+  _setText('rtLucro',      Utils.formatCurrency(dash.lucroBrutoTotal));
+  _setText('rtMargem',     dash.margemMedia + '%');
+  _setText('rtPotencial',  Utils.formatCurrency(dash.lucroPotencialTotal));
+
+  const totalProdutos = Store.getEstoque().filter(p => p.ativo).length;
+  const semLote = Math.max(0, totalProdutos - dash.qtdProdutosRastreados);
+  _setText('rtSemLote', semLote > 0
+    ? `${semLote} produto(s) ainda sem lote de compra registrado — sem rastreabilidade ainda`
+    : '');
+
+  const alertas = RS.getAlertas();
+  const alertasEl = document.getElementById('rtAlertas');
+  const corAlerta = { prejuizo: 'b-red', margem_baixa: 'b-amber', estoque_parado: 'b-slate', alto_retorno: 'b-green' };
+  alertasEl.innerHTML = alertas.slice(0, 8).map(a => `
+    <div class="flex items-center gap-2 bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2 cursor-pointer" onclick="abrirDetalheRentabilidade('${a.produtoId}')">
+      <span class="text-sm flex-shrink-0">${a.icone}</span>
+      <div class="flex-1 min-w-0"><p class="text-[9px] font-black text-slate-300 truncate">${a.produtoNome}</p><p class="text-[8px] text-slate-600 font-bold truncate">${a.detalhe}</p></div>
+    </div>`).join('');
+
+  const ordenarPor = document.getElementById('rtOrdenar')?.value || 'roi';
+  const chaveApi = ordenarPor === 'estoqueParado' ? 'estoqueParado' : ordenarPor;
+  const linhas = RS.getRelatorioROI({ ordenarPor: chaveApi, desc: true });
+
+  if (!linhas.length) {
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-16 opacity-30"><i class="fas fa-chart-line text-4xl text-slate-600 mb-3"></i><p class="text-[10px] font-black uppercase text-slate-600">Nenhum produto com lote de compra ainda</p><p class="text-[9px] text-slate-700 font-bold mt-1">Registre uma entrada de estoque com custo pra começar a rastrear</p></div>`;
+    return;
+  }
+
+  el.innerHTML = linhas.map(r => {
+    const corRoi = r.roi > 0 ? 'text-emerald-400' : r.roi < 0 ? 'text-red-400' : 'text-slate-400';
+    const corLucro = r.lucroRealizado >= 0 ? 'text-emerald-400' : 'text-red-400';
+    return `<div class="prod-card cursor-pointer" onclick="abrirDetalheRentabilidade('${r.produtoId}')">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <p class="text-[12px] font-black text-white truncate flex-1">${r.produtoNome}</p>
+        <span class="badge ${r.roi >= 0 ? 'b-green' : 'b-red'} flex-shrink-0">ROI ${r.roi}%</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 text-center">
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Investido</p><p class="text-[10px] font-black text-blue-400">${Utils.formatCurrency(r.investimentoInicial)}</p></div>
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Lucro</p><p class="text-[10px] font-black ${corLucro}">${Utils.formatCurrency(r.lucroRealizado)}</p></div>
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Margem</p><p class="text-[10px] font-black ${corRoi}">${r.margem}%</p></div>
+        <div><p class="text-[7px] text-slate-600 uppercase font-bold">Estoque</p><p class="text-[10px] font-black text-slate-300">${r.quantidadeDisponivel}</p></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirDetalheRentabilidade(produtoId) {
+  const RS = window.CH?.RentabilidadeService;
+  if (!RS) return;
+  const prod = Store.getEstoque().find(p => p.id === produtoId);
+  const r = RS.getRentabilidadeProduto(produtoId, prod?.nome);
+  if (!r) { UIService.showToast('Sem dados de rentabilidade', 'Este produto ainda não tem lote de compra registrado', 'warning'); return; }
+
+  _setText('rtdNome', r.produtoNome);
+  _setText('rtdStatus', r.status);
+  _setText('rtdInvestimento', Utils.formatCurrency(r.investimentoInicial));
+  _setText('rtdInvestRestante', Utils.formatCurrency(r.investimentoRestante));
+  _setText('rtdReceita', Utils.formatCurrency(r.receitaBruta));
+  _setText('rtdCmv', Utils.formatCurrency(r.cmvRealizado));
+  _setText('rtdLucro', Utils.formatCurrency(r.lucroRealizado));
+  _setText('rtdLucroPotencial', Utils.formatCurrency(r.lucroPotencial));
+  _setText('rtdMargem', r.margem + '%');
+  _setText('rtdRoi', r.roi + '%');
+  _setText('rtdQtdComprada', r.quantidadeComprada);
+  _setText('rtdQtdVendida', r.quantidadeVendida);
+  _setText('rtdQtdRestante', r.quantidadeDisponivel);
+
+  const lotesEl = document.getElementById('rtdLotes');
+  lotesEl.innerHTML = r.lotes.map(l => {
+    const dt = l.dataCompra ? new Date(l.dataCompra).toLocaleDateString('pt-BR') : '—';
+    const corStatus = l.status === 'esgotado' ? 'b-slate' : 'b-green';
+    return `<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+      <div><p class="text-[10px] font-black text-slate-300">${dt}</p><p class="text-[8px] text-slate-600 font-bold">${l.quantidadeDisponivel}/${l.quantidadeInicial} disponível · ${Utils.formatCurrency(l.custoUnitario)}/un</p></div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span class="badge ${corStatus} text-[7px]">${l.status}</span>
+        ${l.quantidadeDisponivel > 0 ? `<button onclick="event.stopPropagation();devolverLote('${l.id}','${produtoId}')" class="w-6 h-6 rounded-lg bg-white/5 text-slate-500 hover:text-amber-400 flex items-center justify-center" title="Devolver ao fornecedor"><i class="fas fa-rotate-left text-[10px]"></i></button>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Nenhum lote</p>';
+
+  const vendasEl = document.getElementById('rtdVendas');
+  vendasEl.innerHTML = r.vendas.slice(0, 20).map(v => {
+    const dt = v.timestamp ? new Date(v.timestamp).toLocaleString('pt-BR') : '—';
+    return `<div class="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2">
+      <div><p class="text-[10px] font-black text-slate-300">${v.quantidade} un</p><p class="text-[8px] text-slate-600 font-bold">${dt}</p></div>
+      <p class="text-[10px] font-black text-slate-400">CMV ${Utils.formatCurrency(v.custoTotal)}</p>
+    </div>`;
+  }).join('') || '<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Nenhuma venda ainda</p>';
+
+  UIService.openModal('modalRentabilidade');
+}
+
+function verificarConsistencia() {
+  const RC = window.CH?.ReconciliationService;
+  if (!RC) return;
+  const resultado = RC.executarReconciliacao();
+
+  const corResumo = resultado.totalDivergencias === 0 ? 'text-emerald-400' : resultado.porSeveridade.alta > 0 ? 'text-red-400' : 'text-amber-400';
+  document.getElementById('recResumo').innerHTML = `
+    <div class="stat !p-3"><p class="text-[7px] text-slate-600 uppercase font-bold">Total</p><p class="text-lg font-black ${corResumo}">${resultado.totalDivergencias}</p></div>
+    <div class="stat !p-3"><p class="text-[7px] text-slate-600 uppercase font-bold">Alta</p><p class="text-lg font-black text-red-400">${resultado.porSeveridade.alta}</p></div>
+    <div class="stat !p-3"><p class="text-[7px] text-slate-600 uppercase font-bold">Média/Baixa</p><p class="text-lg font-black text-amber-400">${resultado.porSeveridade.media + resultado.porSeveridade.baixa}</p></div>`;
+
+  const el = document.getElementById('recLista');
+  if (!resultado.divergencias.length) {
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-10 opacity-60"><i class="fas fa-circle-check text-4xl text-emerald-500 mb-3"></i><p class="text-[10px] font-black uppercase text-emerald-400">Tudo consistente</p></div>`;
+  } else {
+    const corBadge = { alta: 'b-red', media: 'b-amber', baixa: 'b-slate' };
+    el.innerHTML = resultado.divergencias.map(d => `
+      <div class="bg-slate-900/60 border border-white/5 rounded-xl px-3 py-2.5">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="text-[9px] font-black text-slate-300">${d.produtoNome || d.produtoId || '—'}</span>
+          <span class="badge ${corBadge[d.severidade]} text-[7px]">${d.severidade}</span>
+        </div>
+        <p class="text-[9px] text-slate-500 font-bold">${d.detalhe}</p>
+      </div>`).join('');
+  }
+  UIService.openModal('modalReconciliacao');
+}
+
+async function devolverLote(loteId, produtoId) {
+  const ES = window.CH?.EstoqueService;
+  const lote = window.CH?.LoteService?.getLote(loteId);
+  if (!ES || !lote) return;
+
+  const qtdStr = prompt(`Devolver quantas unidades ao fornecedor?\n(disponível no lote: ${lote.quantidadeDisponivel})`, '');
+  if (qtdStr === null) return;
+  const qtd = parseFloat(qtdStr.replace(',', '.'));
+  if (!(qtd > 0)) { UIService.showToast('Quantidade inválida', '', 'warning'); return; }
+
+  const motivo = prompt('Motivo da devolução (opcional):', '') || '';
+
+  try {
+    await ES.devolucaoCompra(loteId, qtd, { motivo });
+    UIService.showToast('Devolução registrada', `${qtd} un devolvida(s) ao fornecedor`, 'success');
+    abrirDetalheRentabilidade(produtoId);
+    renderLista(); renderKPIs();
+  } catch (e) {
+    UIService.showToast('Não foi possível devolver', e.message, 'error');
+  }
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   if (!AuthService.isLogged()) { location.href = 'index.html'; return; }
