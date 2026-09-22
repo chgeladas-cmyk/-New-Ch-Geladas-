@@ -32,6 +32,11 @@ const CONSTANTS = Object.freeze({
   CAMBIO:         'CH_CAMBIO',
   PERFIS:         'CH_PERFIS',
   SYNC_QUEUE:     'CH_SYNC_QUEUE',
+  // Rastreabilidade de investimento/custo/lucro por lote de compra (FIFO).
+  // Coleções próprias no Firestore (1 doc por registro, sem purge — ver
+  // padrão 'financeiro'), não o modelo antigo ch_dados/{col}.
+  LOTES:              'CH_LOTES',
+  MOVIMENTACOES_LOTE: 'CH_MOVIMENTACOES_LOTE',
   }),
 
   LEGACY_KEY:  'CH_GELADAS_DB_ENTERPRISE',
@@ -51,6 +56,11 @@ const CONSTANTS = Object.freeze({
   MAX_FINANCEIRO:    5_000,
   MAX_SAIDAS:        5_000,
   MAX_SYNC_QUEUE:    500,
+  // Sem purge automático (decisão explícita: rastreabilidade não pode sumir).
+  // Teto bem alto, só como cinto de segurança contra crescimento sem fim —
+  // não é uma política de retenção como as demais coleções acima.
+  MAX_LOTES:              200_000,
+  MAX_MOVIMENTACOES_LOTE: 500_000,
 
   // Hashes de emergência (fallback legado): SHA256('001') e SHA256('123').
   // Prioridade: cfg.pinHashAdmin > CH_USERS > estes hashes.
@@ -64,8 +74,8 @@ const CONSTANTS = Object.freeze({
   pdv: Object.freeze({
     // FIX (jul/2026): 'validade' adicionado — sem isto a leitura de lotes
     // cadastrados em outro aparelho nunca chegava neste papel.
-    ler:      ['estoque', 'validade', 'config', 'perfis'],
-    escrever: ['vendas'],
+    ler:      ['estoque', 'validade', 'config', 'perfis', 'lotes'],
+    escrever: ['vendas', 'lotes', 'movimentacoesLote'],
   }),
   admin: Object.freeze({
     // FIX (jul/2026): 'validade' não existia em NENHUM papel — SyncQueue
@@ -73,41 +83,41 @@ const CONSTANTS = Object.freeze({
     // nenhum outro aparelho puxava os dados (hydrateAsync/pull usam esta
     // lista). Resultado: validade.html ficava preso ao localStorage do
     // aparelho onde o lote foi cadastrado.
-    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
-    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis','lotes','movimentacoesLote'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis','lotes','movimentacoesLote'],
   }),
   adm: Object.freeze({
-    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
-    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis','lotes','movimentacoesLote'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','pedidos','config','auditoria','movimentacoes','categorias','fornecedores','financeiro','saidas','cambio','perfis','lotes','movimentacoesLote'],
   }),
   colaborador: Object.freeze({
-    ler:      ['vendas', 'comandas', 'fiado', 'ponto', 'perfis'],
+    ler:      ['vendas', 'comandas', 'fiado', 'ponto', 'perfis', 'lotes'],
     // FIX: 'ponto' adicionado — colaborador precisa gravar ponto no Firebase
     // para que o admin visualize em tempo real. Firestore Rules permitem
     // escrita sem adminToken (regra explícita em ch_dados/ponto).
-    escrever: ['vendas', 'comandas', 'ponto'],
+    escrever: ['vendas', 'comandas', 'ponto', 'lotes', 'movimentacoesLote'],
   }),
   controlador: Object.freeze({
-    ler:      ['vendas', 'aprovacao', 'ponto', 'perfis'],
+    ler:      ['vendas', 'aprovacao', 'ponto', 'perfis', 'lotes'],
     escrever: ['aprovacao', 'ponto'],
   }),
   validador: Object.freeze({
     // FIX (jul/2026): 'validade' adicionado (mesmo nível de acesso que 'estoque')
-    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis'],
-    escrever: ['aprovacao', 'estoque', 'validade', 'ponto'],
+    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis', 'lotes', 'movimentacoesLote'],
+    escrever: ['aprovacao', 'estoque', 'validade', 'ponto', 'lotes', 'movimentacoesLote'],
   }),
   analista: Object.freeze({
-    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis'],
+    ler:      ['vendas','estoque','validade','financeiro','aprovacao', 'ponto', 'perfis', 'lotes', 'movimentacoesLote'],
     escrever: ['aprovacao', 'ponto'],
   }),
   gerente: Object.freeze({
-    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
-    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis','lotes','movimentacoesLote'],
+    escrever: ['estoque','validade','vendas','comandas','fiado','ponto','financeiro','cambio','perfis','lotes','movimentacoesLote'],
   }),
   operador: Object.freeze({
-    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','perfis'],
+    ler:      ['estoque','validade','vendas','comandas','fiado','ponto','perfis','lotes'],
     // FIX: 'ponto' adicionado — operador também bate ponto
-    escrever: ['vendas','comandas','ponto'],
+    escrever: ['vendas','comandas','ponto','lotes','movimentacoesLote'],
   }),
   entregador: Object.freeze({
     ler:      ['pedidos', 'ponto', 'perfis'],
@@ -218,12 +228,15 @@ const Store = (() => {
   financeiro:    CONSTANTS.DB.FINANCEIRO,
   saidas:        CONSTANTS.DB.SAIDAS,
   validade:      CONSTANTS.DB.VALIDADE,
+  lotes:              CONSTANTS.DB.LOTES,
+  movimentacoesLote:  CONSTANTS.DB.MOVIMENTACOES_LOTE,
   };
 
   const _empty = {
   estoque:[], vendas:[], comandas:[], fiado:[],
   ponto:[], pedidos:[], auditoria:[], config:{},
   movimentacoes:[], categorias:[], fornecedores:[], financeiro:[], saidas:[], validade:[],
+  lotes:[], movimentacoesLote:[],
   };
 
   const _limits = {
@@ -233,6 +246,8 @@ const Store = (() => {
   financeiro: CONSTANTS.MAX_FINANCEIRO,
   saidas:     CONSTANTS.MAX_SAIDAS,
   validade:   5_000,
+  lotes:              CONSTANTS.MAX_LOTES,
+  movimentacoesLote:  CONSTANTS.MAX_MOVIMENTACOES_LOTE,
   };
 
   function _read(col) {
@@ -369,6 +384,8 @@ const Store = (() => {
   getFinanceiro()    { return _read('financeiro'); },
   getSaidas()        { return _read('saidas'); },
   getValidade()      { return _read('validade'); },
+  getLotes()             { return _read('lotes'); },
+  getMovimentacoesLote() { return _read('movimentacoesLote'); },
 
   getVendasHoje() {
     const hoje = Utils.todayISO();
@@ -408,6 +425,8 @@ const Store = (() => {
   mutateFinanceiro(fn)    { _mutate('financeiro',    fn); },
   mutateSaidas(fn)        { _mutate('saidas',        fn); },
   mutateValidade(fn)     { _mutate('validade',     fn); },
+  mutateLotes(fn)             { _mutate('lotes',             fn); },
+  mutateMovimentacoesLote(fn) { _mutate('movimentacoesLote', fn); },
 
   invalidate(col) {
     if (col) delete _cache[col];
@@ -1065,6 +1084,48 @@ const FirebaseService = (() => {
      Store.invalidate('fiado');
    } catch(_) {}
    console.info(`[Firebase] ✓ ${clientes.length} cliente(s) fiado sincronizados.`);
+    } else if (colName === 'lotes') {
+   // Mesmo padrão de 'financeiro': log imutável, 1 doc por lote,
+   // filtra por _fbSynced, nunca reescreve o array inteiro.
+   const pendentes = Array.isArray(dados)
+     ? dados.filter(l => l?.id && !l._fbSynced).slice(0, 100)
+     : [];
+   if (!pendentes.length) return true;
+   const batch = _fb.writeBatch(_db);
+   pendentes.forEach(lote => {
+     const ref = _fb.doc(_db, 'lotes', lote.id);
+     batch.set(ref, { ...lote, _fbSynced: true, syncedAt: Utils.nowISO() });
+   });
+   await batch.commit();
+   const key = CONSTANTS.DB.LOTES;
+   try {
+     const local = JSON.parse(localStorage.getItem(key) || '[]');
+     const ids = new Set(pendentes.map(l => l.id));
+     local.forEach(l => { if (ids.has(l.id)) l._fbSynced = true; });
+     localStorage.setItem(key, JSON.stringify(local));
+     Store.invalidate('lotes');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${pendentes.length} lote(s) sincronizados.`);
+    } else if (colName === 'movimentacoesLote') {
+   const pendentes = Array.isArray(dados)
+     ? dados.filter(m => m?.id && !m._fbSynced).slice(0, 150)
+     : [];
+   if (!pendentes.length) return true;
+   const batch = _fb.writeBatch(_db);
+   pendentes.forEach(mov => {
+     const ref = _fb.doc(_db, 'movimentacoesLote', mov.id);
+     batch.set(ref, { ...mov, _fbSynced: true, syncedAt: Utils.nowISO() });
+   });
+   await batch.commit();
+   const key = CONSTANTS.DB.MOVIMENTACOES_LOTE;
+   try {
+     const local = JSON.parse(localStorage.getItem(key) || '[]');
+     const ids = new Set(pendentes.map(m => m.id));
+     local.forEach(m => { if (ids.has(m.id)) m._fbSynced = true; });
+     localStorage.setItem(key, JSON.stringify(local));
+     Store.invalidate('movimentacoesLote');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${pendentes.length} movimentação(ões) de lote sincronizadas.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
       const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
@@ -1204,6 +1265,20 @@ const FirebaseService = (() => {
     } else if (colName === 'fiado') {
    const snap = await _fb.getDocs(_fb.query(_fb.collection(_db, 'fiado'), _fb.limit(1000)));
    return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(c => !c._deleted);
+    } else if (colName === 'lotes') {
+   // Rastreabilidade de custo/investimento — 1 documento por lote de
+   // compra, igual 'financeiro'. Sem purge: log imutável, não é sensato
+   // limitar por data (um lote de 6 meses atrás pode ter estoque ainda
+   // não vendido, precisa continuar rastreável).
+   const snap = await _fb.getDocs(
+     _fb.query(_fb.collection(_db, 'lotes'), _fb.orderBy('dataCompra','desc'), _fb.limit(5000))
+   );
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(l => !l._deleted);
+    } else if (colName === 'movimentacoesLote') {
+   const snap = await _fb.getDocs(
+     _fb.query(_fb.collection(_db, 'movimentacoesLote'), _fb.orderBy('timestamp','desc'), _fb.limit(10000))
+   );
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(m => !m._deleted);
     } else {
    const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
    return snap.exists() ? snap.data().dados : null;
@@ -1333,12 +1408,17 @@ const SyncService = (() => {
     if (dados == null) continue;
 
     // ── Coleções com merge inteligente (nunca sobrescreve locais não enviados) ──
-    if (col === 'vendas' || col === 'comandas' || col === 'fiado') {
-      const getLocal = col === 'vendas'    ? () => Store.getVendas()
-                     : col === 'comandas'  ? () => Store.getComandas()
-                     : () => Store.getFiado();
+    if (col === 'vendas' || col === 'comandas' || col === 'fiado' || col === 'lotes' || col === 'movimentacoesLote') {
+      const getLocal = col === 'vendas'             ? () => Store.getVendas()
+                     : col === 'comandas'            ? () => Store.getComandas()
+                     : col === 'fiado'               ? () => Store.getFiado()
+                     : col === 'lotes'               ? () => Store.getLotes()
+                     : () => Store.getMovimentacoesLote();
       const writeRaw = (data) => Store._writeRaw(col, data);
-      const maxLimit = col === 'vendas' ? CONSTANTS.MAX_VENDAS : (CONSTANTS.MAX_COMANDAS || 2000);
+      const maxLimit = col === 'vendas' ? CONSTANTS.MAX_VENDAS
+                      : col === 'lotes' ? CONSTANTS.MAX_LOTES
+                      : col === 'movimentacoesLote' ? CONSTANTS.MAX_MOVIMENTACOES_LOTE
+                      : (CONSTANTS.MAX_COMANDAS || 2000);
 
       const local    = getLocal();
       const localIds = new Set(local.map(v => v.id).filter(Boolean));
