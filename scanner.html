@@ -123,6 +123,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
         <i class="fas fa-camera text-4xl text-slate-600"></i>
         <p class="text-[10px] font-black uppercase text-slate-500">Câmera parada</p>
         <button onclick="iniciarScanner()" class="btn-pill btn-primary" style="padding:.6rem 1.2rem;"><i class="fas fa-play"></i> Iniciar leitura</button>
+        <p id="cameraErroDetalhe" class="hidden text-[8px] text-red-400 font-mono text-center px-4 max-w-[280px] break-words"></p>
       </div>
     </div>
 
@@ -379,53 +380,48 @@ async function iniciarScanner() {
     return;
   }
   try {
-    _scanner = new Html5Qrcode('reader', {
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.CODABAR,
-        Html5QrcodeSupportedFormats.ITF,
-      ],
-      verbose: false,
-    });
-    const _videoConstraints = {
-      facingMode: 'environment',
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-      advanced: [{ focusMode: 'continuous' }],
-    };
-    // qrbox como função: nunca ultrapassa o tamanho real do vídeo (causa mais
-    // comum de falha silenciosa/tela preta em telas pequenas com valor fixo em px)
+    const _formatos = [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODABAR,
+      Html5QrcodeSupportedFormats.ITF,
+    ];
+    _scanner = new Html5Qrcode('reader', { formatsToSupport: _formatos, verbose: false });
+    // Só facingMode — width/height "ideal" e "advanced" (focusMode etc.) foram
+    // removidos: em alguns aparelhos/Android WebView eles fazem o getUserMedia
+    // falhar direto (OverconstrainedError) mesmo sendo tecnicamente "soft".
+    const _videoConstraints = { facingMode: 'environment' };
+    // qrbox como função, com piso mínimo de 180px — uma função que despenca
+    // pra 0 (ex: viewfinder ainda sem tamanho real) derruba o start() na hora.
     const _qrboxFn = (viewW, viewH) => {
-      const lado = Math.floor(Math.min(viewW, viewH) * 0.7);
+      const lado = Math.max(180, Math.floor(Math.min(viewW, viewH) * 0.7) || 180);
       return { width: lado, height: lado };
     };
     try {
       await _scanner.start(
         _videoConstraints,
-        { fps: 10, qrbox: _qrboxFn, aspectRatio: 1.0 },
+        { fps: 10, qrbox: _qrboxFn },
         _onScanSuccess,
         () => {} // erro de leitura por frame (sem código no quadro) — ignora, é o normal
       );
     } catch (eQrbox) {
-      // Fallback: alguns aparelhos ainda rejeitam a config acima (ex: câmera
-      // muito lenta pra reportar as capabilities a tempo) — tenta sem qrbox,
-      // usando o quadro inteiro do vídeo pra leitura.
-      console.warn('[Scanner] start com qrbox falhou, tentando fallback:', eQrbox);
-      await _scanner.start(
-        _videoConstraints,
-        { fps: 10 },
-        _onScanSuccess,
-        () => {}
-      );
+      // Fallback: alguns aparelhos rejeitam a config com qrbox. Recria a
+      // instância do zero antes de tentar de novo — reusar a mesma instância
+      // após um start() que falhou no meio pode deixar o html5-qrcode num
+      // estado inconsistente e o segundo start() falha silenciosamente também.
+      console.warn('[Scanner] start com qrbox falhou, recriando e tentando sem qrbox:', eQrbox);
+      try { await _scanner.clear(); } catch (_) {}
+      _scanner = new Html5Qrcode('reader', { formatsToSupport: _formatos, verbose: false });
+      await _scanner.start(_videoConstraints, { fps: 10 }, _onScanSuccess, () => {});
     }
     _scannerAtivo = true;
     document.getElementById('cameraParada').classList.add('hidden');
     document.getElementById('btnPararScanner').classList.remove('hidden');
+    document.getElementById('cameraErroDetalhe').classList.add('hidden');
     _setStatus('escaneando', 'Escaneando');
     _atualizarBotaoLanterna();
   } catch (e) {
@@ -455,13 +451,24 @@ function _retomarScanner() {
 
 function _tratarErroCamera(e) {
   const nome = e?.name || '';
+  let msg;
   if (nome === 'NotAllowedError' || /permission/i.test(String(e))) {
-    UIService.showToast('Câmera bloqueada', 'Permita o acesso à câmera nas configurações do navegador', 'error');
+    msg = 'Permita o acesso à câmera nas configurações do navegador';
+    UIService.showToast('Câmera bloqueada', msg, 'error');
   } else if (nome === 'NotFoundError') {
+    msg = 'Nenhuma câmera encontrada neste aparelho';
     UIService.showToast('Nenhuma câmera encontrada', '', 'error');
+  } else if (nome === 'NotReadableError') {
+    msg = 'A câmera já está sendo usada por outro app/aba — feche e tente de novo';
+    UIService.showToast('Câmera ocupada', msg, 'error');
   } else {
-    UIService.showToast('Não foi possível abrir a câmera', String(e?.message || e), 'error');
+    msg = String(e?.message || e);
+    UIService.showToast('Não foi possível abrir a câmera', msg, 'error');
   }
+  const detalhe = document.getElementById('cameraErroDetalhe');
+  detalhe.textContent = `${nome || 'Erro'}: ${msg}`;
+  detalhe.classList.remove('hidden');
+  document.getElementById('cameraParada').classList.remove('hidden');
   _setStatus('erro', 'Erro');
 }
 
