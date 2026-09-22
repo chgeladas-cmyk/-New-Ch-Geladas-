@@ -29,6 +29,8 @@
     { id: 'delivery',            label: 'Delivery',              icone: '🛵', cor: '#f97316' },
     { id: 'ponto',               label: 'Ponto',                 icone: '⏱️', cor: '#14b8a6' },
     { id: 'cardapio',            label: 'Cardápio Digital',      icone: '📋', cor: '#f97316' },
+    { id: 'documentos',          label: 'Documentos (Recibo/Orçamento/Encarte)', icone: '🧾', cor: '#0ea5e9' },
+    { id: 'scanner',             label: 'Scanner de Código de Barras', icone: '📷', cor: '#f97316' },
     { id: 'aprovacao_controle',  label: 'Aprovação — Controle', icone: '🔍', cor: '#f59e0b' },
     { id: 'aprovacao_validacao', label: 'Aprovação — Validação',icone: '✅', cor: '#8b5cf6' },
     { id: 'relatorios',          label: 'Relatórios',            icone: '📈', cor: '#64748b' },
@@ -43,32 +45,32 @@
   const PERFIS_PADRAO = {
     colaborador: {
       label: 'Colaborador', cor: '#3b82f6', icone: '🛒',
-      modulos: { vendas:2, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
+      modulos: { vendas:2, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, documentos:1, scanner:2, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
       flags: { vendas_requer_aprovacao: true },
     },
     controlador: {
       label: 'Controlador', cor: '#f59e0b', icone: '🔍',
-      modulos: { vendas:1, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, aprovacao_controle:2, aprovacao_validacao:0, relatorios:1 },
+      modulos: { vendas:1, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, documentos:0, scanner:0, aprovacao_controle:2, aprovacao_validacao:0, relatorios:1 },
       flags: { vendas_requer_aprovacao: false },
     },
     validador: {
       label: 'Validador', cor: '#8b5cf6', icone: '✅',
-      modulos: { vendas:1, estoque:1, financeiro:1, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, aprovacao_controle:0, aprovacao_validacao:2, relatorios:1 },
+      modulos: { vendas:1, estoque:1, financeiro:1, fiado:0, cambio:0, comandas:0, delivery:0, ponto:1, cardapio:0, documentos:0, scanner:1, aprovacao_controle:0, aprovacao_validacao:2, relatorios:1 },
       flags: { vendas_requer_aprovacao: false },
     },
     gerente: {
       label: 'Gerente', cor: '#f59e0b', icone: '📊',
-      modulos: { vendas:2, estoque:2, financeiro:2, fiado:2, cambio:2, comandas:2, delivery:2, ponto:2, cardapio:1, aprovacao_controle:0, aprovacao_validacao:0, relatorios:2 },
+      modulos: { vendas:2, estoque:2, financeiro:2, fiado:2, cambio:2, comandas:2, delivery:2, ponto:2, cardapio:1, documentos:2, scanner:2, aprovacao_controle:0, aprovacao_validacao:0, relatorios:2 },
       flags: { vendas_requer_aprovacao: false },
     },
     operador: {
       label: 'Operador', cor: '#10b981', icone: '🖥️',
-      modulos: { vendas:2, estoque:1, financeiro:0, fiado:0, cambio:0, comandas:2, delivery:2, ponto:1, cardapio:0, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
+      modulos: { vendas:2, estoque:1, financeiro:0, fiado:0, cambio:0, comandas:2, delivery:2, ponto:1, cardapio:0, documentos:1, scanner:2, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
       flags: { vendas_requer_aprovacao: false },
     },
     entregador: {
       label: 'Entregador', cor: '#06b6d4', icone: '🚴',
-      modulos: { vendas:0, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:2, ponto:1, cardapio:0, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
+      modulos: { vendas:0, estoque:0, financeiro:0, fiado:0, cambio:0, comandas:0, delivery:2, ponto:1, cardapio:0, documentos:0, scanner:0, aprovacao_controle:0, aprovacao_validacao:0, relatorios:0 },
       flags: { vendas_requer_aprovacao: false },
     },
   };

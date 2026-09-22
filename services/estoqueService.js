@@ -157,12 +157,26 @@
     return p ? _normalizarProduto(p) : null;
   }
 
+  /**
+   * Busca um produto pelo código de barras (EAN-13/EAN-8/CODE128 etc.).
+   * Usado pelo módulo de leitura via câmera (scanner.html). Compara o
+   * código exato após aparar espaços — nunca faz correspondência parcial
+   * (evita achar o produto errado por coincidência de prefixo).
+   */
+  function getProdutoPorCodigoBarras(codigo) {
+    const alvo = String(codigo || '').trim();
+    if (!alvo) return null;
+    const p = Store.getEstoque().find(p => p.codigoBarras && String(p.codigoBarras).trim() === alvo);
+    return p ? _normalizarProduto(p) : null;
+  }
+
   /** Cria um novo produto */
   function adicionarProduto(dados) {
     const prod = {
       id:           Utils.generateId(),
       nome:         dados.nome?.trim() || 'Produto sem nome',
       categoria:    dados.categoria    || '',
+      codigoBarras: dados.codigoBarras?.trim() || null,
       precoVenda:   Number(dados.precoVenda  || dados.precoUn  || 0),
       precoCusto:   Number(dados.precoCusto  || dados.custoUn  || 0),
       estoqueAtual: Number(dados.estoqueAtual || dados.qtdUn   || 0),
@@ -375,12 +389,97 @@
 
   // ── APIs de alto nível ───────────────────────────────────────────
 
-  /** Entrada de mercadoria (compra de fornecedor) */
-  async function entradaEstoque(produtoId, quantidade, { custo, fornecedorId, observacao } = {}) {
-    return _registrarMovimentacao({
-      produtoId, tipo: 'entrada', quantidade,
+  /**
+   * Entrada de mercadoria (compra de fornecedor).
+   *
+   * Além da baixa/entrada agregada de sempre, cria um CompraLote (se
+   * LoteService estiver carregado e houver custo informado) para
+   * rastreabilidade de investimento/CMV/lucro por lote (FIFO). Isso é
+   * ADITIVO e não-bloqueante: se a criação do lote falhar por qualquer
+   * motivo, a entrada de estoque "normal" (contador agregado) continua
+   * funcionando exatamente como antes — nunca trava uma compra por causa
+   * da parte nova.
+   *
+   * Produtos que já tinham estoque ANTES desta funcionalidade existir não
+   * têm lote de origem retroativo — a rastreabilidade de custo só cobre
+   * compras registradas a partir de agora (ou de um lote de abertura
+   * criado manualmente, se necessário).
+   */
+  async function entradaEstoque(produtoId, quantidade, { custo, fornecedorId, observacao, frete = 0, desconto = 0, outrasDespesas = 0, unidadeCompra = null } = {}) {
+    const prod = getProduto(produtoId);
+    const unidadeProduto = prod?.unidade || 'UN';
+
+    // Converte a quantidade PRA UNIDADE DO PRODUTO antes de tocar em
+    // qualquer coisa — assim o estoque agregado e o lote nascem
+    // consistentes entre si desde o início (nunca converter só um dos
+    // dois, senão a reconciliação acusaria divergência depois).
+    // custoMercadoria usa a quantidade e o custo ORIGINAIS (mesma unidade
+    // um do outro) — o total gasto não muda por causa da conversão, só a
+    // forma de contar a quantidade muda.
+    let quantidadeParaEstoque = quantidade;
+    const custoMercadoriaTotal = custo != null ? custo * quantidade : null;
+    if (unidadeCompra && unidadeCompra !== unidadeProduto) {
+      if (!window.CH?.CustoService) throw new Error('Conversão de unidade indisponível (custoService não carregado).');
+      quantidadeParaEstoque = window.CH.CustoService.converterQuantidade(quantidade, unidadeCompra, unidadeProduto);
+    }
+
+    const mov = await _registrarMovimentacao({
+      produtoId, tipo: 'entrada', quantidade: quantidadeParaEstoque,
       origem: 'compra', custo, fornecedorId, observacao,
     });
+
+    try {
+      if (window.CH?.LoteService && custo != null) {
+        await window.CH.LoteService.criarLote({
+          produtoId, produtoNome: prod?.nome || mov.nomeProduto,
+          fornecedorId, fornecedorNome: getFornecedor?.(fornecedorId)?.nome || '',
+          unidadeCompra: unidadeProduto, // já convertida acima — criarLote não precisa converter de novo
+          unidadeCompraOriginal: (unidadeCompra && unidadeCompra !== unidadeProduto) ? unidadeCompra : undefined,
+          quantidadeInicial: quantidadeParaEstoque,
+          custoMercadoria: custoMercadoriaTotal,
+          frete, desconto, outrasDespesas,
+          observacao,
+          origemCompraId: mov.id, // idempotência: 1 lote por movimentação de entrada
+        });
+      }
+    } catch (e) {
+      console.warn('[Estoque] Criação de lote (rastreabilidade de custo) falhou — entrada de estoque seguiu normalmente:', e.message);
+    }
+
+    return mov;
+  }
+
+  /**
+   * Devolução de compra ao fornecedor (Seção 23) — mercadoria que ainda
+   * está em estoque (não vendida) volta pro fornecedor. Baixa o estoque
+   * agregado do produto E reduz a quantidade disponível do lote de
+   * origem permanentemente (mesmo espírito de entradaEstoque: aditivo
+   * quanto ao lote, mas aqui a baixa agregada é obrigatória — sem lote
+   * pra decrementar corretamente não tem como saber quanto realmente sai).
+   */
+  async function devolucaoCompra(loteId, quantidade, { motivo = '' } = {}) {
+    if (!window.CH?.LoteService) throw new Error('Rastreabilidade de lote não está disponível — não é possível processar devolução.');
+    const lote = window.CH.LoteService.getLote(loteId);
+    if (!lote) throw new Error(`Lote ${loteId} não encontrado.`);
+    if (!(quantidade > 0)) throw new Error('Quantidade a devolver precisa ser maior que zero.');
+    // Valida ANTES de tocar no estoque agregado — senão uma devolução
+    // inválida (maior que o disponível no lote) deixaria o agregado
+    // baixado e o lote intacto, dessincronizados entre si.
+    if (quantidade > lote.quantidadeDisponivel + 1e-9) {
+      throw new Error(
+        `Não é possível devolver ${quantidade}: só há ${lote.quantidadeDisponivel} disponível neste lote.`
+      );
+    }
+
+    const mov = await _registrarMovimentacao({
+      produtoId: lote.produtoId, tipo: 'devolucao', quantidade,
+      origem: `devolucao:${loteId}:${Utils.generateId().slice(0,6)}`,
+      observacao: motivo || `Devolução ao fornecedor (lote ${loteId.slice(0,8)})`,
+      _forceDelta: -Math.abs(quantidade), // devolução é sempre saída de estoque, mesmo 'devolucao' não estando na lista padrão eSaida
+    });
+
+    await window.CH.LoteService.registrarDevolucao(loteId, quantidade, { motivo, operador: _usuario() });
+    return mov;
   }
 
   /**
@@ -583,11 +682,12 @@
         }
 
         console.info(`[Estoque] ✓ Lote venda ${venda.id}: ${resultados.length} itens baixados`);
+        await _consumirLotesFIFO(resultados.map(r => ({ produtoId: r.produtoId, qtdUn: r.qtdUn })), venda);
         return { ok: true, itensProcessados: resultados.length, erros };
 
       } catch (e) {
         console.warn(`[Estoque] Lote transaction falhou, aplicando localmente:`, e.message);
-        _baixarLoteLocal(venda, itensParaBaixar);
+        await _baixarLoteLocal(venda, itensParaBaixar);
         erros.push(`Firebase falhou — aplicado localmente`);
         return {
           ok:               false,
@@ -601,13 +701,33 @@
       // ── Modo offline / sem token ─────────────────────────────────
       const motivo = !_isOnline() ? 'offline' : !FirebaseService.isReady() ? 'Firebase não pronto' : 'sem adminToken';
       console.info(`[Estoque] Lote local (${motivo}) venda ${venda.id}`);
-      _baixarLoteLocal(venda, itensParaBaixar);
+      await _baixarLoteLocal(venda, itensParaBaixar);
       return { ok: false, localFallback: true, itensProcessados: itensParaBaixar.length, erros: [motivo] };
     }
   }
 
+  /**
+   * Consome os lotes (FIFO) correspondentes a itens já baixados do estoque
+   * agregado. ADITIVO e não-bloqueante: se não houver lote (produto sem
+   * rastreabilidade de custo ainda) ou a consumo falhar por qualquer
+   * motivo, apenas loga um aviso — nunca desfaz nem impede a venda, que já
+   * teve seu estoque agregado baixado normalmente.
+   */
+  async function _consumirLotesFIFO(itens, venda) {
+    if (!window.CH?.LoteService) return;
+    for (const it of itens) {
+      try {
+        await window.CH.LoteService.consumirFIFO(it.produtoId, it.qtdUn, {
+          origem: 'venda', origemId: venda.id, operador: venda.operador || _usuario(),
+        });
+      } catch (e) {
+        console.warn(`[Estoque] Consumo FIFO (rastreabilidade de custo) falhou para produto ${it.produtoId}:`, e.message);
+      }
+    }
+  }
+
   /** Baixa local de todos os itens (fallback offline) */
-  function _baixarLoteLocal(venda, itensParaBaixar) {
+  async function _baixarLoteLocal(venda, itensParaBaixar) {
     const agora = new Date();
     Store.mutateEstoque(estoque => {
       for (const { item, prod, qtdUn, origemKey } of itensParaBaixar) {
@@ -638,6 +758,7 @@
         });
       }
     });
+    await _consumirLotesFIFO(itensParaBaixar.map(({ item, qtdUn }) => ({ produtoId: item.prodId, qtdUn })), venda);
     console.info(`[Estoque] Lote local aplicado: ${itensParaBaixar.length} itens (venda ${venda.id})`);
   }
 
@@ -689,6 +810,16 @@
         observacao: `Cancelamento da venda ${vendaId}`,
       });
       movs.push(mov);
+
+      // Devolve a quantidade ao(s) lote(s) de onde foi consumida (FIFO) —
+      // aditivo/não-bloqueante, mesmo espírito de entradaEstoque/_consumirLotesFIFO.
+      try {
+        if (window.CH?.LoteService) {
+          await window.CH.LoteService.reverterConsumo(item.prodId, { origem: 'venda', origemId: vendaId });
+        }
+      } catch (e) {
+        console.warn(`[Estoque] Estorno de lote (rastreabilidade de custo) falhou para produto ${item.prodId}:`, e.message);
+      }
     }
     return movs;
   }
@@ -847,12 +978,14 @@
     // Produtos
     getProdutos,
     getProduto,
+    getProdutoPorCodigoBarras,
     adicionarProduto,
     atualizarProduto,
     removerProduto,
 
     // Movimentações
     entradaEstoque,
+    devolucaoCompra,
     baixarEstoqueVenda,
     registrarAvaria,
     ajustarEstoque,
