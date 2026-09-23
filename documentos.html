@@ -109,27 +109,57 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
 #folhaDocOrc .doc-assinatura{margin-top:1.6rem;border-top:1px solid #94a3b8;padding-top:.3rem;font-size:.53rem;color:#64748b;text-align:center;max-width:210px;margin-left:auto;margin-right:auto;}
 
 /* ══ ENCARTE — cartaz vertical estilo social ══ */
-#folhaEncarte{width:100%;max-width:360px;aspect-ratio:4/5;margin:0 auto;border-radius:1.3rem;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;}
-#folhaEncarte .enc-head{padding:1.1rem 1rem .5rem;position:relative;}
-#folhaEncarte .enc-brand{display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem;}
-#folhaEncarte .enc-logo{width:24px;height:24px;border-radius:9999px;object-fit:cover;border:1.5px solid rgba(255,255,255,.75);}
-#folhaEncarte .enc-brand span{font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;opacity:.92;text-shadow:0 1px 3px rgba(0,0,0,.4);}
-#folhaEncarte .enc-titulo{font-weight:900;font-size:1.35rem;line-height:1.05;text-transform:uppercase;letter-spacing:-.01em;text-shadow:0 2px 6px rgba(0,0,0,.3);}
-#folhaEncarte .enc-sub{font-weight:700;font-size:.7rem;opacity:.9;margin-top:.2rem;text-shadow:0 1px 3px rgba(0,0,0,.3);}
-#folhaEncarte .enc-ribbon{position:absolute;top:16px;right:-34px;background:#fff;color:#111;font-size:.56rem;font-weight:900;letter-spacing:.05em;padding:.3rem 2.4rem;transform:rotate(38deg);box-shadow:0 4px 12px rgba(0,0,0,.3);text-transform:uppercase;}
-#folhaEncarte .enc-lista{flex:1;padding:.2rem 1rem 0;display:flex;flex-direction:column;gap:.4rem;overflow:hidden;}
-#folhaEncarte .enc-prod{background:rgba(255,255,255,.15);backdrop-filter:blur(2px);border-radius:.75rem;padding:.45rem .65rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;}
-#folhaEncarte .enc-prod .nome{font-weight:800;font-size:.72rem;min-width:0;}
-#folhaEncarte .enc-prod .precos{display:flex;flex-direction:column;align-items:flex-end;line-height:1.05;flex-shrink:0;}
-#folhaEncarte .enc-prod .de{font-size:.58rem;text-decoration:line-through;opacity:.75;}
-#folhaEncarte .enc-prod .preco{font-weight:900;font-size:.87rem;white-space:nowrap;}
-#folhaEncarte .enc-rodape{padding:.75rem 1rem 1.05rem;font-size:.58rem;font-weight:700;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.3);}
-#folhaEncarte.compacta .enc-lista{gap:.28rem;}
-#folhaEncarte.compacta .enc-prod{padding:.32rem .55rem;}
-#folhaEncarte.compacta .enc-prod .nome{font-size:.64rem;}
-#folhaEncarte.compacta .enc-prod .preco{font-size:.76rem;}
-#folhaEncarte.compacta .enc-prod .de{font-size:.53rem;}
-#folhaEncarte.compacta .enc-titulo{font-size:1.15rem;}
+#folhaEncarte{width:100%;max-width:360px;aspect-ratio:4/5;margin:0 auto;border-radius:1.3rem;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;isolation:isolate;}
+#folhaEncarte::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle at 90% 6%,rgba(255,255,255,.18) 0%,transparent 40%),radial-gradient(circle at -8% 98%,rgba(255,255,255,.14) 0%,transparent 45%),radial-gradient(circle at 105% 100%,rgba(0,0,0,.3) 0%,transparent 55%);pointer-events:none;z-index:0;}
+#folhaEncarte::after{content:'';position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,transparent,var(--enc-accent,#fff) 50%,transparent);opacity:.85;z-index:2;}
+#folhaEncarte>*{position:relative;z-index:1;}
+
+#folhaEncarte .enc-head{padding:1.15rem 1.1rem .5rem;}
+#folhaEncarte .enc-brand{display:flex;align-items:center;gap:.45rem;margin-bottom:.9rem;}
+#folhaEncarte .enc-logo{width:26px;height:26px;border-radius:9999px;object-fit:cover;border:1.5px solid rgba(255,255,255,.8);box-shadow:0 2px 8px rgba(0,0,0,.35),0 0 0 2px var(--enc-accent,transparent);flex-shrink:0;}
+#folhaEncarte .enc-brand span{font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;opacity:.95;text-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap;}
+#folhaEncarte .enc-brand::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.4),transparent);}
+
+#folhaEncarte .enc-titulo{font-weight:900;font-size:1.55rem;line-height:1.04;text-transform:uppercase;letter-spacing:-.015em;text-shadow:0 3px 10px rgba(0,0,0,.35);max-width:76%;}
+#folhaEncarte .enc-sub{font-weight:700;font-size:.74rem;opacity:.92;margin-top:.3rem;text-shadow:0 1px 3px rgba(0,0,0,.3);max-width:80%;}
+
+#folhaEncarte .enc-ribbon{position:absolute;top:16px;right:-36px;background:#fff;color:#111;font-size:.57rem;font-weight:900;letter-spacing:.06em;padding:.32rem 2.5rem;transform:rotate(38deg);box-shadow:0 6px 16px rgba(0,0,0,.35);text-transform:uppercase;}
+
+#folhaEncarte .enc-lista{position:relative;flex:1;padding:.4rem 1.1rem 0;display:flex;flex-direction:column;justify-content:center;gap:.55rem;overflow:hidden;}
+#folhaEncarte .enc-watermark{position:absolute;inset:6%;margin:auto;max-width:78%;max-height:78%;object-fit:contain;opacity:.11;filter:grayscale(1) brightness(0) invert(1);pointer-events:none;z-index:0;}
+#folhaEncarte .enc-prod{position:relative;z-index:1;background:rgba(255,255,255,.13);backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.18);border-radius:.9rem;padding:.6rem .8rem;display:flex;justify-content:space-between;align-items:center;gap:.6rem;}
+#folhaEncarte .enc-prod::before{content:'';position:absolute;left:0;top:.45rem;bottom:.45rem;width:3px;border-radius:3px;background:rgba(255,255,255,.6);}
+#folhaEncarte .enc-prod .nome{font-weight:800;font-size:.76rem;min-width:0;line-height:1.2;padding-left:.4rem;}
+#folhaEncarte .enc-prod .precos{display:flex;flex-direction:column;align-items:flex-end;line-height:1;flex-shrink:0;gap:.2rem;}
+#folhaEncarte .enc-prod .de{font-size:.6rem;text-decoration:line-through;opacity:.72;font-weight:600;}
+#folhaEncarte .enc-prod .preco-pill{background:var(--enc-accent,#fff);color:var(--enc-accent-txt,#111);font-weight:900;font-size:.92rem;padding:.2rem .55rem;border-radius:.5rem;white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.25);}
+#folhaEncarte .enc-prod .badge-inline{background:#111;color:#fff;font-size:.5rem;font-weight:900;padding:.08rem .35rem;border-radius:.3rem;letter-spacing:.02em;}
+#folhaEncarte .enc-prod .economia{font-size:.55rem;font-weight:800;opacity:.85;margin-top:.05rem;}
+
+#folhaEncarte .enc-rodape{padding:.8rem 1.1rem 1.1rem;font-size:.6rem;font-weight:700;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.3);border-top:1px solid rgba(255,255,255,.18);margin:.4rem 1.1rem 0;display:flex;align-items:center;justify-content:center;gap:.35rem;}
+#folhaEncarte .enc-rodape i{font-size:.55rem;opacity:.85;}
+
+/* Hero: só 1 produto no encarte → dá destaque total, sem sobrar vazio */
+#folhaEncarte.hero .enc-watermark{opacity:.15;max-width:88%;max-height:88%;}
+#folhaEncarte.hero .enc-prod{flex-direction:column;align-items:flex-start;padding:1.1rem 1.2rem;gap:.4rem;}
+#folhaEncarte.hero .enc-prod::before{display:none;}
+#folhaEncarte.hero .enc-prod .nome{font-size:1.05rem;padding-left:0;}
+#folhaEncarte.hero .enc-prod .precos{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:.55rem;}
+#folhaEncarte.hero .enc-prod .preco-pill{font-size:1.6rem;padding:.3rem .8rem;}
+#folhaEncarte.hero .enc-prod .de{font-size:.78rem;}
+#folhaEncarte.hero .enc-prod .economia{width:100%;font-size:.62rem;}
+
+/* Compacta: muitos itens → reduz tudo pra caber sem cortar */
+#folhaEncarte.compacta .enc-lista{gap:.32rem;}
+#folhaEncarte.compacta .enc-prod{padding:.42rem .6rem;}
+#folhaEncarte.compacta .enc-prod .nome{font-size:.66rem;padding-left:.3rem;}
+#folhaEncarte.compacta .enc-prod .preco-pill{font-size:.78rem;padding:.14rem .42rem;}
+#folhaEncarte.compacta .enc-prod .de{font-size:.54rem;}
+#folhaEncarte.compacta .enc-prod .badge-inline{font-size:.46rem;}
+#folhaEncarte.compacta .enc-titulo{font-size:1.2rem;}
+#folhaEncarte.compacta .enc-watermark{display:none;}
+
+.tema-swatch-logo{background-size:cover;background-position:center;background-color:#111;}
 
 .tema-swatch{width:26px;height:26px;border-radius:9999px;border:2px solid rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;}
 .tema-swatch.sel{border-color:#fff;box-shadow:0 0 0 2px #38bdf8;}
@@ -441,13 +471,71 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
    já existente.
 ══════════════════════════════════════════════════════════════ */
 
+/* ══ TEMA AUTOMÁTICO A PARTIR DA LOGO ══
+   Faz a média das cores "de marca" da imagem (ignora pixels quase
+   brancos/pretos/transparentes) e monta um degradê + selo de preço
+   na mesma cor, pra o encarte casar com a identidade visual real da loja. */
+function _rgbParaHsl(r, g, b) {
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h=0, s=0; const l=(max+min)/2;
+  const d=max-min;
+  if (d) {
+    s = l > .5 ? d/(2-max-min) : d/(max+min);
+    if (max===r) h=(g-b)/d + (g<b?6:0);
+    else if (max===g) h=(b-r)/d + 2;
+    else h=(r-g)/d + 4;
+    h /= 6;
+  }
+  return [h, s, l];
+}
+function _hslParaHex(h, s, l) {
+  const k = n => (n + h*12) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  const toHex = v => Math.round(v*255).toString(16).padStart(2,'0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+function _corDominante(ctx, w, h) {
+  try {
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let r=0, g=0, b=0, n=0;
+    const passo = 4 * Math.max(1, Math.round((w*h)/2500));
+    for (let i=0; i<data.length; i+=passo) {
+      const a = data[i+3];
+      if (a < 60) continue;
+      const rr=data[i], gg=data[i+1], bb=data[i+2];
+      const lum = (rr+gg+bb)/3;
+      if (lum > 240 || lum < 12) continue;
+      r+=rr; g+=gg; b+=bb; n++;
+    }
+    if (!n) return null;
+    return { r: Math.round(r/n), g: Math.round(g/n), b: Math.round(b/n) };
+  } catch { return null; }
+}
+function _temaAPartirDaCor(cor) {
+  if (!cor) return null;
+  const [h, sBase] = _rgbParaHsl(cor.r, cor.g, cor.b);
+  const s = Math.max(sBase, .45);
+  return {
+    bg: `linear-gradient(155deg, ${_hslParaHex(h,s,.40)} 0%, ${_hslParaHex(h,s,.24)} 55%, ${_hslParaHex(h,s,.07)} 100%)`,
+    txt: '#fff',
+    accent: _hslParaHex(h, Math.min(s,.35), .95),
+    accentTxt: _hslParaHex(h, s, .24),
+  };
+}
+function _listaTemas() {
+  const temaLogo = _cfgDocumentos().temaLogo;
+  return temaLogo ? [...TEMAS, { id:'logo', ...temaLogo }] : TEMAS;
+}
+
 const TEMAS = [
-  { id:'marca',   bg:'linear-gradient(160deg,#8a0e04 0%,#3a0602 55%,#0a0000 100%)', txt:'#ffd166' },
-  { id:'laranja', bg:'linear-gradient(155deg,#f97316,#ea580c 55%,#7c2d12)',          txt:'#fff' },
-  { id:'azul',    bg:'linear-gradient(155deg,#0ea5e9,#0369a1 55%,#0c2340)',          txt:'#fff' },
-  { id:'verde',   bg:'linear-gradient(155deg,#22c55e,#15803d 55%,#052e12)',          txt:'#fff' },
-  { id:'rosa',    bg:'linear-gradient(155deg,#ec4899,#be185d 55%,#4a0a29)',          txt:'#fff' },
-  { id:'roxo',    bg:'linear-gradient(155deg,#8b5cf6,#5b21b6 55%,#1e0a4a)',          txt:'#fff' },
+  { id:'marca',   bg:'linear-gradient(160deg,#8a0e04 0%,#3a0602 55%,#0a0000 100%)', txt:'#ffd166', accent:'#ffd166', accentTxt:'#3a0602' },
+  { id:'laranja', bg:'linear-gradient(155deg,#f97316,#ea580c 55%,#7c2d12)',          txt:'#fff',    accent:'#fff7ed', accentTxt:'#c2410c' },
+  { id:'azul',    bg:'linear-gradient(155deg,#0ea5e9,#0369a1 55%,#0c2340)',          txt:'#fff',    accent:'#f0f9ff', accentTxt:'#0369a1' },
+  { id:'verde',   bg:'linear-gradient(155deg,#22c55e,#15803d 55%,#052e12)',          txt:'#fff',    accent:'#f0fdf4', accentTxt:'#15803d' },
+  { id:'rosa',    bg:'linear-gradient(155deg,#ec4899,#be185d 55%,#4a0a29)',          txt:'#fff',    accent:'#fdf2f8', accentTxt:'#be185d' },
+  { id:'roxo',    bg:'linear-gradient(155deg,#8b5cf6,#5b21b6 55%,#1e0a4a)',          txt:'#fff',    accent:'#f5f3ff', accentTxt:'#5b21b6' },
 ];
 
 let _abaAtiva  = 'recibo';
@@ -459,6 +547,7 @@ let _buscaAlvo = null; // 'recibo' | 'orcamento' | 'encarte'
 let _recNumero = null;
 let _orcNumero = null;
 let _logoBase64Pendente = undefined; // undefined = sem alteração; null = remover; string = nova imagem
+let _temaLogoPendente   = undefined; // undefined = sem alteração; null = remover; objeto = novo tema extraído
 
 /* ══ TABS ══ */
 function mudarAba(tab) {
@@ -481,6 +570,7 @@ function abrirConfigLoja() {
   const cfg = Store.getConfig() || {};
   const d   = cfg.documentos || {};
   _logoBase64Pendente = undefined;
+  _temaLogoPendente = undefined;
   document.getElementById('cfgLojaLogoPreview').src = d.logoUrl || './icon-512.png';
   document.getElementById('cfgLojaNome').value     = d.nome     || cfg.nome || '';
   document.getElementById('cfgLojaEndereco').value = d.endereco || '';
@@ -502,9 +592,11 @@ function _lerLogoArquivo(ev) {
       else if (h >= w && h > max){ w = Math.round(w * max / h); h = max; }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
       const dataUrl = canvas.toDataURL('image/png', .9);
       _logoBase64Pendente = dataUrl;
+      _temaLogoPendente = _temaAPartirDaCor(_corDominante(ctx, w, h));
       document.getElementById('cfgLojaLogoPreview').src = dataUrl;
     };
     img.src = reader.result;
@@ -513,6 +605,7 @@ function _lerLogoArquivo(ev) {
 }
 function _removerLogoPersonalizado() {
   _logoBase64Pendente = null;
+  _temaLogoPendente = null;
   document.getElementById('cfgLojaLogoPreview').src = './icon-512.png';
 }
 function salvarConfigLoja() {
@@ -525,11 +618,13 @@ function salvarConfigLoja() {
     const doc = { ...(cfg.documentos || {}), nome, endereco, whatsapp, cnpj, instagram };
     if (_logoBase64Pendente === null) delete doc.logoUrl;
     else if (typeof _logoBase64Pendente === 'string') doc.logoUrl = _logoBase64Pendente;
+    if (_temaLogoPendente === null) delete doc.temaLogo;
+    else if (_temaLogoPendente) doc.temaLogo = _temaLogoPendente;
     cfg.documentos = doc;
   });
   UIService.closeModal('modalConfigLoja');
   UIService.showToast('Dados salvos', 'Usados nos próximos documentos', 'success');
-  renderRecibo(); renderOrcamento(); renderEncarte();
+  _renderTemas(); renderRecibo(); renderOrcamento(); renderEncarte();
 }
 
 /* ══ CONTADOR SEQUENCIAL (nº do recibo/orçamento) ══ */
@@ -856,8 +951,10 @@ async function baixarPdfDocAtivo() {
 /* ══ ENCARTE ══ */
 function _renderTemas() {
   const el = document.getElementById('temaSwatches');
-  el.innerHTML = TEMAS.map(t => `
-    <div class="tema-swatch ${t.id===_encTema?'sel':''}" style="background:${t.bg}" onclick="_setTema('${t.id}')"></div>`).join('');
+  el.innerHTML = _listaTemas().map(t => t.id === 'logo'
+    ? `<div class="tema-swatch tema-swatch-logo" style="background-image:url('${_logoUrl()}');box-shadow:${t.id===_encTema?`0 0 0 2px #fff, 0 0 0 4px ${t.accentTxt}`:`0 0 0 2px ${t.accentTxt}`}" title="Tema da marca (da logo)" onclick="_setTema('logo')"></div>`
+    : `<div class="tema-swatch ${t.id===_encTema?'sel':''}" style="background:${t.bg}" onclick="_setTema('${t.id}')"></div>`
+  ).join('');
 }
 function _setTema(id) { _encTema = id; _renderTemas(); renderEncarte(); }
 
@@ -869,13 +966,33 @@ function renderEncarte() {
   const cfgD      = _cfgDocumentos();
   const cfg       = Store.getConfig() || {};
   const nomeLoja  = cfgD.nome || cfg.nome || 'CH Geladas';
-  const tema      = TEMAS.find(t => t.id === _encTema) || TEMAS[0];
+  const tema      = _listaTemas().find(t => t.id === _encTema) || TEMAS[0];
   const rodapeFinal = rodape || [cfgD.whatsapp||cfg.whatsapp, cfgD.instagram].filter(Boolean).join(' · ');
+  const isHero    = _encItens.length === 1;
 
   const folha = document.getElementById('folhaEncarte');
   folha.style.background = tema.bg;
   folha.style.color = tema.txt;
+  folha.style.setProperty('--enc-accent', tema.accent || '#fff');
+  folha.style.setProperty('--enc-accent-txt', tema.accentTxt || '#111');
   folha.classList.toggle('compacta', _encItens.length > 5);
+  folha.classList.toggle('hero', isHero);
+
+  const itensHtml = _encItens.map(i => {
+    const temDe    = i.precoDe > 0 && i.precoDe > i.preco;
+    const desconto = temDe ? Math.round((1 - i.preco / i.precoDe) * 100) : 0;
+    return `
+        <div class="enc-prod">
+          <span class="nome">${i.nome}</span>
+          <span class="precos">
+            ${desconto > 0 ? `<span class="badge-inline">-${desconto}%</span>` : ''}
+            ${temDe ? `<span class="de">${Utils.formatCurrency(i.precoDe)}</span>` : ''}
+            <span class="preco-pill">${Utils.formatCurrency(i.preco)}</span>
+            ${isHero && temDe ? `<span class="economia">Economize ${Utils.formatCurrency(i.precoDe - i.preco)}</span>` : ''}
+          </span>
+        </div>`;
+  }).join('') || `<p style="opacity:.75;font-size:.7rem;text-align:center;margin-top:1rem;">Adicione produtos ao encarte</p>`;
+
   folha.innerHTML = `
     <div class="enc-head">
       <div class="enc-brand"><img class="enc-logo" src="${_logoUrl()}" onerror="this.style.display='none'"><span>${nomeLoja}</span></div>
@@ -884,16 +1001,10 @@ function renderEncarte() {
       ${subtitulo ? `<div class="enc-sub">${subtitulo}</div>` : ''}
     </div>
     <div class="enc-lista">
-      ${_encItens.map(i => `
-        <div class="enc-prod">
-          <span class="nome">${i.nome}</span>
-          <span class="precos">
-            ${i.precoDe > 0 ? `<span class="de">${Utils.formatCurrency(i.precoDe)}</span>` : ''}
-            <span class="preco">${Utils.formatCurrency(i.preco)}</span>
-          </span>
-        </div>`).join('') || `<p style="opacity:.75;font-size:.7rem;text-align:center;margin-top:1rem;">Adicione produtos ao encarte</p>`}
+      <img class="enc-watermark" src="${_logoUrl()}" alt="" aria-hidden="true" onerror="this.remove()">
+      ${itensHtml}
     </div>
-    <div class="enc-rodape">${rodapeFinal || nomeLoja}</div>`;
+    <div class="enc-rodape"><i class="fas fa-clock"></i>${rodapeFinal || nomeLoja}</div>`;
 }
 
 async function baixarImagemEncarte() {
