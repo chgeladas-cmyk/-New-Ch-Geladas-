@@ -126,7 +126,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
 #folhaEncarte .enc-ribbon{position:absolute;top:16px;right:-36px;background:#fff;color:#111;font-size:.57rem;font-weight:900;letter-spacing:.06em;padding:.32rem 2.5rem;transform:rotate(38deg);box-shadow:0 6px 16px rgba(0,0,0,.35);text-transform:uppercase;}
 
 #folhaEncarte .enc-lista{position:relative;flex:1;padding:.4rem 1.1rem 0;display:flex;flex-direction:column;justify-content:center;gap:.55rem;overflow:hidden;}
-#folhaEncarte .enc-watermark{position:absolute;inset:6%;margin:auto;max-width:78%;max-height:78%;object-fit:contain;opacity:.11;filter:grayscale(1) brightness(0) invert(1);pointer-events:none;z-index:0;}
+#folhaEncarte .enc-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64%;aspect-ratio:1/1;border-radius:50%;object-fit:cover;opacity:.16;pointer-events:none;z-index:0;}
 #folhaEncarte .enc-prod{position:relative;z-index:1;background:rgba(255,255,255,.13);backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.18);border-radius:.9rem;padding:.6rem .8rem;display:flex;justify-content:space-between;align-items:center;gap:.6rem;}
 #folhaEncarte .enc-prod::before{content:'';position:absolute;left:0;top:.45rem;bottom:.45rem;width:3px;border-radius:3px;background:rgba(255,255,255,.6);}
 #folhaEncarte .enc-prod .nome{font-weight:800;font-size:.76rem;min-width:0;line-height:1.2;padding-left:.4rem;}
@@ -140,7 +140,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
 #folhaEncarte .enc-rodape i{font-size:.55rem;opacity:.85;}
 
 /* Hero: só 1 produto no encarte → dá destaque total, sem sobrar vazio */
-#folhaEncarte.hero .enc-watermark{opacity:.15;max-width:88%;max-height:88%;}
+#folhaEncarte.hero .enc-watermark{width:74%;opacity:.19;}
 #folhaEncarte.hero .enc-prod{flex-direction:column;align-items:flex-start;padding:1.1rem 1.2rem;gap:.4rem;}
 #folhaEncarte.hero .enc-prod::before{display:none;}
 #folhaEncarte.hero .enc-prod .nome{font-size:1.05rem;padding-left:0;}
@@ -991,7 +991,7 @@ function renderEncarte() {
             ${isHero && temDe ? `<span class="economia">Economize ${Utils.formatCurrency(i.precoDe - i.preco)}</span>` : ''}
           </span>
         </div>`;
-  }).join('') || `<p style="opacity:.75;font-size:.7rem;text-align:center;margin-top:1rem;">Adicione produtos ao encarte</p>`;
+  }).join('') || `<p style="position:relative;z-index:1;opacity:.75;font-size:.7rem;text-align:center;margin-top:1rem;">Adicione produtos ao encarte</p>`;
 
   folha.innerHTML = `
     <div class="enc-head">
