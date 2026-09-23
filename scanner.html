@@ -124,6 +124,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
         <i class="fas fa-camera text-4xl text-slate-600"></i>
         <p class="text-[10px] font-black uppercase text-slate-500">Câmera parada</p>
         <button onclick="iniciarScanner()" class="btn-pill btn-primary" style="padding:.6rem 1.2rem;"><i class="fas fa-play"></i> Iniciar leitura</button>
+        <button onclick="abrirCodigoManual()" class="btn-pill btn-ghost" style="padding:.5rem 1rem;"><i class="fas fa-keyboard"></i> Digitar código</button>
         <p id="cameraErroDetalhe" class="hidden text-[8px] text-red-400 font-mono text-center px-4 max-w-[280px] break-words"></p>
       </div>
     </div>
@@ -131,6 +132,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
     <div class="flex items-center justify-between">
       <span id="statusBadge" class="status-badge status-parado"><span class="status-dot"></span>Parado</span>
       <div class="flex items-center gap-2">
+        <button onclick="abrirCodigoManual()" class="btn-pill btn-ghost" style="padding:.5rem .7rem;"><i class="fas fa-keyboard"></i></button>
         <button id="btnLanterna" onclick="alternarLanterna()" class="btn-pill btn-ghost hidden" style="padding:.5rem .7rem;"><i class="fas fa-bolt"></i></button>
         <button id="btnPararScanner" onclick="pararScanner()" class="btn-pill btn-ghost hidden" style="padding:.5rem .8rem;"><i class="fas fa-stop"></i> Parar</button>
       </div>
@@ -165,6 +167,7 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
       <div class="w-14 h-14 rounded-2xl bg-sky-500/15 flex items-center justify-center mx-auto mb-2"><i class="fas fa-box-open text-sky-400 text-xl"></i></div>
       <h3 id="entProdNome" class="text-sm font-black text-white">Produto</h3>
       <p id="entProdEstoque" class="text-[10px] text-slate-500 font-bold mt-0.5">Estoque atual: —</p>
+      <p id="entCodigoLido" class="text-[9px] text-slate-600 font-mono mt-0.5"></p>
     </div>
     <div id="entPackAviso" class="hidden text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 mb-3 text-center"></div>
     <div class="grid grid-cols-2 gap-2 mb-3">
@@ -211,6 +214,42 @@ body{background-image:radial-gradient(ellipse at 20% 80%,rgba(56,189,248,.05) 0%
     <p id="associarCodigo" class="text-[9px] text-slate-500 font-mono mb-3"></p>
     <input id="associarBusca" class="inp mb-3" placeholder="🔍 Buscar produto..." oninput="renderListaAssociar()">
     <div id="associarLista" class="space-y-1.5 max-h-64 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- MODAL: DIGITAR CÓDIGO MANUALMENTE -->
+<div class="modal" id="modalCodigoManual">
+  <div class="modal-box max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-black uppercase tracking-widest text-sky-400"><i class="fas fa-keyboard"></i> Digitar código</h3>
+      <button onclick="cancelarCodigoManual()" class="w-7 h-7 rounded-lg bg-white/5 text-slate-400"><i class="fas fa-times text-xs"></i></button>
+    </div>
+    <p class="text-[9px] text-slate-500 font-bold mb-3">Use quando a leitura pela câmera falhar — digite o número que está impresso embaixo do código de barras.</p>
+    <input id="codigoManualInput" type="text" inputmode="numeric" class="inp mb-4" placeholder="Ex: 7894900011517" onkeydown="if(event.key==='Enter')confirmarCodigoManual()">
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="cancelarCodigoManual()" class="btn-pill btn-ghost">Cancelar</button>
+      <button onclick="confirmarCodigoManual()" class="btn-pill btn-primary"><i class="fas fa-search"></i> Buscar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRMAR ITEM NA SAÍDA (antes de entrar no carrinho) -->
+<div class="modal" id="modalConfirmarSaida">
+  <div class="modal-box max-w-sm p-5">
+    <div class="text-center mb-4">
+      <div class="w-14 h-14 rounded-2xl bg-orange-500/15 flex items-center justify-center mx-auto mb-2"><i class="fas fa-cart-plus text-orange-400 text-xl"></i></div>
+      <h3 id="confSaidaNome" class="text-sm font-black text-white">Produto</h3>
+      <p id="confSaidaCodigo" class="text-[9px] text-slate-500 font-mono mt-0.5"></p>
+      <p id="confSaidaPreco" class="text-[11px] text-emerald-400 font-black mt-1"></p>
+    </div>
+    <div class="mb-4">
+      <label class="label">Quantidade</label>
+      <input id="confSaidaQtd" type="number" min="0.001" step="0.001" value="1" class="inp">
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="cancelarConfirmarSaida()" class="btn-pill btn-ghost">Cancelar</button>
+      <button onclick="confirmarAdicaoSaida()" class="btn-pill btn-primary"><i class="fas fa-check"></i> Adicionar</button>
+    </div>
   </div>
 </div>
 
@@ -502,31 +541,61 @@ function _onScanSuccess(codigoLido) {
   _ultimoTimestamp = agora;
 
   window.CH.SoundService?.beep();
-  _setStatus('buscando', 'Buscando...');
   _pausarScanner();
+  _processarCodigo(codigoLido);
+}
+
+/** Busca o produto pelo código e decide o próximo passo — usado tanto pela
+ *  leitura via câmera quanto pela digitação manual (fallback pra quando a
+ *  câmera lê errado ou não lê nada). */
+function _processarCodigo(codigoLido) {
+  _setStatus('buscando', 'Buscando...');
+  _codigoAtual = codigoLido;
 
   const produto = window.CH.EstoqueService?.getProdutoPorCodigoBarras?.(codigoLido);
   if (!produto) {
     _setStatus('erro', 'Não encontrado');
-    _codigoAtual = codigoLido;
     document.getElementById('naoEncontradoCodigo').textContent = codigoLido;
     UIService.openModal('modalNaoEncontrado');
     return;
   }
 
   _setStatus('sucesso', 'Encontrado');
-  if (_modo === 'entrada') _abrirModalEntrada(produto);
-  else _adicionarAoCarrinho(produto);
+  if (_modo === 'entrada') _abrirModalEntrada(produto, codigoLido);
+  else _abrirConfirmarSaida(produto, codigoLido);
+}
+
+/* ══ DIGITAÇÃO MANUAL DE CÓDIGO (fallback pra falha de leitura) ══ */
+function abrirCodigoManual() {
+  _pausarScanner();
+  document.getElementById('codigoManualInput').value = '';
+  UIService.openModal('modalCodigoManual');
+  setTimeout(() => document.getElementById('codigoManualInput')?.focus(), 150);
+}
+
+function cancelarCodigoManual() {
+  UIService.closeModal('modalCodigoManual');
+  _retomarScanner();
+}
+
+function confirmarCodigoManual() {
+  const codigo = document.getElementById('codigoManualInput').value.trim();
+  if (!codigo) { UIService.showToast('Digite um código', '', 'warning'); return; }
+  UIService.closeModal('modalCodigoManual');
+  _ultimoCodigo = codigo;
+  _ultimoTimestamp = Date.now();
+  _processarCodigo(codigo);
 }
 
 /* ══ MODO ENTRADA ══ */
 let _packAtualEntrada = null; // pack detectado (código de CAIXA/FARDO), null = código de unidade
 
-function _abrirModalEntrada(produto) {
+function _abrirModalEntrada(produto, codigoLido) {
   _produtoAtual = produto;
   _packAtualEntrada = produto._packEncontrado || null;
   document.getElementById('entProdNome').textContent = produto.nome;
   document.getElementById('entProdEstoque').textContent = `Estoque atual: ${produto.estoqueAtual} ${produto.unidade}`;
+  document.getElementById('entCodigoLido').textContent = `Código lido: ${codigoLido ?? '—'}`;
   document.getElementById('entQuantidade').value = '';
 
   const aviso = document.getElementById('entPackAviso');
@@ -599,7 +668,38 @@ async function confirmarEntrada() {
 }
 
 /* ══ MODO SAÍDA (carrinho → venda de verdade via VendasService) ══ */
-function _adicionarAoCarrinho(produto) {
+/** Mostra um passo de confirmação (produto + código lido + quantidade) antes
+ *  de lançar o item no carrinho — evita que uma leitura errada ou um bipe
+ *  duplo vire item de venda sem o operador perceber. */
+let _saidaPendente = null;
+function _abrirConfirmarSaida(produto, codigoLido) {
+  const pack = produto._packEncontrado || null;
+  _saidaPendente = produto;
+  document.getElementById('confSaidaNome').textContent = pack ? `${produto.nome} (${pack.label})` : produto.nome;
+  document.getElementById('confSaidaCodigo').textContent = `Código lido: ${codigoLido ?? '—'}`;
+  const preco = pack ? (pack.precoVenda != null ? pack.precoVenda : produto.precoVenda * pack.qtd) : produto.precoVenda;
+  document.getElementById('confSaidaPreco').textContent = `R$ ${Number(preco).toFixed(2).replace('.', ',')} / ${pack ? pack.label : produto.unidade}`;
+  document.getElementById('confSaidaQtd').value = 1;
+  UIService.openModal('modalConfirmarSaida');
+}
+
+function cancelarConfirmarSaida() {
+  UIService.closeModal('modalConfirmarSaida');
+  _saidaPendente = null;
+  _retomarScanner();
+}
+
+function confirmarAdicaoSaida() {
+  if (!_saidaPendente) return;
+  const qtd = parseFloat(document.getElementById('confSaidaQtd').value);
+  if (!(qtd > 0)) { UIService.showToast('Quantidade inválida', '', 'warning'); return; }
+  _adicionarAoCarrinho(_saidaPendente, qtd);
+  UIService.closeModal('modalConfirmarSaida');
+  _saidaPendente = null;
+  _retomarScanner();
+}
+
+function _adicionarAoCarrinho(produto, qtd = 1) {
   const pack = produto._packEncontrado || null;
   // Cada combinação produto+variante (unidade avulsa OU um pack específico)
   // é uma linha própria no carrinho — não podem se misturar na mesma linha,
@@ -608,12 +708,12 @@ function _adicionarAoCarrinho(produto) {
   const label      = pack ? pack.label : 'UNID';
   const existente   = _carrinho.find(i => i.produtoId === produto.id && i.label === label);
   if (existente) {
-    existente.qtd += 1;
+    existente.qtd += qtd;
   } else if (pack) {
     _carrinho.push({
       produtoId: produto.id,
       nome:      `${produto.nome} (${pack.label})`,
-      qtd:       1,
+      qtd:       qtd,
       // preco/custo são POR CAIXA aqui (não por unidade), porque qtd conta
       // caixas — se o pack não tem preço próprio cadastrado, calcula pela
       // unidade × quantas unidades tem o pack.
@@ -623,11 +723,10 @@ function _adicionarAoCarrinho(produto) {
       label:     pack.label,
     });
   } else {
-    _carrinho.push({ produtoId: produto.id, nome: produto.nome, qtd: 1, preco: produto.precoVenda, custo: produto.precoCusto, unidade: produto.unidade, label: 'UNID' });
+    _carrinho.push({ produtoId: produto.id, nome: produto.nome, qtd: qtd, preco: produto.precoVenda, custo: produto.precoCusto, unidade: produto.unidade, label: 'UNID' });
   }
   _renderCarrinho();
   UIService.showToast(pack ? `${produto.nome} (${pack.label})` : produto.nome, 'Adicionado ao carrinho', 'success');
-  setTimeout(_retomarScanner, 400); // pequeno respiro antes de voltar a escanear
 }
 
 function _renderCarrinho() {
