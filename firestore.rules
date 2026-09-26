@@ -118,6 +118,20 @@ service cloud.firestore {
       allow write: if autenticado() && docValido(request.resource.data) && temAdminToken(request.resource.data);
     }
 
+    // ─── /ch_dados/pedidos — cardápio público + equipe (entregador/gerente) ──
+    // FIX (set/2026): não existia regra própria — caía no catch-all
+    // /ch_dados/{colecao} abaixo, que exige adminToken. O pedido nasce no
+    // cardápio público (cliente sem login/PIN, só auth anônima do
+    // Firebase) e é depois atualizado por entregador/gerente/operador no
+    // módulo Delivery — nenhum desses tem adminToken (só admin/adm geram
+    // um no login). Resultado: toda escrita de pedidos era recusada com
+    // permission-denied, e o pedido só chegava via Telegram (canal
+    // separado, fora do Firestore). Mesmo padrão de comandas/fiado/ponto.
+    match /ch_dados/pedidos {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
     // ─── /ch_dados/{colecao} ─────────────────────────────────────────
     match /ch_dados/{colecao} {
 

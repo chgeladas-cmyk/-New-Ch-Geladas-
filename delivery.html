@@ -97,6 +97,9 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <button onclick="abrirRelatorio()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 hover:text-orange-400 transition-all">
         <i class="fas fa-chart-bar text-xs"></i>
       </button>
+      <button id="btnNotifWhats" onclick="_toggleNotifWhats()" class="w-8 h-8 rounded-lg bg-slate-900 border border-white/5 flex items-center justify-center transition-all" title="Notificar cliente via WhatsApp a cada mudança de status">
+        <i class="fab fa-whatsapp text-xs"></i>
+      </button>
       <a href="cardapio.html" target="_blank" class="bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 px-3 py-2 rounded-xl font-black text-[9px] uppercase tracking-wide transition-all flex items-center gap-1.5">
         <i class="fas fa-qrcode text-[9px]"></i>Cardápio
       </a>
@@ -355,10 +358,91 @@ function init() {
   preencherEntregadores();
   atualizarKpis();
   renderPedidos();
+  _carregarNotifWhats();
   if (!_storeListenerOk) {
     _storeListenerOk = true;
     EventBus.on('store:updated', () => { atualizarKpis(); renderPedidos(); popularSelectProdutos(); preencherEntregadores(); });
   }
+}
+
+/* ═══════════ NOTIFICAÇÃO WHATSAPP POR STATUS ═══════════
+   Feature nova (set/2026): a cada avanço de status (Preparando/A Caminho/
+   Entregue/Cancelado), abre uma aba wa.me com a mensagem pronta pro
+   telefone do cliente (capturado no cardápio) — o atendente só confirma
+   o envio no WhatsApp Web/App dele. Sem API paga, sem token, sem conta
+   de negócios: é o mesmo mecanismo de Utils.openWhatsApp (já usado em
+   vendas.html/cardapio.html), só que endereçado ao telefone do cliente
+   em vez do número da loja. Liga/desliga persiste em cfg.notificarWhatsappPedidos
+   (default: ligado) — botão no header.
+   FIX (janela síncrona): em 'Entregue' há um await (VendasService) antes
+   do texto ficar pronto; se window.open() rodasse só depois do await, o
+   navegador já teria perdido o "user gesture" do clique e bloquearia o
+   popup. Por isso a aba é aberta em branco ANTES de qualquer await, e só
+   navegada pro link wa.me quando a mensagem estiver pronta. */
+let _notifWhatsAtivo = true;
+function _carregarNotifWhats() {
+  const cfg = Store.getConfig();
+  _notifWhatsAtivo = cfg?.notificarWhatsappPedidos !== false; // default ligado
+  _pintarBtnNotifWhats();
+}
+function _pintarBtnNotifWhats() {
+  const btn = document.getElementById('btnNotifWhats');
+  if (!btn) return;
+  btn.classList.toggle('text-emerald-400', _notifWhatsAtivo);
+  btn.classList.toggle('text-slate-600',   !_notifWhatsAtivo);
+  btn.title = _notifWhatsAtivo
+    ? 'Notificação WhatsApp do cliente: ATIVA (clique pra desligar)'
+    : 'Notificação WhatsApp do cliente: desligada (clique pra ligar)';
+}
+function _toggleNotifWhats() {
+  _notifWhatsAtivo = !_notifWhatsAtivo;
+  Store.mutateConfig(cfg => { cfg.notificarWhatsappPedidos = _notifWhatsAtivo; });
+  _pintarBtnNotifWhats();
+  UIService.showToast(_notifWhatsAtivo ? 'Notificação WhatsApp ativada' : 'Notificação WhatsApp desativada', '', _notifWhatsAtivo ? 'success' : 'warning');
+}
+
+// Telefone do cliente vem sem DDI (ex: "(71) 9 9999-9999", igual placeholder
+// do cardápio) — wa.me exige o número completo com código do país.
+function _numeroWhatsCliente(tel) {
+  const d = String(tel||'').replace(/\D/g,'');
+  if (!d) return null;
+  if (d.length === 10 || d.length === 11) return '55' + d;       // DDD+número, sem DDI
+  if (d.length === 12 || d.length === 13) return d;               // já tem DDI (55...)
+  return d.length >= 10 ? d : null;
+}
+
+// Abre (ou reaproveita a aba já pré-aberta) o wa.me com a mensagem pronta.
+function _notificarClienteWhatsApp(pedido, mensagem, winRef) {
+  const numero = _numeroWhatsCliente(pedido?.telefone);
+  if (!numero) { try { winRef?.close?.(); } catch(_) {} return; }
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  if (winRef && !winRef.closed) winRef.location.href = url;
+  else window.open(url, '_blank');
+}
+
+// Pré-abre uma aba em branco (síncrona, dentro do clique) se for enviar
+// notificação pra este pedido/status — evita bloqueio de popup em fluxos
+// com await (ex: 'Entregue'). Retorna null quando não há o que notificar.
+function _preAbrirWhats(pedidoId, novoStatus) {
+  if (!_notifWhatsAtivo) return null;
+  const ped = Store.getPedidos().find(p => p.id === pedidoId);
+  if (!ped?.telefone || !_numeroWhatsCliente(ped.telefone)) return null;
+  const statusComNotificacao = ['Preparando', 'A Caminho', 'Entregue', 'Cancelado'];
+  if (!statusComNotificacao.includes(novoStatus)) return null;
+  return window.open('', '_blank');
+}
+
+function _msgStatusPedido(pedido, novoStatus) {
+  const loja = Store.getConfig()?.nome || 'CH Geladas';
+  const num  = pedido.numPedido || '';
+  const nome = pedido.cliente || '';
+  const msgs = {
+    Preparando: `🍹 *${loja}*\nOi ${nome}! Seu pedido *${num}* já está sendo preparado.`,
+    'A Caminho': `🛵 *${loja}*\nSeu pedido *${num}* saiu para entrega! Chegando até você.`,
+    Entregue: `✅ *${loja}*\nPedido *${num}* entregue! Obrigado pela preferência, ${nome}! 🍻`,
+    Cancelado: `❌ *${loja}*\nSeu pedido *${num}* foi cancelado. Qualquer dúvida, é só chamar por aqui.`,
+  };
+  return msgs[novoStatus] || `Seu pedido *${num}* está: ${novoStatus}`;
 }
 
 /* ═══════════ POPULAR SELECTS ═══════════ */
@@ -570,6 +654,10 @@ function salvarPedido() {
 
 /* ═══════════ AVANÇAR STATUS ═══════════ */
 async function avancarStatus(id, novoStatus) {
+  // Precisa abrir a aba ANTES do await abaixo (fluxo 'Entregue'), senão
+  // o navegador bloqueia o popup por já ter perdido o user gesture.
+  const _winWhats = _preAbrirWhats(id, novoStatus);
+
   let _pedidoAtual = null;
   Store.mutatePedidos(pedidos => {
     const p = pedidos.find(x=>x.id===id);
@@ -679,16 +767,30 @@ async function avancarStatus(id, novoStatus) {
     } catch(e) { console.warn('[Delivery] Telegram caminho falhou:', e.message); }
   }
 
+  // Notificação WhatsApp pro cliente (aba pré-aberta em _preAbrirWhats)
+  if (_pedidoAtual && _winWhats) {
+    _notificarClienteWhatsApp(_pedidoAtual, _msgStatusPedido(_pedidoAtual, novoStatus), _winWhats);
+  } else if (_winWhats) {
+    try { _winWhats.close(); } catch(_) {}
+  }
+
   const labels = { Preparando:'Preparando ⏳', 'A Caminho':'A caminho 🛵', Entregue:'Entregue ✅' };
   UIService.showToast(labels[novoStatus]||novoStatus, '', 'success');
 }
 
 function cancelarPedido(id) {
   if (!confirm('Cancelar este pedido?')) return;
+  const _winWhats = _preAbrirWhats(id, 'Cancelado');
+  let _pedidoAtual = null;
   Store.mutatePedidos(pedidos => {
     const p = pedidos.find(x=>x.id===id);
-    if (p) { p.status='Cancelado'; p.atualizadoEm=new Date().toISOString(); }
+    if (p) { p.status='Cancelado'; p.atualizadoEm=new Date().toISOString(); _pedidoAtual=p; }
   });
+  if (_pedidoAtual && _winWhats) {
+    _notificarClienteWhatsApp(_pedidoAtual, _msgStatusPedido(_pedidoAtual, 'Cancelado'), _winWhats);
+  } else if (_winWhats) {
+    try { _winWhats.close(); } catch(_) {}
+  }
   UIService.showToast('Pedido cancelado','','warning');
 }
 

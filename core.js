@@ -337,7 +337,14 @@ const Store = (() => {
     // FIX: inclui gerente e operador (UserService) além de admin/pdv (CONSTANTS.PERMISSOES)
     const permCore    = role && (CONSTANTS.PERMISSOES[role]?.escrever?.includes(col) ?? false);
     const permUserSvc = role && window.CH?.UserService?.podeEscrever?.(role, col);
-    const perm = permCore || permUserSvc;
+    // FIX (set/2026): 'pedidos' nasce no cardápio público (cardapio.html),
+    // aberto pro cliente sem login/PIN — logo sem 'role'. Sem esta exceção,
+    // permCore/permUserSvc davam sempre falso pra esse caso e o pedido
+    // nunca era enfileirado pro Firestore: ficava só no localStorage do
+    // navegador do próprio cliente, e só o Telegram (canal separado,
+    // fora do Store) avisava a loja. O módulo Delivery nunca recebia nada.
+    const permPublico  = !role && col === 'pedidos';
+    const perm = permCore || permUserSvc || permPublico;
     if (perm) window.CH.SyncQueue.enqueue('salvar', col, final);
   } else {
     window._pendingSync?.push(col);
@@ -823,6 +830,14 @@ const FirebaseService = (() => {
   const colsRT = (role === 'admin' || role === 'adm')
     ? ['estoque', 'validade', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
     : ['estoque', 'validade', 'config', 'usuarios', 'sistemaUpdate'];
+  // FIX (set/2026): 'pedidos' só entrava em tempo real pra admin/adm.
+  // Entregador (e qualquer role com permissão de leitura de 'pedidos')
+  // ficava sem atualização ao vivo no módulo Delivery — só via reload/
+  // relogin (SyncService.pull no login). Agora qualquer role autorizado
+  // a ler 'pedidos' recebe o listener também.
+  if (!colsRT.includes('pedidos') && CONSTANTS.PERMISSOES[role]?.ler?.includes('pedidos')) {
+    colsRT.push('pedidos');
+  }
 
   // ── Listener em tempo real para coleção vendas ────────────────────
   try {
@@ -1128,7 +1143,13 @@ const FirebaseService = (() => {
    console.info(`[Firebase] ✓ ${pendentes.length} movimentação(ões) de lote sincronizadas.`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
-      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto']);
+      // FIX (set/2026): 'pedidos' adicionado — cliente do cardápio público
+      // nunca tem adminToken (nem logou), e entregador/gerente/operador
+      // também não geram adminToken (só admin/adm geram no login). Sem
+      // esta exceção o doc de pedidos caía na regra genérica do
+      // firestore.rules que exige adminToken e era recusado com
+      // permission-denied.
+      const _semAdminToken = new Set(['comandas', 'fiado', 'cambio', 'ponto', 'pedidos']);
       const docData = { dados, ts: Utils.nowISO() };
       if (_adminToken && !_semAdminToken.has(colName)) docData.adminToken = _adminToken;
       await _fb.setDoc(_fb.doc(_db, 'ch_dados', colName), docData);
