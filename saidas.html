@@ -913,7 +913,16 @@ function apagarSaidaAtual() {
   const s = (_Store.getSaidas()||[]).find(x=>x.id===_saidaAtualId);
   if (!s) return;
   if (!confirm(`Apagar saída de ${fmt(s.valor)}?\nEsta ação não pode ser desfeita.`)) return;
+  const _jaSincronizada = !!s._fbSynced;
   _Store.mutateSaidas(saidas => { const i=saidas.findIndex(x=>x.id===_saidaAtualId); if(i>=0) saidas.splice(i,1); });
+  // FIX (set/2026): saidas agora é coleção própria no Firestore (1 doc por
+  // saída, igual vendas/financeiro) — o splice acima só remove do array
+  // local. Sem este enqueue explícito, o doc já sincronizado continuaria
+  // existindo no Firestore e voltaria no próximo pull()/tempo real de
+  // outro aparelho. Mesmo padrão já usado por vendas.html ao excluir venda.
+  if (_jaSincronizada && window.CH?.SyncQueue) {
+    window.CH.SyncQueue.enqueue('deletar', 'saidas', [_saidaAtualId]);
+  }
   fecharModal('modalDetalhe');
   showToast('Saída apagada','','warning');
   renderDashboard();

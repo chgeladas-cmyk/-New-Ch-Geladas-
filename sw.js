@@ -1,7 +1,7 @@
 // FIX [ALTO]: Service Worker restaurado com cache offline.
 // Estava desativado ("temporariamente para testes") — PWA sem cache = quebrado offline.
 
-const CACHE_NAME = 'ch-geladas-v55'; // FIX (set/2026): bump p/ forçar novo core.js (fix pedidos->Delivery)
+const CACHE_NAME = 'ch-geladas-v58'; // FIX (set/2026, etapa 2): ponto migrado pra coleção própria (core.js + ponto.html + firestore.rules)
 
 const ASSETS_STATIC = [
   './',

@@ -16,6 +16,7 @@ rules_version = '2';
  * │  movimentacoes/{id} │  ADM               │  ADM + sistema (transaction) │
  * │  lotes/{id}         │  ADM               │  PDV + ADM (sem adminToken)  │
  * │  movimentacoesLote/{id} │ ADM            │  PDV + ADM (sem adminToken)  │
+ * │  saidas/{id}        │  ADM               │  ADM + GERENTE (sem token)   │
  * │  categorias/{id}    │  PDV + ADM         │  ADM                         │
  * │  fornecedores/{id}  │  ADM               │  ADM                         │
  * │  backups/{data}/**  │  ADM               │  ADM (adminToken)            │
@@ -80,6 +81,20 @@ service cloud.firestore {
           && data.tipo is string;
     }
 
+    function saidaValida(data) {
+      return data.keys().hasAll(['id', 'tipo', 'valor'])
+          && data.id is string
+          && data.id.size() > 0
+          && data.valor is number;
+    }
+
+    function pontoValido(data) {
+      return data.keys().hasAll(['id', 'tipo', 'nome'])
+          && data.id is string
+          && data.id.size() > 0
+          && data.tipo is string;
+    }
+
     // Coleções abertas para leitura por qualquer autenticado (PDV + ADM)
     function colecaoPublica(colecao) {
       return colecao in ['estoque', 'config', 'categorias'];
@@ -108,6 +123,22 @@ service cloud.firestore {
     // Ponto é registrado por colaboradores sem adminToken.
     // Controle de edição/cancelamento é feito no app (admin only).
     match /ch_dados/ponto {
+      allow read:  if autenticado();
+      allow write: if autenticado() && docValido(request.resource.data);
+    }
+
+    // ─── /ch_dados/caixastatus — qualquer autenticado pode escrever ──
+    // FIX (set/2026): status ao vivo do caixa por operador, extraído de
+    // dentro de 'ponto' (era reescrito ali a cada abertura/fechamento/
+    // sangria/retirada — mover pro padrão de coleção própria usado em
+    // saidas/financeiro custaria até 1000 escritas por evento). 1 doc
+    // único, cada operador grava só a própria chave via merge de campo
+    // (dot-path) no client — a regra aqui só valida a forma do documento
+    // resultante, não impõe merge (isso é responsabilidade do client-side
+    // FirebaseService.salvar, que sempre usa {merge:true}). Nenhum dos
+    // papéis que publicam status (colaborador/gerente/operador/admin)
+    // gera adminToken exceto admin/adm — mesmo motivo de ponto/fiado.
+    match /ch_dados/caixastatus {
       allow read:  if autenticado();
       allow write: if autenticado() && docValido(request.resource.data);
     }
@@ -189,6 +220,39 @@ service cloud.firestore {
     // delete: apenas admin.
     match /financeiro/{lancId} {
       allow create: if autenticado() && financeiroValido(request.resource.data);
+      allow read:   if autenticado();
+      allow update: if autenticado() && temAdminToken(request.resource.data);
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /saidas/{saidaId} ───────────────────────────────────────────
+    // FIX (set/2026): saidas migrado de ch_dados/saidas (doc único, mesmo
+    // risco de teto de 1MB já corrigido antes em financeiro/fiado) para
+    // este modelo por-lançamento (core.js grava direto em saidas/{id}).
+    // create: qualquer autenticado — sem isso, 'gerente' (que tem permissão
+    // de escrever 'saidas' mas NUNCA gera adminToken, só admin/adm geram)
+    // ficaria com toda saída recusada com permission-denied, igual ao
+    // bug já visto em fiado/financeiro. Mesmo padrão de 'financeiro' acima.
+    // update: log append-only — só correção manual/migração (admin).
+    // delete: apenas admin (exclusão marca _deleted, ver FirebaseService.deletar).
+    match /saidas/{saidaId} {
+      allow create: if autenticado() && saidaValida(request.resource.data);
+      allow read:   if autenticado();
+      allow update: if autenticado() && temAdminToken(request.resource.data);
+      allow delete: if autenticado() && temAdminToken(request.resource.data);
+    }
+
+    // ─── /ponto/{pontoId} ────────────────────────────────────────────
+    // FIX (set/2026, etapa 2): ponto migrado de ch_dados/ponto (doc
+    // único, mesmo risco de teto de 1MB) para este modelo por-registro
+    // (core.js grava direto em ponto/{id}). O status de caixa de alta
+    // frequência já não mora mais aqui (ver /ch_dados/caixastatus acima)
+    // — o que resta (entrada/saída de turno, sangria, retirada,
+    // fechamento) é criado sem adminToken (colaborador/gerente/operador
+    // nunca geram um), mas editado/cancelado/restaurado/apagado só por
+    // admin (que sempre tem adminToken) — mesmo padrão de 'saidas' acima.
+    match /ponto/{pontoId} {
+      allow create: if autenticado() && pontoValido(request.resource.data);
       allow read:   if autenticado();
       allow update: if autenticado() && temAdminToken(request.resource.data);
       allow delete: if autenticado() && temAdminToken(request.resource.data);

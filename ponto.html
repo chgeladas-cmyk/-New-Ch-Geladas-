@@ -690,7 +690,10 @@ function renderLista() {
 ═══════════════════════════════════ */
 function renderPorColaborador() {
   const pontos=Store.getPonto().filter(p=>(p.tipo==='ENTRADA'||p.tipo==='SAÍDA')&&!p.cancelado);
-  const statusCaixa=Store.getPonto().filter(p=>p.tipo==='CAIXA_STATUS');
+  // FIX (set/2026): status de caixa saiu do array 'ponto' — agora vem de
+  // Store.getCaixaStatus() (1 doc único, mapa por operador). Object.values
+  // devolve a lista de status pra manter o resto da função inalterado.
+  const statusCaixa=Object.values(Store.getCaixaStatus()||{});
   const hoje=Utils.todayISO();
   const el=document.getElementById('listaPonto');
   if(!el) return;
@@ -715,7 +718,7 @@ function renderPorColaborador() {
     }
     colabs[nome].horasTotais=totalMin;
     const st=statusCaixa.find(p=>p.nome===nome);
-    colabs[nome].caixa=st?.dados||null;
+    colabs[nome].caixa=st||null;
   });
   if(Object.keys(colabs).length===0){ el.innerHTML=`<div class="flex flex-col items-center justify-center py-16 opacity-30"><i class="fas fa-users text-5xl text-slate-600 mb-4"></i><p class="text-[10px] font-black uppercase tracking-widest text-slate-600">Nenhum colaborador</p></div>`; return; }
   el.innerHTML=Object.entries(colabs).sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,d])=>{
@@ -827,15 +830,17 @@ function abrirRelatorio() {
 ═══════════════════════════════════ */
 let _caixaAberto=false, _caixaAtual=null, _ultimoStatusCaixaPublicado=null;
 
-/* Publica o status do caixa (aberto/fechado) na coleção 'ponto' para que
-   o ADM acompanhe em outros dispositivos sem depender do localStorage
-   do colaborador que abriu o caixa. Um único registro CAIXA_STATUS por
-   operador é mantido (substitui o anterior, não acumula).
-   Também carrega o snapshot COMPLETO do caixa (caixaCompleto) — não só o
-   resumo — para que iniciarCaixa() consiga reconstruir o turno inteiro
-   (retiradas/sangrias/obs) a partir do servidor caso o localStorage deste
-   aparelho seja perdido (comum em PWA no iOS após dias sem uso) ou o
-   colaborador troque de aparelho no meio do turno. */
+/* Publica o status do caixa (aberto/fechado) para que o ADM acompanhe em
+   outros dispositivos sem depender do localStorage do colaborador que abriu
+   o caixa. FIX (set/2026): não mora mais dentro do array 'ponto' (onde era
+   um registro tipo CAIXA_STATUS reescrito a cada evento) — agora é 1 doc
+   único 'ch_dados/caixastatus' com merge por campo (cada operador grava só
+   a própria chave, ver core.js/FirebaseService.salvar). Continua carregando
+   o snapshot COMPLETO do caixa (caixaCompleto) — não só o resumo — para que
+   iniciarCaixa() consiga reconstruir o turno inteiro (retiradas/sangrias/
+   obs) a partir do servidor caso o localStorage deste aparelho seja perdido
+   (comum em PWA no iOS após dias sem uso) ou o colaborador troque de
+   aparelho no meio do turno. */
 function _publicarStatusCaixa(operadorOverride) {
   const operador=operadorOverride||_caixaAtual?.operador||AuthService.getNome();
   const aberto=!!(_caixaAberto&&_caixaAtual);
@@ -856,19 +861,15 @@ function _publicarStatusCaixa(operadorOverride) {
   const assinatura=operador+'|'+JSON.stringify(dadosNovos);
   if(assinatura===_ultimoStatusCaixaPublicado) return;
   _ultimoStatusCaixaPublicado=assinatura;
-  Store.mutatePonto(ponto=>{
-    const idx=ponto.findIndex(p=>p.tipo==='CAIXA_STATUS'&&p.nome===operador);
-    const registro={
-      id:        idx>=0?ponto[idx].id:Utils.generateId(),
-      tipo:      'CAIXA_STATUS',
-      nome:      operador,
-      criadoEm:  new Date().toISOString(),
-      dataCurta: Utils.todayISO(),
-      dados:     dadosNovos,
-    };
-    if(idx>=0) ponto.splice(idx,1);
-    ponto.unshift(registro);
-  });
+  const slug=Utils.slugify(operador);
+  if(!slug) return;
+  // Atualiza local otimisticamente — este aparelho vê o próprio status
+  // publicado na hora, sem esperar o round-trip do Firestore.
+  const atual=Store.getCaixaStatus()||{};
+  Store._writeRaw('caixastatus',{...atual,[slug]:{...dadosNovos,nome:operador,atualizadoEm:Utils.nowISO()}});
+  if(window.CH?.SyncQueue){
+    window.CH.SyncQueue.enqueue('salvar','caixastatus',{operador,dadosStatus:dadosNovos});
+  }
 }
 
 function _calcularEsperado() {
@@ -913,13 +914,12 @@ function _calcularEsperado() {
    também se atualiza em vez de continuar operando um caixa já encerrado. */
 function _sincronizarCaixaComServidor() {
   const operador=_caixaAtual?.operador||AuthService.getNome();
-  const statusSync=Store.getPonto()
-    .filter(p=>p.tipo==='CAIXA_STATUS'&&p.nome===operador)
-    .sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''))[0];
+  const slug=Utils.slugify(operador);
+  const statusSync=slug?(Store.getCaixaStatus()||{})[slug]:null;
   if(!statusSync) return; // ainda não sincronizou (ex.: 1ª carga antes do pull) — mantém o que já tem local
 
-  const remotoAberto=!!statusSync.dados?.aberto;
-  const remotoCompleto=statusSync.dados?.caixaCompleto||null;
+  const remotoAberto=!!statusSync?.aberto;
+  const remotoCompleto=statusSync?.caixaCompleto||null;
 
   if(remotoAberto&&remotoCompleto){
     if(!_caixaAberto||_caixaAtual?.id!==remotoCompleto.id||JSON.stringify(_caixaAtual)!==JSON.stringify(remotoCompleto)){
@@ -1220,6 +1220,7 @@ function confirmarEdicaoPonto() {
   const motivo=document.getElementById('editPontoMotivo').value.trim();
   if(!nome||!hora||!data){UIService.showToast('Preencha todos os campos','','error');return;}
 
+  let _registroAtualizado=null;
   Store.mutatePonto(ponto=>{
     const p=ponto.find(x=>x.id===id);
     if(!p) return;
@@ -1232,7 +1233,15 @@ function confirmarEdicaoPonto() {
     p.editadoPor=AuthService.getNome();
     p.editadoMotivo=motivo||'Correção admin';
     p._anterior=anterior;
+    _registroAtualizado=p;
   });
+  // FIX (set/2026): ponto agora é coleção própria — o filtro !_fbSynced do
+  // salvar() só cobre registro NOVO, então uma edição num registro já
+  // sincronizado precisa ser propagada explicitamente (mesmo padrão de
+  // vendas.html ao aprovar/rejeitar venda).
+  if(_registroAtualizado?._fbSynced && window.CH?.SyncQueue){
+    window.CH.SyncQueue.enqueue('atualizar','ponto',[_registroAtualizado]);
+  }
 
   UIService.closeModal('modalEditarPonto');
   renderLista(); if(AuthService.isAdmin()) renderColabsHoje();
@@ -1242,20 +1251,28 @@ function confirmarEdicaoPonto() {
 function cancelarPonto(id) {
   if(!AuthService.isAdmin()) return;
   if(!confirm('Cancelar este registro? Ele ficará visível mas não contará nas estatísticas.')) return;
+  let _reg=null;
   Store.mutatePonto(ponto=>{
     const p=ponto.find(x=>x.id===id);
-    if(p){ p.cancelado=true; p.canceladoEm=new Date().toISOString(); p.canceladoPor=AuthService.getNome(); }
+    if(p){ p.cancelado=true; p.canceladoEm=new Date().toISOString(); p.canceladoPor=AuthService.getNome(); _reg=p; }
   });
+  if(_reg?._fbSynced && window.CH?.SyncQueue){
+    window.CH.SyncQueue.enqueue('atualizar','ponto',[_reg]);
+  }
   atualizarKpis(); renderLista(); if(AuthService.isAdmin()) renderColabsHoje();
   UIService.showToast('Registro cancelado','','warning');
 }
 
 function restaurarPonto(id) {
   if(!AuthService.isAdmin()) return;
+  let _reg=null;
   Store.mutatePonto(ponto=>{
     const p=ponto.find(x=>x.id===id);
-    if(p){ p.cancelado=false; p.restauradoEm=new Date().toISOString(); p.restauradoPor=AuthService.getNome(); }
+    if(p){ p.cancelado=false; p.restauradoEm=new Date().toISOString(); p.restauradoPor=AuthService.getNome(); _reg=p; }
   });
+  if(_reg?._fbSynced && window.CH?.SyncQueue){
+    window.CH.SyncQueue.enqueue('atualizar','ponto',[_reg]);
+  }
   atualizarKpis(); renderLista(); if(AuthService.isAdmin()) renderColabsHoje();
   UIService.showToast('Registro restaurado','','success');
 }
@@ -1263,7 +1280,16 @@ function restaurarPonto(id) {
 function apagarPonto(id) {
   if(!AuthService.isAdmin()) return;
   if(!confirm('Apagar permanentemente este registro? Esta ação não pode ser desfeita.')) return;
-  Store.mutatePonto(ponto=>{ const idx=ponto.findIndex(p=>p.id===id); if(idx>=0) ponto.splice(idx,1); });
+  let _jaSincronizado=false;
+  Store.mutatePonto(ponto=>{
+    const idx=ponto.findIndex(p=>p.id===id);
+    if(idx>=0){ _jaSincronizado=!!ponto[idx]._fbSynced; ponto.splice(idx,1); }
+  });
+  // FIX (set/2026): sem isto, o doc já sincronizado voltaria sozinho no
+  // próximo pull()/tempo real de outro aparelho (mesmo padrão de saidas.html).
+  if(_jaSincronizado && window.CH?.SyncQueue){
+    window.CH.SyncQueue.enqueue('deletar','ponto',[id]);
+  }
   UIService.showToast('Registro apagado','','warning');
   renderLista();
 }

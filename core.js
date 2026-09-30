@@ -20,6 +20,7 @@ const CONSTANTS = Object.freeze({
   COMANDAS:       'CH_COMANDAS',
   FIADO:          'CH_FIADO',
   PONTO:          'CH_PONTO',
+  CAIXASTATUS:    'CH_CAIXASTATUS',
   PEDIDOS:        'CH_PEDIDOS',
   CONFIG:         'CH_CONFIG',
   AUDITORIA:      'CH_AUDITORIA',
@@ -176,6 +177,14 @@ const Utils = Object.freeze({
   deepClone(obj) {
   try { return structuredClone(obj); } catch { return JSON.parse(JSON.stringify(obj)); }
   },
+  slugify(str) {
+  return String(str || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/(^_|_$)/g, '')
+    .slice(0, 60);
+  },
 });
 
 const CryptoService = {
@@ -219,6 +228,7 @@ const Store = (() => {
   comandas:      CONSTANTS.DB.COMANDAS,
   fiado:         CONSTANTS.DB.FIADO,
   ponto:         CONSTANTS.DB.PONTO,
+  caixastatus:   CONSTANTS.DB.CAIXASTATUS,
   pedidos:       CONSTANTS.DB.PEDIDOS,
   config:        CONSTANTS.DB.CONFIG,
   auditoria:     CONSTANTS.DB.AUDITORIA,
@@ -234,7 +244,7 @@ const Store = (() => {
 
   const _empty = {
   estoque:[], vendas:[], comandas:[], fiado:[],
-  ponto:[], pedidos:[], auditoria:[], config:{},
+  ponto:[], pedidos:[], auditoria:[], config:{}, caixastatus:{},
   movimentacoes:[], categorias:[], fornecedores:[], financeiro:[], saidas:[], validade:[],
   lotes:[], movimentacoesLote:[],
   };
@@ -382,6 +392,7 @@ const Store = (() => {
   getComandas()      { return _read('comandas'); },
   getFiado()         { return _read('fiado'); },
   getPonto()         { return _read('ponto'); },
+  getCaixaStatus()   { return _read('caixastatus'); },
   getPedidos()       { return _read('pedidos'); },
   getConfig()        { return _read('config'); },
   getAuditoria()     { return _read('auditoria'); },
@@ -603,6 +614,7 @@ const Store = (() => {
     getEstoque()       { return Store.getEstoque(); },
     getVendas()        { return Store.getVendas(); },
     getPonto()         { return Store.getPonto(); },
+    getCaixaStatus()   { return Store.getCaixaStatus(); },
     getPedidos()       { return Store.getPedidos(); },
     getComandas()      { return Store.getComandas(); },
     getFiado()         { return Store.getFiado(); },
@@ -827,9 +839,16 @@ const FirebaseService = (() => {
   // em tempo real, então nenhum aparelho recebia os lotes cadastrados em
   // outros aparelhos sem um reload manual (e mesmo assim dependia do
   // hydrateAsync/pull, que também não incluíam 'validade' antes desta correção).
+  // FIX (set/2026): 'saidas' removido daqui — saiu do modelo de doc único
+  // ch_dados/saidas e virou coleção própria (ver bloco dedicado abaixo,
+  // mesmo padrão de 'financeiro'). Deixá-la neste array reabriria um
+  // listener morto em ch_dados/saidas (documento que deixa de ser escrito).
+  // FIX (set/2026, etapa 2): 'ponto' também saiu daqui pelo mesmo motivo
+  // — virou coleção própria (bloco dedicado abaixo). 'caixastatus' segue
+  // aqui, esse continua sendo doc único de propósito (ver salvar()).
   const colsRT = (role === 'admin' || role === 'adm')
-    ? ['estoque', 'validade', 'config', 'comandas', 'pedidos', 'saidas', 'usuarios', 'ponto', 'sistemaUpdate']
-    : ['estoque', 'validade', 'config', 'usuarios', 'sistemaUpdate'];
+    ? ['estoque', 'validade', 'config', 'comandas', 'pedidos', 'usuarios', 'caixastatus', 'sistemaUpdate']
+    : ['estoque', 'validade', 'config', 'usuarios', 'caixastatus', 'sistemaUpdate'];
   // FIX (set/2026): 'pedidos' só entrava em tempo real pra admin/adm.
   // Entregador (e qualquer role com permissão de leitura de 'pedidos')
   // ficava sem atualização ao vivo no módulo Delivery — só via reload/
@@ -905,6 +924,60 @@ const FirebaseService = (() => {
     }, err => console.warn('[RT] fiado:', err.code));
     _unsubscribers.push(unsubFiado);
   } catch(e) { console.warn('[RT] fiado subscribe falhou:', e.message); }
+
+  // ── Listener em tempo real para coleção saidas ──────────────────────
+  // FIX (set/2026): saidas saiu do doc único ch_dados/saidas (mesmo teto
+  // de 1MB) e virou coleção própria, 1 doc por saída. Mantém o mesmo
+  // escopo de acesso que já existia no colsRT antigo (só admin/adm
+  // recebiam tempo real de 'saidas' — gerente já dependia só do pull()
+  // no login, comportamento preservado aqui).
+  if (role === 'admin' || role === 'adm') {
+    try {
+   const saidasQuery = _fb.query(
+     _fb.collection(_db, 'saidas'),
+     _fb.orderBy('data', 'desc'),
+     _fb.limit(5000)
+   );
+   const unsubSaidas = _fb.onSnapshot(saidasQuery, snap => {
+     const saidas = snap.docs
+       .map(d => ({ ...d.data(), _fbSynced: true }))
+       .filter(s => !s._deleted);
+     try { localStorage.setItem(CONSTANTS.DB.SAIDAS, JSON.stringify(saidas)); } catch(_) {}
+     Store.invalidate('saidas');
+     EventBus.emit('store:updated', 'saidas');
+     EventBus.emit('store:saidas');
+     EventBus.emit('sync:ok', 'saidas');
+   }, err => console.warn('[RT] saidas:', err.code));
+   _unsubscribers.push(unsubSaidas);
+    } catch(e) { console.warn('[RT] saidas subscribe falhou:', e.message); }
+  }
+
+  // ── Listener em tempo real para coleção ponto ───────────────────────
+  // FIX (set/2026, etapa 2): ponto saiu do doc único ch_dados/ponto
+  // (mesmo teto de 1MB, MAX_PONTO=1000) e virou coleção própria, 1 doc
+  // por registro. Mantém o mesmo escopo de acesso que já existia (só
+  // admin/adm recebiam tempo real de 'ponto' — outros papéis dependem
+  // do pull() no login, comportamento preservado aqui).
+  if (role === 'admin' || role === 'adm') {
+    try {
+   const pontoQuery = _fb.query(
+     _fb.collection(_db, 'ponto'),
+     _fb.orderBy('criadoEm', 'desc'),
+     _fb.limit(3000)
+   );
+   const unsubPonto = _fb.onSnapshot(pontoQuery, snap => {
+     const ponto = snap.docs
+       .map(d => ({ ...d.data(), _fbSynced: true }))
+       .filter(p => !p._deleted);
+     try { localStorage.setItem(CONSTANTS.DB.PONTO, JSON.stringify(ponto)); } catch(_) {}
+     Store.invalidate('ponto');
+     EventBus.emit('store:updated', 'ponto');
+     EventBus.emit('store:ponto');
+     EventBus.emit('sync:ok', 'ponto');
+   }, err => console.warn('[RT] ponto:', err.code));
+   _unsubscribers.push(unsubPonto);
+    } catch(e) { console.warn('[RT] ponto subscribe falhou:', e.message); }
+  }
 
   colsRT.forEach(col => {
     try {
@@ -1141,6 +1214,82 @@ const FirebaseService = (() => {
      Store.invalidate('movimentacoesLote');
    } catch(_) {}
    console.info(`[Firebase] ✓ ${pendentes.length} movimentação(ões) de lote sincronizadas.`);
+    } else if (colName === 'saidas') {
+   // FIX (set/2026): saidas migrado do doc único ch_dados/saidas (mesmo
+   // risco de teto físico de 1MB do Firestore já visto e corrigido antes
+   // em financeiro/fiado — MAX_SAIDAS=5.000 registros é o cap local, nada
+   // impede o array de chegar perto do limite) para coleção própria, 1
+   // documento por saída — mesmo padrão de 'financeiro'. Log append-only:
+   // saída só some via exclusão explícita de admin (ver FirebaseService.deletar
+   // + saidas.html apagarSaidaAtual(), que agora também chama isso).
+   const pendentes = Array.isArray(dados)
+     ? dados.filter(s => s?.id && !s._fbSynced).slice(0, 100)
+     : [];
+   if (!pendentes.length) return true;
+   const batch = _fb.writeBatch(_db);
+   pendentes.forEach(saida => {
+     const ref = _fb.doc(_db, 'saidas', saida.id);
+     batch.set(ref, { ...saida, _fbSynced: true, syncedAt: Utils.nowISO() });
+   });
+   await batch.commit();
+   const key = CONSTANTS.DB.SAIDAS;
+   try {
+     const local = JSON.parse(localStorage.getItem(key) || '[]');
+     const ids = new Set(pendentes.map(s => s.id));
+     local.forEach(s => { if (ids.has(s.id)) s._fbSynced = true; });
+     localStorage.setItem(key, JSON.stringify(local));
+     Store.invalidate('saidas');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${pendentes.length} saída(s) sincronizada(s).`);
+    } else if (colName === 'caixastatus') {
+   // FIX (set/2026): status ao vivo do caixa por operador, extraído de
+   // dentro do array 'ponto' (onde era um registro tipo CAIXA_STATUS
+   // reescrito a cada abertura/fechamento/sangria/retirada). NÃO usa o
+   // padrão "coleção própria" de saidas/financeiro/lotes porque aqui o
+   // mesmo registro muda várias vezes por turno (não é log append-only)
+   // — migrar pro padrão de doc-por-registro exigiria reescrever até
+   // MAX_PONTO=1000 documentos a cada mudança de status, multiplicando o
+   // custo de escrita (o problema de cota já resolvido antes, ver sessão
+   // jul/30). Em vez disso: 1 doc único (ch_dados/caixastatus), merge por
+   // campo via dot-path — cada operador grava só a própria chave, nunca
+   // sobrescrevendo o status dos outros escrevendo ao mesmo tempo — e o
+   // custo por escrita continua sendo sempre 1 doc, igual já era antes.
+   const { operador, dadosStatus } = dados || {};
+   const slug = Utils.slugify(operador);
+   if (!slug) return true;
+   const docData = { ts: Utils.nowISO() };
+   docData[`dados.${slug}`] = { ...dadosStatus, nome: operador, atualizadoEm: Utils.nowISO() };
+   await _fb.setDoc(_fb.doc(_db, 'ch_dados', 'caixastatus'), docData, { merge: true });
+   console.info('[Firebase] ✓ status de caixa publicado:', operador);
+    } else if (colName === 'ponto') {
+   // FIX (set/2026): ponto migrado do doc único ch_dados/ponto (mesmo
+   // risco de teto de 1MB do Firestore, MAX_PONTO=1.000 registros) pra
+   // coleção própria, 1 documento por registro (entrada/saída de turno,
+   // sangria, retirada, fechamento) — mesmo padrão de 'saidas'. O status
+   // de caixa de alta frequência já saiu daqui antes (ver 'caixastatus'
+   // acima), então o que sobra muda pouco depois de criado: correção
+   // manual, cancelamento e restauração (todas ação admin, raras) são
+   // propagadas por FirebaseService.atualizar() — não por aqui, que só
+   // cobre registro NOVO (filtro !_fbSynced, igual financeiro/saidas).
+   const pendentes = Array.isArray(dados)
+     ? dados.filter(p => p?.id && !p._fbSynced).slice(0, 100)
+     : [];
+   if (!pendentes.length) return true;
+   const batch = _fb.writeBatch(_db);
+   pendentes.forEach(p => {
+     const ref = _fb.doc(_db, 'ponto', p.id);
+     batch.set(ref, { ...p, _fbSynced: true, syncedAt: Utils.nowISO() });
+   });
+   await batch.commit();
+   const key = CONSTANTS.DB.PONTO;
+   try {
+     const local = JSON.parse(localStorage.getItem(key) || '[]');
+     const ids = new Set(pendentes.map(p => p.id));
+     local.forEach(p => { if (ids.has(p.id)) p._fbSynced = true; });
+     localStorage.setItem(key, JSON.stringify(local));
+     Store.invalidate('ponto');
+   } catch(_) {}
+   console.info(`[Firebase] ✓ ${pendentes.length} registro(s) de ponto sincronizado(s).`);
     } else {
       // Coleções que qualquer autenticado pode escrever (sem adminToken)
       // FIX (set/2026): 'pedidos' adicionado — cliente do cardápio público
@@ -1224,6 +1373,70 @@ const FirebaseService = (() => {
   }
   }
 
+  // Migração única do saidas: ch_dados/saidas (array) → 1 doc por saída
+  // na coleção 'saidas'. Rodar uma vez, como admin, depois do deploy:
+  // await window.CH.FirebaseService.migrarSaidasParaColecao()
+  async function migrarSaidasParaColecao() {
+  if (!_ready || !_db || !_fb) return { ok: false, motivo: 'Firebase não pronto' };
+  try {
+    const snapAntigo = await _fb.getDoc(_fb.doc(_db, 'ch_dados', 'saidas'));
+    if (!snapAntigo.exists()) return { ok: true, migrados: 0, motivo: 'nada para migrar' };
+    const antigos = snapAntigo.data()?.dados || [];
+    if (!antigos.length) return { ok: true, migrados: 0 };
+
+    let migrados = 0;
+    for (let i = 0; i < antigos.length; i += 400) {
+   const lote = antigos.slice(i, i + 400);
+   const batch = _fb.writeBatch(_db);
+   lote.forEach(s => {
+     if (!s?.id) return;
+     const ref = _fb.doc(_db, 'saidas', s.id);
+     batch.set(ref, { ...s, _fbSynced: true, migradoEm: Utils.nowISO() }, { merge: true });
+   });
+   await batch.commit();
+   migrados += lote.length;
+    }
+    console.info(`[Firebase] ✓ Migração saidas: ${migrados} saída(s) movida(s) para a coleção 'saidas'.`);
+    return { ok: true, migrados };
+  } catch(e) {
+    console.warn('[Firebase] Migração saidas falhou:', e.code || e.message);
+    return { ok: false, motivo: e.message };
+  }
+  }
+
+  // Migração única do ponto: ch_dados/ponto (array) → 1 doc por registro
+  // na coleção 'ponto'. Descarta registros tipo CAIXA_STATUS (esses já
+  // foram extraídos antes pra 'ch_dados/caixastatus', não fazem mais
+  // sentido como registro de ponto). Rodar uma vez, como admin, depois
+  // do deploy: await window.CH.FirebaseService.migrarPontoParaColecao()
+  async function migrarPontoParaColecao() {
+  if (!_ready || !_db || !_fb) return { ok: false, motivo: 'Firebase não pronto' };
+  try {
+    const snapAntigo = await _fb.getDoc(_fb.doc(_db, 'ch_dados', 'ponto'));
+    if (!snapAntigo.exists()) return { ok: true, migrados: 0, motivo: 'nada para migrar' };
+    const antigos = (snapAntigo.data()?.dados || []).filter(p => p?.tipo !== 'CAIXA_STATUS');
+    if (!antigos.length) return { ok: true, migrados: 0 };
+
+    let migrados = 0;
+    for (let i = 0; i < antigos.length; i += 400) {
+   const lote = antigos.slice(i, i + 400);
+   const batch = _fb.writeBatch(_db);
+   lote.forEach(p => {
+     if (!p?.id) return;
+     const ref = _fb.doc(_db, 'ponto', p.id);
+     batch.set(ref, { ...p, _fbSynced: true, migradoEm: Utils.nowISO() }, { merge: true });
+   });
+   await batch.commit();
+   migrados += lote.length;
+    }
+    console.info(`[Firebase] ✓ Migração ponto: ${migrados} registro(s) movido(s) para a coleção 'ponto'.`);
+    return { ok: true, migrados };
+  } catch(e) {
+    console.warn('[Firebase] Migração ponto falhou:', e.code || e.message);
+    return { ok: false, motivo: e.message };
+  }
+  }
+
 
   async function deletar(colName, dados) {
     if (!_ready || !_db || !_fb) return false;
@@ -1239,6 +1452,37 @@ const FirebaseService = (() => {
         });
         await batch.commit();
         console.info('[Firebase] ✓ venda(s) deletada(s):', ids.length);
+      } else if (colName === 'saidas') {
+        // FIX (set/2026): sem este branch, apagar uma saída só some do
+        // array local (mutateSaidas faz splice) — o doc já sincronizado
+        // na coleção 'saidas' continuaria existindo pra sempre e voltaria
+        // no próximo pull()/onSnapshot de outro aparelho. saidas.html
+        // agora chama SyncQueue.enqueue('deletar','saidas',[id]) explicitamente
+        // depois do splice, mesmo padrão já usado por vendas.html.
+        const ids = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        ids.forEach(id => {
+          const ref = _fb.doc(_db, 'saidas', typeof id === 'string' ? id : id.id);
+          const docData = { _deleted: true, _fbSynced: true, updatedAt: Utils.nowISO() };
+          if (_adminToken) docData.adminToken = _adminToken;
+          batch.set(ref, docData, { merge: true });
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ saída(s) deletada(s):', ids.length);
+      } else if (colName === 'ponto') {
+        // FIX (set/2026): mesmo motivo de saidas acima — apagarPonto()
+        // fazia só splice local; sem isso o doc voltaria sozinho no
+        // próximo pull()/tempo real de outro aparelho.
+        const ids = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        ids.forEach(id => {
+          const ref = _fb.doc(_db, 'ponto', typeof id === 'string' ? id : id.id);
+          const docData = { _deleted: true, _fbSynced: true, updatedAt: Utils.nowISO() };
+          if (_adminToken) docData.adminToken = _adminToken;
+          batch.set(ref, docData, { merge: true });
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ registro(s) de ponto deletado(s):', ids.length);
       }
       return true;
     } catch(e) {
@@ -1262,6 +1506,25 @@ const FirebaseService = (() => {
         });
         await batch.commit();
         console.info('[Firebase] ✓ venda(s) atualizada(s):', itens.length);
+      } else if (colName === 'ponto') {
+        // FIX (set/2026): edição/cancelamento/restauração de registro de
+        // ponto (ações só de admin — ver ponto.html editarPonto/cancelarPonto/
+        // restaurarPonto) precisam ser propagadas explicitamente porque o
+        // registro já tem _fbSynced:true desde a criação — o filtro
+        // "!_fbSynced" do salvar() não pegaria essa mudança de campo.
+        // Mesmo padrão de vendas acima, mas COM adminToken (só admin/adm
+        // chamam essas 3 funções no client, então exigir aqui é defesa
+        // em profundidade, não deveria travar ninguém legítimo).
+        const itens = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        itens.forEach(p => {
+          const ref = _fb.doc(_db, 'ponto', p.id);
+          const docData = { ...p, _fbSynced: true, updatedAt: Utils.nowISO() };
+          if (_adminToken) docData.adminToken = _adminToken;
+          batch.set(ref, docData, { merge: true });
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ registro(s) de ponto atualizado(s):', itens.length);
       }
       return true;
     } catch(e) {
@@ -1300,6 +1563,16 @@ const FirebaseService = (() => {
      _fb.query(_fb.collection(_db, 'movimentacoesLote'), _fb.orderBy('timestamp','desc'), _fb.limit(10000))
    );
    return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(m => !m._deleted);
+    } else if (colName === 'saidas') {
+   const snap = await _fb.getDocs(
+     _fb.query(_fb.collection(_db, 'saidas'), _fb.orderBy('data','desc'), _fb.limit(5000))
+   );
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(s => !s._deleted);
+    } else if (colName === 'ponto') {
+   const snap = await _fb.getDocs(
+     _fb.query(_fb.collection(_db, 'ponto'), _fb.orderBy('criadoEm','desc'), _fb.limit(3000))
+   );
+   return snap.docs.map(d => ({ ...d.data(), _fbSynced: true })).filter(p => !p._deleted);
     } else {
    const snap = await _fb.getDoc(_fb.doc(_db, 'ch_dados', colName));
    return snap.exists() ? snap.data().dados : null;
@@ -1367,6 +1640,8 @@ const FirebaseService = (() => {
   forcarAtualizacaoGlobal,
   migrarFinanceiroParaColecao,
   migrarFiadoParaColecao,
+  migrarSaidasParaColecao,
+  migrarPontoParaColecao,
 
   runTransaction,
   docRef,
