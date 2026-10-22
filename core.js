@@ -1614,6 +1614,22 @@ const FirebaseService = (() => {
   return _fb.writeBatch(_db);
   }
 
+  /**
+   * Consulta genérica a uma coleção do Firestore.
+   * @param {string} colPath  nome da coleção (ex.: 'movimentacoes')
+   * @param {Array<[string,string,any]>} filtros  ex.: [['origem','==','venda:123']]
+   * @param {{limit?:number}} [opts]
+   * @returns {Promise<Array>} documentos com { id, ...dados } (exclui _deleted)
+   * Lança erro se o Firebase não estiver pronto (o chamador trata no try/catch).
+   */
+  async function queryCollection(colPath, filtros = [], opts = {}) {
+  _requireReady();
+  const constraints = (filtros || []).map(([campo, op, valor]) => _fb.where(campo, op, valor));
+  if (opts && opts.limit) constraints.push(_fb.limit(opts.limit));
+  const snap = await _fb.getDocs(_fb.query(_fb.collection(_db, colPath), ...constraints));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x._deleted);
+  }
+
   function serverTimestamp() {
   _requireReady();
   return _fb.serverTimestamp();
@@ -1648,6 +1664,7 @@ const FirebaseService = (() => {
   colRef,
   newDocRef,
   getBatch,
+  queryCollection,
   serverTimestamp,
   getDoc: (ref) => { if (!_ready) throw new Error('Firebase não inicializado'); return _fb.getDoc(ref); }, // FIX #3
   };
