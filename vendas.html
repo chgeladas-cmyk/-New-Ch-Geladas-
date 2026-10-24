@@ -27,6 +27,8 @@ body{background-image:radial-gradient(ellipse at 20% 50%,rgba(59,130,246,.04) 0%
 .inp{font-size:16px!important;padding:12px 14px;color:#fff;background:#1e293b;border:2px solid #334155;border-radius:.75rem;width:100%;outline:none;transition:all .2s;font-family:inherit;}
 .inp:focus{border-color:#3b82f6!important;box-shadow:0 0 0 4px rgba(59,130,246,.2)!important;background:#0f172a;}
 .inp::placeholder{color:#64748b;}
+@keyframes vozPulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6);}70%{box-shadow:0 0 0 10px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}
+#btnVoz.ouvindo{color:#fff!important;background:#ef4444!important;animation:vozPulse 1.2s infinite;}
 .label{color:#60a5fa;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.35rem;display:block;}
 .prod-card{background:linear-gradient(145deg,rgba(13,17,23,.98),rgba(9,12,18,1));border:1.5px solid rgba(255,255,255,.06);border-left:3px solid var(--primary);border-radius:1.25rem;transition:all .18s;position:relative;padding:.875rem;}
 .prod-card:hover{border-color:rgba(59,130,246,.3);transform:translateY(-1px);}
@@ -133,7 +135,10 @@ body.is-admin .adm-flex{display:flex!important;}
         <div class="flex gap-2">
           <div class="relative flex-1">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none"></i>
-            <input type="text" id="searchProd" oninput="clearTimeout(this._t);this._t=setTimeout(renderCatalogo,160)" class="inp !pl-9" placeholder="Pesquisar produto...">
+            <input type="text" id="searchProd" oninput="clearTimeout(this._t);this._t=setTimeout(renderCatalogo,160)" class="inp !pl-9 !pr-11" placeholder="Pesquisar produto...">
+            <button type="button" id="btnVoz" onclick="toggleVozBusca()" aria-label="Pesquisar por voz" title="Pesquisar por voz" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all">
+              <i id="btnVozIcon" class="fas fa-microphone text-sm"></i>
+            </button>
           </div>
         </div>
         <div id="catRow" class="flex gap-2 overflow-x-auto no-scroll pb-1"></div>
@@ -534,6 +539,7 @@ function logout() { if (!confirm('Encerrar sessão?')) return; AuthService.logou
 /* ══ INIT ══ */
 function init() {
   UIService.startClock('clock');
+  initVozBusca();
   renderCatFiltros();
   renderCatalogo();
   renderCart();
@@ -647,13 +653,88 @@ function renderCatFiltros() {
 function setCategoria(cat) { _catAtiva = cat; renderCatFiltros(); renderCatalogo(); }
 
 /* ══ CATÁLOGO ══ */
+/* Normaliza p/ busca: minúsculas, sem acento, sem pontuação (reconhecimento de voz
+   devolve "coca-cola", "Coca Cola.", "cerveja skol 269" etc. de formas variadas) */
+function _normBusca(t) {
+  return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+/* ══ PESQUISA POR VOZ ══ */
+let _vozRec = null, _vozAtiva = false;
+function _vozSuportada() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+function initVozBusca() {
+  const btn = document.getElementById('btnVoz');
+  if (!btn) return;
+  if (_vozSuportada()) btn.classList.remove('hidden'); // sem suporte (ex.: Firefox) → botão fica oculto
+}
+
+function _vozParar() {
+  _vozAtiva = false;
+  document.getElementById('btnVoz')?.classList.remove('ouvindo');
+  const ic = document.getElementById('btnVozIcon');
+  if (ic) ic.className = 'fas fa-microphone text-sm';
+}
+
+function toggleVozBusca() {
+  if (!_vozSuportada()) {
+    UIService.showToast('Voz indisponível', 'Este navegador não suporta pesquisa por voz', 'error');
+    return;
+  }
+  if (_vozAtiva) { try { _vozRec?.stop(); } catch(_) {} return; }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  rec.lang = 'pt-BR';
+  rec.interimResults = true;   // mostra o texto enquanto fala
+  rec.continuous = false;      // encerra sozinho ao fim da frase
+  rec.maxAlternatives = 1;
+  _vozRec = rec;
+
+  const inp = document.getElementById('searchProd');
+
+  rec.onstart = () => {
+    _vozAtiva = true;
+    document.getElementById('btnVoz')?.classList.add('ouvindo');
+    const ic = document.getElementById('btnVozIcon');
+    if (ic) ic.className = 'fas fa-stop text-sm';
+    if (inp) inp.placeholder = 'Ouvindo... fale o nome do produto';
+  };
+  rec.onresult = (ev) => {
+    let txt = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+    txt = txt.replace(/[.,;!?]+$/,'').trim();
+    if (inp && txt) { inp.value = txt; renderCatalogo(); }
+  };
+  rec.onerror = (ev) => {
+    const msgs = {
+      'not-allowed':         'Permita o uso do microfone nas configurações do navegador',
+      'service-not-allowed': 'Permita o uso do microfone nas configurações do navegador',
+      'no-speech':           'Nenhuma fala detectada. Tente novamente',
+      'audio-capture':       'Microfone não encontrado',
+      'network':             'Sem internet — a pesquisa por voz precisa de conexão'
+    };
+    if (ev.error !== 'aborted') UIService.showToast('Pesquisa por voz', msgs[ev.error] || ('Erro: ' + ev.error), 'error');
+  };
+  rec.onend = () => {
+    _vozParar();
+    if (inp) inp.placeholder = 'Pesquisar produto...';
+  };
+
+  try { rec.start(); }
+  catch (e) { _vozParar(); UIService.showToast('Pesquisa por voz', 'Não foi possível iniciar o microfone', 'error'); }
+}
+
 function renderCatalogo() {
-  const busca = (document.getElementById('searchProd')?.value || '').toLowerCase();
+  const busca = _normBusca(document.getElementById('searchProd')?.value || '');
+  const termos = busca ? busca.split(' ') : [];
   const el = document.getElementById('catalogo');
   if (!el) return;
   const estoque = Store.getEstoque();
   let prods = estoque.filter(p => {
-    const mb = !busca || (p.nome||'').toLowerCase().includes(busca);
+    const nomeN = termos.length ? _normBusca(p.nome) : '';
+    const mb = termos.every(t => nomeN.includes(t));
     const mc = _catAtiva === 'TODOS' || (p.categoria||'') === _catAtiva;
     return mb && mc;
   });

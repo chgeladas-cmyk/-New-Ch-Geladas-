@@ -1,7 +1,7 @@
 // FIX [ALTO]: Service Worker restaurado com cache offline.
 // Estava desativado ("temporariamente para testes") — PWA sem cache = quebrado offline.
 
-const CACHE_NAME = 'ch-geladas-v59'; // FIX (out/2026): FirebaseService.queryCollection adicionado (reconciliação de estoque) | FIX (set/2026, etapa 2): ponto migrado pra coleção própria (core.js + ponto.html + firestore.rules)
+const CACHE_NAME = 'ch-geladas-v60'; // FEAT (out/2026): pesquisa por voz em vendas.html + Permissions-Policy microphone=(self) | FIX (out/2026): FirebaseService.queryCollection adicionado (reconciliação de estoque) | FIX (set/2026, etapa 2): ponto migrado pra coleção própria (core.js + ponto.html + firestore.rules)
 
 const ASSETS_STATIC = [
   './',
