@@ -135,12 +135,13 @@ body.is-admin .adm-flex{display:flex!important;}
         <div class="flex gap-2">
           <div class="relative flex-1">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs pointer-events-none"></i>
-            <input type="text" id="searchProd" oninput="clearTimeout(this._t);this._t=setTimeout(renderCatalogo,160)" class="inp !pl-9 !pr-11" placeholder="Pesquisar produto...">
+            <input type="text" id="searchProd" oninput="_vozLimparAlts();clearTimeout(this._t);this._t=setTimeout(renderCatalogo,160)" class="inp !pl-9 !pr-11" placeholder="Pesquisar produto...">
             <button type="button" id="btnVoz" onclick="toggleVozBusca()" aria-label="Pesquisar por voz" title="Pesquisar por voz" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all">
               <i id="btnVozIcon" class="fas fa-microphone text-sm"></i>
             </button>
           </div>
         </div>
+        <div id="vozSugestoes" class="hidden flex flex-wrap gap-1.5 items-center"></div>
         <div id="catRow" class="flex gap-2 overflow-x-auto no-scroll pb-1"></div>
         <div id="catalogo" class="grid grid-cols-2 gap-2 overflow-y-auto scroll" style="max-height:68vh"></div>
       </div>
@@ -677,6 +678,97 @@ function _vozParar() {
   if (ic) ic.className = 'fas fa-microphone text-sm';
 }
 
+/* ── Sugestões "ouvi também" (alternativas do reconhecedor) ── */
+let _vozAlts = [];
+function _vozMostrarAlts(principal, alts) {
+  const box = document.getElementById('vozSugestoes');
+  if (!box) return;
+  const vistos = new Set([_normBusca(principal)]);
+  _vozAlts = [];
+  alts.forEach(a => {
+    const t = String(a||'').replace(/[.,;!?]+$/,'').trim();
+    const n = _normBusca(t);
+    if (t && n && !vistos.has(n)) { vistos.add(n); _vozAlts.push(t); }
+  });
+  if (!_vozAlts.length) { _vozLimparAlts(); return; }
+  box.innerHTML = '<span class="text-[9px] text-slate-500 font-black uppercase tracking-wider mr-1">Ouvi também:</span>' +
+    _vozAlts.map((t,i) => `<button type="button" onclick="aplicarAltVoz(${i})" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/25 transition-all"></button>`).join('');
+  // textContent (não innerHTML) para o texto falado nunca virar HTML
+  box.querySelectorAll('button').forEach((b,i) => { b.textContent = _vozAlts[i]; });
+  box.classList.remove('hidden');
+}
+function _vozLimparAlts() {
+  _vozAlts = [];
+  const box = document.getElementById('vozSugestoes');
+  if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
+}
+function aplicarAltVoz(i) {
+  const t = _vozAlts[i];
+  if (!t) return;
+  const inp = document.getElementById('searchProd');
+  if (inp) inp.value = t;
+  _vozLimparAlts();
+  renderCatalogo();
+}
+
+/* ── Busca aproximada (palavra mal entendida / erro de grafia) ──
+   Fonética simplificada pt-BR: "ç/ss/c/s", "ch/x", "ph/f", "qu/k", "y/i", "h" mudo, letras dobradas */
+function _fonetica(t) {
+  let x = String(t||'').toLowerCase().replace(/ç/g,'s');
+  x = _normBusca(x);
+  return x
+    .replace(/ph/g,'f').replace(/ch|sh/g,'x')
+    .replace(/qu/g,'k').replace(/gu(?=[ei])/g,'g')
+    .replace(/c(?=[ei])/g,'s').replace(/c/g,'k')
+    .replace(/g(?=[ei])/g,'j')
+    .replace(/y/g,'i').replace(/w/g,'v').replace(/z/g,'s')
+    .replace(/h/g,'').replace(/(.)\1+/g,'$1');
+}
+function _lev(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({length: b.length + 1}, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+/* 0 = idêntico … 1 = totalmente diferente (melhor token do nome contra o termo falado) */
+function _scoreTermo(termo, tokensNome) {
+  const t = _fonetica(termo);
+  if (!t) return 1;
+  let melhor = 1;
+  for (const tk of tokensNome) {
+    if (!tk) continue;
+    if (t.length >= 3 && tk.includes(t)) return 0;
+    const d1 = _lev(t, tk) / Math.max(t.length, tk.length);
+    const d2 = tk.length > t.length ? _lev(t, tk.slice(0, t.length)) / t.length : 1; // fala parcial
+    melhor = Math.min(melhor, d1, d2 + 0.05);
+  }
+  return melhor;
+}
+function _sugerirProdutos(busca, estoque) {
+  const termos = _normBusca(busca).split(' ').filter(t => t.length >= 2);
+  if (!termos.length) return [];
+  const LIMITE = 0.45; // acima disso considera "não parecido" — evita sugerir produto sem relação
+  return estoque
+    .filter(p => _catAtiva === 'TODOS' || (p.categoria||'') === _catAtiva)
+    .map(p => {
+      const tokens = _normBusca(p.nome).split(' ').map(_fonetica);
+      const sc = termos.reduce((a, t) => a + _scoreTermo(t, tokens), 0) / termos.length;
+      return { p, sc };
+    })
+    .filter(x => x.sc <= LIMITE)
+    .sort((a, b) => a.sc - b.sc)
+    .slice(0, 8)
+    .map(x => x.p);
+}
+
 function toggleVozBusca() {
   if (!_vozSuportada()) {
     UIService.showToast('Voz indisponível', 'Este navegador não suporta pesquisa por voz', 'error');
@@ -689,12 +781,13 @@ function toggleVozBusca() {
   rec.lang = 'pt-BR';
   rec.interimResults = true;   // mostra o texto enquanto fala
   rec.continuous = false;      // encerra sozinho ao fim da frase
-  rec.maxAlternatives = 1;
+  rec.maxAlternatives = 5;   // alternativas do reconhecedor viram sugestões "ouvi também"
   _vozRec = rec;
 
   const inp = document.getElementById('searchProd');
 
   rec.onstart = () => {
+    _vozLimparAlts();
     _vozAtiva = true;
     document.getElementById('btnVoz')?.classList.add('ouvindo');
     const ic = document.getElementById('btnVozIcon');
@@ -702,10 +795,16 @@ function toggleVozBusca() {
     if (inp) inp.placeholder = 'Ouvindo... fale o nome do produto';
   };
   rec.onresult = (ev) => {
-    let txt = '';
-    for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+    let txt = '', alts = [];
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      txt += ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) {
+        for (let j = 1; j < ev.results[i].length; j++) alts.push(ev.results[i][j].transcript);
+      }
+    }
     txt = txt.replace(/[.,;!?]+$/,'').trim();
     if (inp && txt) { inp.value = txt; renderCatalogo(); }
+    if (alts.length) _vozMostrarAlts(txt, alts);
   };
   rec.onerror = (ev) => {
     const msgs = {
@@ -738,13 +837,23 @@ function renderCatalogo() {
     const mc = _catAtiva === 'TODOS' || (p.categoria||'') === _catAtiva;
     return mb && mc;
   });
+  let aviso = '';
+  if (prods.length === 0 && termos.length) {
+    const sug = _sugerirProdutos(busca, estoque);
+    if (sug.length) {
+      prods = sug;
+      aviso = `<div class="col-span-2 rounded-xl px-3 py-2 text-[10px] font-bold text-amber-300" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);">
+        <i class="fas fa-lightbulb mr-1"></i>Nenhum produto com "${busca}". Mais parecidos — confira antes de adicionar:
+      </div>`;
+    }
+  }
   if (prods.length === 0) {
     el.innerHTML = `<div class="col-span-2 flex flex-col items-center justify-center py-20 opacity-30">
       <i class="fas fa-box-open text-5xl mb-4 text-slate-600"></i>
       <p class="text-[10px] font-black uppercase tracking-widest text-slate-600">${estoque.length===0?'Sem produtos':'Nenhum produto encontrado'}</p>
     </div>`; return;
   }
-  el.innerHTML = prods.map(p => {
+  el.innerHTML = aviso + prods.map(p => {
     const esg = (p.qtdUn||0) <= 0;
     const baixo = !esg && p.qtdUn <= (Store.getConfig()?.alertaEstoque||3);
     return `<div class="prod-card ${esg?'esgotado':''}">
