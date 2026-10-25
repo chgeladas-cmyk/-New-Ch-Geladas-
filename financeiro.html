@@ -730,6 +730,43 @@ function renderFormasPgto(vendas) {
 }
 
 /* ═══════════════════════════════════
+   TOP PRODUTOS — sempre em UNIDADES
+   (fardo c/12 vendido ×3 = 36 un, e mostra "3× fardo c/12")
+   Mesma regra da baixa de estoque: qtd × unidades do pack.
+═══════════════════════════════════ */
+function _unidadesItem(i) {
+  const qtd   = Number(i.qtd) || 1;
+  const label = i.label || 'UNID';
+  if (label === 'UNID') return qtd;
+  let porPack = 0;
+  try {
+    const prod = (Store.getEstoque() || []).find(p => p.id === i.prodId);
+    const pack = prod?.packs?.find(pk => pk.label === label || (pk.qtd + 'x') === label);
+    porPack = Number(pack?.qtd) || 0;
+  } catch (_) {}
+  // produto/pack apagado ou renomeado: usa o número do rótulo ("12x", "Fardo c/12")
+  if (!porPack) porPack = parseInt((String(label).match(/(\d+)/) || [])[1], 10) || 1;
+  return qtd * porPack;
+}
+function _somarTopQtd(d, i) {
+  d.qtd = (d.qtd || 0) + _unidadesItem(i);
+  const label = i.label || 'UNID';
+  if (label !== 'UNID') {
+    d.packs = d.packs || {};
+    d.packs[label] = (d.packs[label] || 0) + (Number(i.qtd) || 1);
+  }
+}
+function _fmtTopQtd(d) {
+  const base = `${d.qtd} un`;
+  const ps = Object.entries(d.packs || {}).map(([l, q]) => {
+    const m = /^(\d+)x$/i.exec(l);
+    const nome = String(m ? 'fardo c/' + m[1] : l).replace(/[<>&]/g, '');
+    return `${q}× ${nome}`;
+  });
+  return ps.length ? `${base} · ${ps.join(' + ')}` : base;
+}
+
+/* ═══════════════════════════════════
    TOP PRODUTOS
 ═══════════════════════════════════ */
 function renderTopProdutos(vendas) {
@@ -739,7 +776,7 @@ function renderTopProdutos(vendas) {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd: 0, total: 0 };
-    prods[k].qtd   += i.qtd||1;
+    _somarTopQtd(prods[k], i);
     prods[k].total += (i.preco||0)*(i.qtd||1);
   }));
   const top = Object.entries(prods).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
@@ -753,7 +790,7 @@ function renderTopProdutos(vendas) {
       <p class="text-lg mb-1">${icons[i]}</p>
       <p class="text-[9px] font-black text-white truncate mb-1" title="${nome}">${nome}</p>
       <p class="text-[10px] font-black text-purple-400">${Utils.formatCurrency(d.total)}</p>
-      <p class="text-[8px] text-slate-500 font-bold">${d.qtd} un</p>
+      <p class="text-[8px] text-slate-500 font-bold">${_fmtTopQtd(d)}</p>
     </div>`).join('');
 }
 
@@ -855,7 +892,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0 };
-    prods[k].qtd   += i.qtd||1;
+    _somarTopQtd(prods[k], i);
     prods[k].total += (i.preco||0)*(i.qtd||1);
   }));
   const topIcons = ['🥇','🥈','🥉'];
@@ -866,7 +903,7 @@ function _abrirRelatorioDia(dia, mes, ano) {
         <span class="text-[10px] font-black text-slate-300">${topIcons[i]||`${i+1}.`} ${n}</span>
         <div class="text-right">
           <span class="text-[10px] font-black text-amber-400">${Utils.formatCurrency(d.total)}</span>
-          <span class="text-[8px] text-slate-600 font-bold ml-2">${d.qtd} un</span>
+          <span class="text-[8px] text-slate-600 font-bold ml-2">${_fmtTopQtd(d)}</span>
         </div>
       </div>`).join('') ||
     '<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem dados</p>';
@@ -963,7 +1000,7 @@ function _abrirRelatorioMes(mes, ano) {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0, lucro:0 };
-    prods[k].qtd   += i.qtd||1;
+    _somarTopQtd(prods[k], i);
     prods[k].total += (i.preco||0)*(i.qtd||1);
     prods[k].lucro += (i.lucro||0);
   }));
@@ -975,7 +1012,7 @@ function _abrirRelatorioMes(mes, ano) {
         <span class="text-[10px] font-black text-slate-300">${topIcons[i]||`${i+1}.`} ${n}</span>
         <div class="text-right">
           <span class="text-[10px] font-black text-amber-400">${Utils.formatCurrency(d.total)}</span>
-          <span class="text-[8px] text-slate-600 font-bold ml-2">${d.qtd} un</span>
+          <span class="text-[8px] text-slate-600 font-bold ml-2">${_fmtTopQtd(d)}</span>
         </div>
       </div>`).join('') ||
     '<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem dados</p>';
@@ -1165,7 +1202,7 @@ function abrirRelatorio() {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome||'?';
     if (!prods[k]) prods[k] = { qtd:0, total:0 };
-    prods[k].qtd   += i.qtd||1;
+    _somarTopQtd(prods[k], i);
     prods[k].total += (i.preco||0)*(i.qtd||1);
   }));
   const topProd = Object.entries(prods).sort((a,b)=>b[1].total-a[1].total).slice(0,10);
@@ -1175,7 +1212,7 @@ function abrirRelatorio() {
       <span class="text-[10px] font-black text-slate-300">${topIcons[i]||`${i+1}.`} ${n}</span>
       <div class="text-right">
         <span class="text-[10px] font-black text-amber-400">${Utils.formatCurrency(d.total)}</span>
-        <span class="text-[8px] text-slate-600 font-bold ml-2">${d.qtd} un</span>
+        <span class="text-[8px] text-slate-600 font-bold ml-2">${_fmtTopQtd(d)}</span>
       </div>
     </div>`).join('') || '<p class="text-[9px] text-slate-600 text-center py-2 font-bold">Sem dados</p>';
 
@@ -1228,11 +1265,11 @@ function _gerarTextoRelatorio() {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k=i.nome||'?';
     if(!prods[k]) prods[k]={qtd:0,total:0};
-    prods[k].qtd+=(i.qtd||1); prods[k].total+=(i.preco||0)*(i.qtd||1);
+    _somarTopQtd(prods[k], i); prods[k].total+=(i.preco||0)*(i.qtd||1);
   }));
   txt += `TOP PRODUTOS\n${sep2}\n`;
   Object.entries(prods).sort((a,b)=>b[1].total-a[1].total).slice(0,10).forEach(([n,d],i) => {
-    txt += `  ${i+1}. ${n.padEnd(28)} ${Utils.formatCurrency(d.total).padStart(12)}  (${d.qtd} un)\n`;
+    txt += `  ${i+1}. ${n.padEnd(28)} ${Utils.formatCurrency(d.total).padStart(12)}  (${_fmtTopQtd(d)})\n`;
   });
   txt += `\n${sep}\nGerado por ${nomeLoja} PDV\n${sep}\n`;
   return txt;
@@ -1436,7 +1473,7 @@ function abrirRelDiario() {
   vendas.filter(v => !v._cambio && !v._fiado && !v._avulsa).forEach(v => v.itens?.forEach(i => {
     const k = i.nome || '?';
     if (!prods[k]) prods[k] = { qtd: 0, total: 0, cat: i.categoria || '' };
-    prods[k].qtd   += i.qtd || 1;
+    _somarTopQtd(prods[k], i);
     prods[k].total += (i.preco || 0) * (i.qtd || 1);
   }));
   const topIcons = ['🥇','🥈','🥉','4️⃣','5️⃣'];
@@ -1450,7 +1487,7 @@ function abrirRelDiario() {
         </div>
         <div class="text-right">
           <p class="text-[10px] font-black text-amber-400">${Utils.formatCurrency(d.total)}</p>
-          <p class="text-[8px] text-slate-600 font-bold">${d.qtd} unid.</p>
+          <p class="text-[8px] text-slate-600 font-bold">${_fmtTopQtd(d)}</p>
         </div>
       </div>`).join('') || '<p class="text-[9px] text-slate-600 text-center py-2">Sem itens</p>';
 
