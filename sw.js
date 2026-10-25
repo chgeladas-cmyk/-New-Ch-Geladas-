@@ -1,7 +1,7 @@
 // FIX [ALTO]: Service Worker restaurado com cache offline.
 // Estava desativado ("temporariamente para testes") — PWA sem cache = quebrado offline.
 
-const CACHE_NAME = 'ch-geladas-v61'; // FEAT (out/2026): pesquisa por voz + busca aproximada/sugestões em vendas.html + Permissions-Policy microphone=(self) | FIX (out/2026): FirebaseService.queryCollection adicionado (reconciliação de estoque) | FIX (set/2026, etapa 2): ponto migrado pra coleção própria (core.js + ponto.html + firestore.rules)
+const CACHE_NAME = 'ch-geladas-v65'; // FIX (out/2026): excluir cliente fiado sincroniza (tombstone + deletar não colapsa) | Top Produtos em unidades (fardo = qtd × un do pack) em financeiro.html | gerente grava estoque sem adminToken (firestore.rules) | diagnóstico de sync no cadastro de estoque (estoque.html) | pesquisa por voz + busca aproximada/sugestões em vendas.html + Permissions-Policy microphone=(self) | FIX (out/2026): FirebaseService.queryCollection adicionado (reconciliação de estoque) | FIX (set/2026, etapa 2): ponto migrado pra coleção própria (core.js + ponto.html + firestore.rules)
 
 const ASSETS_STATIC = [
   './',
