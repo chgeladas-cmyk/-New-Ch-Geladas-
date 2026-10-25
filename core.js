@@ -1483,6 +1483,24 @@ const FirebaseService = (() => {
         });
         await batch.commit();
         console.info('[Firebase] ✓ registro(s) de ponto deletado(s):', ids.length);
+      } else if (colName === 'fiado') {
+        // FIX (out/2026): excluirCliente() (fiado.html) só fazia splice local.
+        // O doc continuava na coleção 'fiado' e o onSnapshot/pull() devolvia o
+        // cliente — parecia que "não exclui". Mesmo padrão de saidas/ponto:
+        // tombstone (_deleted) que os listeners/pull já filtram. Inclui 'id'
+        // porque a regra fiadoValido() exige id no documento resultante.
+        // (delete físico não serve: a regra exige adminToken em request.resource,
+        // que não existe em delete.)
+        const ids = Array.isArray(dados) ? dados : [dados];
+        const batch = _fb.writeBatch(_db);
+        ids.forEach(id => {
+          const cid = typeof id === 'string' ? id : id.id;
+          if (!cid) return;
+          const ref = _fb.doc(_db, 'fiado', cid);
+          batch.set(ref, { id: cid, _deleted: true, _fbSynced: true, updatedAt: Utils.nowISO() }, { merge: true });
+        });
+        await batch.commit();
+        console.info('[Firebase] ✓ cliente(s) fiado excluído(s):', ids.length);
       }
       return true;
     } catch(e) {

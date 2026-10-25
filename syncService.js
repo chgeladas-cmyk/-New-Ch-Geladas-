@@ -49,6 +49,9 @@
 
   function _colapsar(q, acao, colecao, dados) {
     if (_NUNCA_COLAPSAR.has(colecao)) return false;
+    // FIX (out/2026): 'deletar' carrega só os ids a apagar — colapsar trocaria a
+    // lista e perderia exclusões anteriores ainda pendentes (ex.: 2 clientes fiado).
+    if (acao === 'deletar') return false;
     const idx = q.findIndex(i =>
       i.status   === 'pendente' &&
       i.acao     === acao &&

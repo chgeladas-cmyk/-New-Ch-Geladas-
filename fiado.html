@@ -703,10 +703,12 @@ function renderDetalhe() {
   const btnExcluir = document.getElementById('btnExcluirCliente');
   if (btnExcluir) {
     if (quitado && AuthService.isAdmin()) {
+      btnExcluir.style.removeProperty('display');
       btnExcluir.style.display = 'flex';
       btnExcluir.title = 'Excluir cliente (saldo zerado)';
     } else {
-      btnExcluir.style.display = 'none';
+      // .adm-only usa display:flex!important — só um inline !important consegue esconder
+      btnExcluir.style.setProperty('display', 'none', 'important');
     }
   }
 
@@ -1552,10 +1554,14 @@ function excluirCliente() {
     return;
   }
   if (!confirm(`Excluir o cliente "${c.nome}" permanentemente?\nEsta ação não pode ser desfeita.`)) return;
+  const _idExcluir = _clienteAtualId;
   Store.mutateFiado(fiado => {
-    const idx = fiado.findIndex(x=>x.id===_clienteAtualId);
+    const idx = fiado.findIndex(x=>x.id===_idExcluir);
     if (idx>=0) fiado.splice(idx,1);
   });
+  // FIX (out/2026): sem isto o doc continuava no Firestore e o cliente voltava
+  // no próximo pull()/tempo real (o sync de fiado só regrava quem ainda existe).
+  if (window.CH?.SyncQueue) window.CH.SyncQueue.enqueue('deletar', 'fiado', [_idExcluir]);
   UIService.showToast('Cliente excluído', c.nome, 'warning');
   voltarLista();
 }
