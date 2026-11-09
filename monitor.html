@@ -183,6 +183,7 @@
       <span>🔧 Integridade de Estoque</span>
       <div class="flex gap-2">
         <button class="btn btn-yellow text-xs" onclick="verFalhas()">Ver Falhas</button>
+        <button class="btn text-xs" id="btnBaixarRelatorio" onclick="baixarRelatorioReconciliacao()" disabled style="opacity:.5">⬇ Relatório</button>
         <button class="btn btn-green text-xs" id="btnReconciliar" onclick="reconciliarEstoque()">
           Reconciliar Agora
         </button>
@@ -357,13 +358,18 @@
 
     btn.disabled = true;
     btn.textContent = '⏳ Verificando...';
-    status.textContent = 'Verificando vendas do dia vs estoque no Firebase...';
+    status.textContent = 'Verificando vendas criadas, aprovadas ou validadas hoje vs estoque no Firebase...';
     status.className = 'text-xs text-yellow-400 mb-2 text-center';
     lista.innerHTML = '';
     kpis.style.display = 'none';
 
     try {
       const r = await window.CH.EstoqueService.reconciliarEstoque();
+      if (r && r.ok !== false) {
+        _ultimaReconc = r;
+        try { localStorage.setItem('CH_ULTIMA_RECONC', JSON.stringify(r)); } catch (_) {}
+        _habilitarBtnRelatorio(true);
+      }
 
       if (!r.ok && r.motivo) {
         status.textContent = `⚠️ ${r.motivo}`;
@@ -419,6 +425,82 @@
 
     btn.disabled = false;
     btn.textContent = 'Reconciliar Agora';
+  };
+
+  // ── Relatório de reconciliação (download .txt) ───────────────────
+  let _ultimaReconc = null;
+  try { _ultimaReconc = JSON.parse(localStorage.getItem('CH_ULTIMA_RECONC') || 'null'); } catch (_) {}
+
+  function _habilitarBtnRelatorio(on) {
+    const b = document.getElementById('btnBaixarRelatorio');
+    if (!b) return;
+    b.disabled = !on;
+    b.style.opacity = on ? '1' : '.5';
+  }
+  _habilitarBtnRelatorio(!!_ultimaReconc);
+
+  function _montarRelatorioTxt(r) {
+    const brl = (n) => 'R$ ' + (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dt  = (iso) => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('pt-BR'); };
+    const L = [];
+    const ok = Math.max(0, r.verificadas - r.corrigidas - r.falhas);
+    const corrigidas = (r.detalhes || []).filter(d => d.status === 'corrigido');
+    const falhas     = (r.detalhes || []).filter(d => d.status === 'falhou');
+
+    L.push('RELATÓRIO DE RECONCILIAÇÃO DE ESTOQUE — CH GELADAS');
+    L.push('='.repeat(52));
+    L.push('Gerado em : ' + dt(r.geradoEm));
+    L.push('Referência: vendas criadas, aprovadas ou validadas em ' + (r.dataRef || '—'));
+    L.push('');
+    L.push('RESUMO');
+    L.push('-'.repeat(52));
+    L.push('Vendas verificadas : ' + r.verificadas);
+    L.push('Sem problema (OK)  : ' + ok);
+    L.push('Falhas corrigidas  : ' + r.corrigidas);
+    L.push('Falhas NÃO corrigidas: ' + r.falhas);
+    L.push('');
+
+    const bloco = (titulo, lista, comMotivo) => {
+      L.push(titulo + ' (' + lista.length + ')');
+      L.push('-'.repeat(52));
+      if (!lista.length) { L.push('Nenhuma.'); L.push(''); return; }
+      lista.forEach((d, i) => {
+        L.push((i + 1) + '. Venda ' + (d.vendaId || '—'));
+        L.push('   Data/hora : ' + (d.data || '—') + ' ' + (d.hora || ''));
+        L.push('   Operador  : ' + (d.operador || '—') + '   Pagamento: ' + (d.formaPgto || '—'));
+        L.push('   Total     : ' + brl(d.total) + '   Itens: ' + (d.qtdItens ?? '—') + '   Status venda: ' + (d.vendaStatus || '—'));
+        if (d.aprovadaEm) L.push('   Aprovada em: ' + dt(d.aprovadaEm));
+        if (d.validadaEm) L.push('   Validada em: ' + dt(d.validadaEm));
+        L.push('   Falha encontrada: ' + (d.falha || '—'));
+        L.push((comMotivo ? '   Motivo da falha de correção: ' : '   Correção aplicada: ') + (d.msg || '—'));
+        L.push('');
+      });
+    };
+
+    bloco('FALHAS ENCONTRADAS E CORRIGIDAS', corrigidas, false);
+    bloco('FALHAS ENCONTRADAS E NÃO CORRIGIDAS (verificar manualmente)', falhas, true);
+
+    if (!corrigidas.length && !falhas.length) {
+      L.push('Nenhuma falha encontrada nesta reconciliação.');
+    }
+    L.push('');
+    L.push('Obs.: esta reconciliação confere se cada venda teve a baixa de estoque');
+    L.push('registrada (movimentações) e corrige automaticamente as que não tiveram.');
+    return L.join('\n');
+  }
+
+  window.baixarRelatorioReconciliacao = function () {
+    if (!_ultimaReconc) { alert('Rode "Reconciliar Agora" primeiro.'); return; }
+    const txt  = '\uFEFF' + _montarRelatorioTxt(_ultimaReconc);
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    const a    = document.createElement('a');
+    const ts   = new Date(_ultimaReconc.geradoEm || Date.now());
+    const pad  = (n) => String(n).padStart(2, '0');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `reconciliacao-${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   };
 
   window.verFalhas = function () {
