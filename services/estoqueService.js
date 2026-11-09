@@ -979,7 +979,21 @@
       )
     );
 
-    const relatorio = { verificadas: 0, corrigidas: 0, falhas: 0, detalhes: [] };
+    const relatorio = { verificadas: 0, corrigidas: 0, falhas: 0, detalhes: [], geradoEm: new Date().toISOString(), dataRef: hoje };
+
+    // Dados da venda anexados a cada linha do relatório (usados no download)
+    const _info = (venda) => ({
+      vendaId:   venda.id,
+      data:      venda.data || venda.dataCurta || '',
+      hora:      venda.hora || '',
+      operador:  venda.operador || '',
+      formaPgto: venda.formaPgto || '',
+      total:     Number(venda.total) || 0,
+      qtdItens:  (venda.itens || []).length,
+      vendaStatus: venda.status || '',
+      aprovadaEm: venda.aprovadaEm || '',
+      validadaEm: venda.validadaEm || '',
+    });
 
     for (const venda of alvo) {
       if (!venda.itens?.length) continue;
@@ -991,7 +1005,7 @@
         );
 
         if (movs && movs.length > 0) {
-          relatorio.detalhes.push({ vendaId: venda.id, status: 'ok', msg: 'Movimentação já existe' });
+          relatorio.detalhes.push({ ..._info(venda), status: 'ok', msg: 'Movimentação já existe' });
           continue;
         }
 
@@ -1000,19 +1014,19 @@
           const resCorr = await baixarEstoqueVendaLote(venda);
           if (resCorr.ok || resCorr.itensProcessados > 0) {
             relatorio.corrigidas++;
-            relatorio.detalhes.push({ vendaId: venda.id, status: 'corrigido', msg: `${resCorr.itensProcessados} itens ajustados` });
+            relatorio.detalhes.push({ ..._info(venda), status: 'corrigido', falha: 'Venda sem movimentação de estoque', msg: `${resCorr.itensProcessados} itens ajustados` });
           } else {
             relatorio.falhas++;
-            relatorio.detalhes.push({ vendaId: venda.id, status: 'falhou', msg: resCorr.erros?.join('; ') || 'Baixa falhou' });
+            relatorio.detalhes.push({ ..._info(venda), status: 'falhou', falha: 'Venda sem movimentação de estoque', msg: resCorr.erros?.join('; ') || 'Baixa falhou' });
           }
         } catch (eLote) {
           relatorio.falhas++;
-          relatorio.detalhes.push({ vendaId: venda.id, status: 'falhou', msg: eLote.message });
+          relatorio.detalhes.push({ ..._info(venda), status: 'falhou', falha: 'Venda sem movimentação de estoque', msg: eLote.message });
         }
 
       } catch (e) {
         relatorio.falhas++;
-        relatorio.detalhes.push({ vendaId: venda.id, status: 'falhou', msg: e.message });
+        relatorio.detalhes.push({ ..._info(venda), status: 'falhou', falha: 'Erro ao consultar movimentações', msg: e.message });
       }
     }
 
