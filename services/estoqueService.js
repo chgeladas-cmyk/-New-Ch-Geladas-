@@ -949,7 +949,7 @@
 
   // ── Reconciliação manual ─────────────────────────────────────────
   /**
-   * Reconciliação completa: varre todas as vendas do dia e verifica
+   * Reconciliação completa: varre as vendas do dia (criadas, aprovadas ou validadas hoje) e verifica
    * se cada uma teve o estoque baixado. Corrige automaticamente as que falharam.
    * Retorna relatório { verificadas, corrigidas, falhas, detalhes[] }
    */
@@ -959,9 +959,24 @@
       return { ok: false, motivo: 'Sem adminToken ou Firebase offline' };
     }
 
+    // FIX (nov/2026): a janela "do dia" considerava só a data de CRIAÇÃO da venda
+    // (dataCurta). Venda criada em outro dia mas aprovada/validada hoje ficava
+    // fora da reconciliação e nunca era conferida. Agora entra se qualquer uma
+    // destas datas (criação, aprovação, validação) cair em hoje — no fuso local.
+    const hoje = Utils.todayISO();
+    const _diaLocal = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
     const alvo = vendas || Store.getVendas().filter(v =>
-      v.dataCurta === Utils.todayISO() &&
-      ['concluida', 'validada'].includes(v.status)
+      ['concluida', 'validada'].includes(v.status) &&
+      (
+        v.dataCurta === hoje ||
+        _diaLocal(v.aprovadaEm) === hoje ||
+        _diaLocal(v.validadaEm) === hoje
+      )
     );
 
     const relatorio = { verificadas: 0, corrigidas: 0, falhas: 0, detalhes: [] };
